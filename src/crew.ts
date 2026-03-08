@@ -264,9 +264,9 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
               partner.idleTimer = 1 + Math.random() * 2;
               partner.copulationTarget = null;
             }
-            member.thoughtBubble = 'heart';
-            member.thoughtBubbleTimer = 3;
           }
+          member.thoughtBubble = 'heart';
+          member.thoughtBubbleTimer = 3;
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
           member.copulationTarget = null;
