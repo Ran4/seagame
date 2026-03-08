@@ -12,13 +12,16 @@ export const DAY_START = 60;
 export const DUSK_START = 420;
 export const NIGHT_START = 480;
 
+export const NIGHT_BRIGHTNESS = 0.4;
+const BRIGHTNESS_RANGE = 1.0 - NIGHT_BRIGHTNESS;
+
 // TODO: when seasons exist, make this change over the seasons!
 export function getShipBrightness(timeOfDay: number): number {
-  if (timeOfDay < DAWN_START) return 0.5;
-  if (timeOfDay < DAY_START) return 0.5 + 0.5 * (timeOfDay - DAWN_START) / (DAY_START - DAWN_START);
+  if (timeOfDay < DAWN_START) return NIGHT_BRIGHTNESS;
+  if (timeOfDay < DAY_START) return NIGHT_BRIGHTNESS + BRIGHTNESS_RANGE * (timeOfDay - DAWN_START) / (DAY_START - DAWN_START);
   if (timeOfDay < DUSK_START) return 1.0;
-  if (timeOfDay < NIGHT_START) return 1.0 - 0.5 * (timeOfDay - DUSK_START) / (NIGHT_START - DUSK_START);
-  return 0.5;
+  if (timeOfDay < NIGHT_START) return 1.0 - BRIGHTNESS_RANGE * (timeOfDay - DUSK_START) / (NIGHT_START - DUSK_START);
+  return NIGHT_BRIGHTNESS;
 }
 
 // Lantern constants

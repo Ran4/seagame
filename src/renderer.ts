@@ -1,7 +1,7 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
-  ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY,
+  ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
 } from './types';
 import { SpriteSheet } from './sprites';
 import { SHIP_SPEED } from './worldmap';
@@ -104,7 +104,7 @@ export class Renderer {
       }
       const lanternLift = Math.min(0.35, litCount * 0.07); // each lantern lifts ~0.07, max 0.35
 
-      const nightDark = (1 - brightness) * 2; // 0 at day, 1 at night
+      const nightDark = (1 - brightness) / (1 - NIGHT_BRIGHTNESS); // 0 at day, 1 at night
       const nightAlpha = Math.max(0, nightDark * 0.55 - lanternLift);
       const deckAlpha = deckIndex > 0 ? 0.125 * deckIndex : 0;
       const totalAlpha = Math.min(0.75, nightAlpha + deckAlpha);
