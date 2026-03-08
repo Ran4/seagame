@@ -232,6 +232,25 @@ export class Renderer {
             }
           }
           ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
+          // Bright glow on lit lantern sprite
+          if (tile === TileType.LANTERN) {
+            const lKey = `${this.renderDeckIndex}-${x}-${y}`;
+            const lOil = this.lanternOil.get(lKey) ?? 0;
+            if (lOil > 0) {
+              const intensity = Math.min(1, lOil / 20);
+              const prevComp = ctx.globalCompositeOperation;
+              ctx.globalCompositeOperation = 'lighter';
+              const gcx = sx + TILE_SIZE / 2;
+              const gcy = sy + TILE_SIZE / 2;
+              const grad = ctx.createRadialGradient(gcx, gcy, 0, gcx, gcy, TILE_SIZE * 0.7);
+              grad.addColorStop(0, `rgba(255, 220, 100, ${0.6 * intensity})`);
+              grad.addColorStop(0.6, `rgba(255, 180, 60, ${0.25 * intensity})`);
+              grad.addColorStop(1, 'rgba(255, 160, 40, 0)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(sx - TILE_SIZE * 0.2, sy - TILE_SIZE * 0.2, TILE_SIZE * 1.4, TILE_SIZE * 1.4);
+              ctx.globalCompositeOperation = prevComp;
+            }
+          }
         } else {
           ctx.fillStyle = TILE_COLORS[tile];
           ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
