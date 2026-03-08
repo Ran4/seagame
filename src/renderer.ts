@@ -58,6 +58,7 @@ export class Renderer {
     hasNavigator: boolean = false,
     hasHelmsman: boolean = false,
     barrelInventory: Map<string, Item[]> = new Map(),
+    waterOffset: { x: number; y: number } = { x: 0, y: 0 },
   ): void {
     const ctx = this.ctx;
     this.hoveredItem = null as typeof this.hoveredItem;
@@ -66,7 +67,7 @@ export class Renderer {
     ctx.fillStyle = WATER_COLOR_1;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    this.drawWater(camera, time);
+    this.drawWater(camera, time, waterOffset);
 
     // Crow's nest: draw upper deck faintly underneath (tiles + crew)
     if (deckIndex === 0 && decks.length > 1) {
@@ -104,6 +105,9 @@ export class Renderer {
     }
 
     this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks, barrelInventory, time);
+    if (worldMap) {
+      this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length);
+    }
     this.drawSoundButton(soundMuted);
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
@@ -118,12 +122,16 @@ export class Renderer {
     }
   }
 
-  private drawWater(camera: Camera, time: number): void {
+  private drawWater(camera: Camera, time: number, waterOffset: { x: number; y: number }): void {
     const ctx = this.ctx;
-    const startTileX = Math.floor(camera.x / TILE_SIZE);
-    const startTileY = Math.floor(camera.y / TILE_SIZE);
-    const tilesX = Math.ceil(CANVAS_WIDTH / TILE_SIZE) + 1;
-    const tilesY = Math.ceil(CANVAS_HEIGHT / TILE_SIZE) + 1;
+    // Water uses its own effective camera that includes the scroll offset,
+    // so water moves independently of the ship tiles
+    const effCamX = camera.x + waterOffset.x;
+    const effCamY = camera.y + waterOffset.y;
+    const startTileX = Math.floor(effCamX / TILE_SIZE);
+    const startTileY = Math.floor(effCamY / TILE_SIZE);
+    const tilesX = Math.ceil(CANVAS_WIDTH / TILE_SIZE) + 2;
+    const tilesY = Math.ceil(CANVAS_HEIGHT / TILE_SIZE) + 2;
     const phase = Math.floor(time * 0.5) % 2;
 
     if (this.sprites) {
@@ -132,8 +140,8 @@ export class Renderer {
         for (let tx = 0; tx < tilesX; tx++) {
           const worldTX = startTileX + tx;
           const worldTY = startTileY + ty;
-          const sx = worldTX * TILE_SIZE - camera.x;
-          const sy = worldTY * TILE_SIZE - camera.y;
+          const sx = worldTX * TILE_SIZE - effCamX;
+          const sy = worldTY * TILE_SIZE - effCamY;
           ctx.drawImage(waterImg, sx, sy, TILE_SIZE, TILE_SIZE);
         }
       }
@@ -144,8 +152,8 @@ export class Renderer {
           const worldTY = startTileY + ty;
           const isLight = (worldTX + worldTY + phase) % 2 === 0;
           ctx.fillStyle = isLight ? WATER_COLOR_1 : WATER_COLOR_2;
-          const sx = worldTX * TILE_SIZE - camera.x;
-          const sy = worldTY * TILE_SIZE - camera.y;
+          const sx = worldTX * TILE_SIZE - effCamX;
+          const sy = worldTY * TILE_SIZE - effCamY;
           ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
         }
       }
@@ -491,6 +499,70 @@ export class Renderer {
       ctx.arc(cx + 3, cy, 7, -Math.PI / 4, Math.PI / 4);
       ctx.stroke();
     }
+  }
+
+  private drawCompass(heading: number, moving: boolean, deckCount: number): void {
+    const ctx = this.ctx;
+    const panelH = deckCount * 22 + 8;
+    const size = panelH;
+    const x = 10 + 160 + 8; // right of deck selector
+    const y = 10;
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+    const r = size / 2 - 6;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(x, y, size, size);
+
+    // Outer ring
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Cardinal direction labels
+    ctx.fillStyle = '#666666';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('N', cx, cy - r + 5);
+    ctx.fillText('S', cx, cy + r - 5);
+    ctx.fillText('W', cx - r + 6, cy);
+    ctx.fillText('E', cx + r - 6, cy);
+
+    // Needle — heading 0 = east, standard math angles
+    // North arrow (red) points toward heading, south arrow (white) opposite
+    const needleLen = r - 8;
+    // Convert heading: 0=east in math, but compass north is -π/2
+    const angle = heading;
+    const nx = Math.cos(angle) * needleLen;
+    const ny = Math.sin(angle) * needleLen;
+
+    // Red half (direction of travel)
+    ctx.strokeStyle = moving ? '#ee4444' : '#884444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + nx, cy + ny);
+    ctx.stroke();
+
+    // White half (opposite)
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - nx, cy - ny);
+    ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = '#cccccc';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.textBaseline = 'alphabetic';
   }
 
   private drawCrewPanel(member: CrewMember): void {

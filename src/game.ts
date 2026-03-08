@@ -6,7 +6,7 @@ import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
-import { createWorldMap, updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing } from './worldmap';
+import { createWorldMap, updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing, SHIP_SPEED } from './worldmap';
 
 export class Game {
   private decks: Deck[];
@@ -26,6 +26,7 @@ export class Game {
   private navTimer = 0;
   private time = 0;
   private lastTime = 0;
+  private waterOffset = { x: 0, y: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.decks = createShip();
@@ -93,6 +94,13 @@ export class Game {
     }
     if (anySteering) updateHelmsman(this.worldMap);
     updateSailing(this.worldMap, dt);
+
+    // Scroll water downward to visualize ship movement
+    if (this.worldMap.currentSpeed > 0) {
+      const WATER_SCROLL_SPEED = 32; // pixels/sec at full speed
+      const speedRatio = this.worldMap.currentSpeed / SHIP_SPEED;
+      this.waterOffset.y -= WATER_SCROLL_SPEED * speedRatio * dt;
+    }
 
     // Auto-open overlay on transition into navigating; auto-close when nobody is
     if (anyNavigating && !this.wasNavigating) {
@@ -557,6 +565,7 @@ export class Game {
       hasNavigator,
       hasHelmsman,
       this.barrelInventory,
+      this.waterOffset,
     );
   }
 }
