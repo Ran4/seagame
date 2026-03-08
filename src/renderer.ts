@@ -814,6 +814,52 @@ export class Renderer {
         ctx.stroke();
       }
     }
+
+    // Draw submenu for hovered parent
+    for (let i = 0; i < menu.items.length; i++) {
+      const item = menu.items[i];
+      if (!item.submenu) continue;
+
+      const parentY = my + pad + i * itemH;
+      const subX = mx + itemW;
+      const subY = parentY;
+      const subH = item.submenu.length * itemH + pad * 2;
+
+      const overParent = mousePos.x >= mx && mousePos.x <= mx + itemW &&
+                         mousePos.y >= parentY && mousePos.y <= parentY + itemH;
+      const overSub = mousePos.x >= subX && mousePos.x <= subX + itemW &&
+                      mousePos.y >= subY && mousePos.y <= subY + subH;
+      if (!overParent && !overSub) continue;
+
+      // Submenu background
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillRect(subX, subY, itemW, subH);
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(subX + 0.5, subY + 0.5, itemW - 1, subH - 1);
+
+      for (let j = 0; j < item.submenu.length; j++) {
+        const sjy = subY + pad + j * itemH;
+        const subItem = item.submenu[j];
+
+        if (!subItem.disabled && mousePos.x >= subX && mousePos.x <= subX + itemW &&
+            mousePos.y >= sjy && mousePos.y <= sjy + itemH) {
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.fillRect(subX + 1, sjy, itemW - 2, itemH);
+        }
+
+        ctx.fillStyle = subItem.disabled ? '#666666' : '#ffffff';
+        ctx.fillText(subItem.label, subX + 10, sjy + 16);
+
+        if (j < item.submenu.length - 1) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath();
+          ctx.moveTo(subX + 4, sjy + itemH);
+          ctx.lineTo(subX + itemW - 4, sjy + itemH);
+          ctx.stroke();
+        }
+      }
+    }
   }
 
   private drawMapOverlay(worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean = false, hasHelmsman: boolean = false): void {

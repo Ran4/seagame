@@ -83,6 +83,7 @@ export enum CrewState {
   LOOKOUT = 'lookout',
   NAVIGATING = 'navigating',
   COPULATING = 'copulating',
+  KISSING = 'kissing',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -95,14 +96,16 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.LOOKOUT]: 'Lookout',
   [CrewState.NAVIGATING]: 'Navigating',
   [CrewState.COPULATING]: 'Copulating',
+  [CrewState.KISSING]: 'Kissing',
 };
 
 export interface ContextMenuItem {
   label: string;
   targetState: CrewState;
   deckTarget?: number; // send crew to this deck
-  targetCrewId?: number; // for crew-crew copulation
+  targetCrewId?: number; // for crew-crew interactions
   disabled?: boolean;
+  submenu?: ContextMenuItem[];
 }
 
 export interface ContextMenu {

@@ -13,6 +13,7 @@ const CANNON_DURATION = 15;
 const LOOKOUT_DURATION = 30;
 const NAVIGATE_DURATION = 999999;
 const COPULATE_DURATION = 15;
+const KISS_DURATION = 3;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -165,6 +166,51 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
+      case CrewState.KISSING:
+        member.stateTimer -= dt;
+        // Pull in crew partner on first frame
+        if (member.copulationTarget?.type === 'crew') {
+          const target = member.copulationTarget;
+          const partner = crew.find(c => c.id === target.crewId);
+          if (partner && partner.state !== CrewState.KISSING) {
+            partner.state = CrewState.KISSING;
+            partner.stateTimer = member.stateTimer;
+            partner.copulationTarget = { type: 'crew', crewId: member.id };
+            partner.path = [];
+          }
+        }
+        if (member.stateTimer <= 0) {
+          if (member.copulationTarget?.type === 'crew') {
+            const target = member.copulationTarget;
+            const partner = crew.find(c => c.id === target.crewId);
+            if (partner) {
+              const myRelation = member.relations.find(r => r.crewId === partner.id);
+              const theirRelation = partner.relations.find(r => r.crewId === member.id);
+              if (myRelation && theirRelation) {
+                if ((myRelation.attraction >= 64) && (theirRelation.attraction >= 64)) {
+                  // Both attracted — positive kiss
+                  myRelation.attraction = Math.min(255, myRelation.attraction + 32);
+                  theirRelation.attraction = Math.min(255, theirRelation.attraction + 32);
+                } else {
+                  // Unwelcome kiss — negative outcome
+                  myRelation.attraction = Math.max(0, myRelation.attraction - 32);
+                  myRelation.friendship = Math.max(0, myRelation.friendship - 32);
+                  theirRelation.attraction = Math.max(0, theirRelation.attraction - 32);
+                  theirRelation.friendship = Math.max(0, theirRelation.friendship - 32);
+                }
+              }
+              if (partner.state === CrewState.KISSING) {
+                partner.state = CrewState.IDLE;
+                partner.idleTimer = 1 + Math.random() * 2;
+                partner.copulationTarget = null;
+              }
+            }
+          }
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+          member.copulationTarget = null;
+        }
+        break;
       case CrewState.COPULATING:
         member.profile.energy = Math.max(0, member.profile.energy - 4.0 * dt);
         member.stateTimer -= dt;
@@ -287,6 +333,8 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = NAVIGATE_DURATION;
     } else if (member.state === CrewState.COPULATING) {
       member.stateTimer = COPULATE_DURATION;
+    } else if (member.state === CrewState.KISSING) {
+      member.stateTimer = KISS_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

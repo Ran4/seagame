@@ -226,7 +226,7 @@ export class Game {
           return;
         }
         if (menuItem.targetCrewId !== undefined) {
-          // Copulate with crew member — order selected crew to target
+          // Crew-crew interaction (kiss or copulate)
           const member = this.crew.find(c => c.id === this.selectedCrewId);
           const target = this.crew.find(c => c.id === menuItem.targetCrewId);
           if (member && target) {
@@ -240,7 +240,7 @@ export class Game {
               member,
               { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck },
               this.decks,
-              CrewState.COPULATING,
+              menuItem.targetState,
             );
           }
         } else if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
@@ -322,9 +322,12 @@ export class Game {
         this.audio.play('click');
         this.contextMenu = null;
         this.input.mouseClick = null;
-      } else {
+      } else if (menuItem === null) {
         // Clicked outside menu — close it, let click fall through
         this.contextMenu = null;
+      } else {
+        // undefined = clicked on submenu parent or disabled submenu item, keep menu open
+        this.input.mouseClick = null;
       }
     }
 
@@ -407,18 +410,27 @@ export class Game {
               items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
             }
           }
-          // Copulate with this crew member (requires a different crew selected)
+          // Interact submenu (requires a different crew selected)
           if (this.selectedCrewId !== null && this.selectedCrewId !== clickedCrew.id) {
             const selected = this.crew.find(c => c.id === this.selectedCrewId);
             if (selected) {
               const selRelation = selected.relations.find(r => r.crewId === clickedCrew!.id);
               const targetRelation = clickedCrew.relations.find(r => r.crewId === selected.id);
-              const mutualAttraction = (selRelation?.attraction ?? 0) >= 128 && (targetRelation?.attraction ?? 0) >= 128;
-              if (mutualAttraction) {
-                items.push({ label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id });
-              } else {
-                items.push({ label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id, disabled: true });
-              }
+              const selFriendship = selRelation?.friendship ?? 0;
+              const selAttraction = selRelation?.attraction ?? 0;
+              const targetAttraction = targetRelation?.attraction ?? 0;
+              const canKiss = selFriendship >= 64 || selAttraction >= 64;
+              const mutualAttraction = selAttraction >= 128 && targetAttraction >= 128;
+
+              const submenu: ContextMenuItem[] = [
+                canKiss
+                  ? { label: 'Kiss', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id }
+                  : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id, disabled: true },
+                mutualAttraction
+                  ? { label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id }
+                  : { label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id, disabled: true },
+              ];
+              items.push({ label: 'Interact \u25B6', targetState: CrewState.IDLE, submenu });
             }
           }
         }
@@ -474,7 +486,8 @@ export class Game {
     updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time);
   }
 
-  private handleMenuClick(click: { x: number; y: number }): ContextMenuItem | null {
+  // Returns the clicked menu item, or undefined to mean "click was on menu, don't close"
+  private handleMenuClick(click: { x: number; y: number }): ContextMenuItem | null | undefined {
     if (!this.contextMenu) return null;
 
     const itemW = 200;
@@ -490,11 +503,34 @@ export class Game {
     if (mx < 0) mx = 4;
     if (my < 0) my = 4;
 
+    // Check submenu clicks first
+    for (let i = 0; i < this.contextMenu.items.length; i++) {
+      const item = this.contextMenu.items[i];
+      if (!item.submenu) continue;
+      const parentY = my + pad + i * itemH;
+      const subX = mx + itemW;
+      const subY = parentY;
+      const subH = item.submenu.length * itemH + pad * 2;
+
+      if (click.x >= subX && click.x <= subX + itemW &&
+          click.y >= subY && click.y <= subY + subH) {
+        for (let j = 0; j < item.submenu.length; j++) {
+          const sjy = subY + pad + j * itemH;
+          if (click.y >= sjy && click.y <= sjy + itemH) {
+            if (item.submenu[j].disabled) return undefined;
+            return item.submenu[j];
+          }
+        }
+        return undefined;
+      }
+    }
+
     for (let i = 0; i < this.contextMenu.items.length; i++) {
       const iy = my + pad + i * itemH;
       if (click.x >= mx && click.x <= mx + itemW &&
           click.y >= iy && click.y <= iy + itemH) {
-        if (this.contextMenu.items[i].disabled) return null;
+        if (this.contextMenu.items[i].disabled) return undefined;
+        if (this.contextMenu.items[i].submenu) return undefined;
         return this.contextMenu.items[i];
       }
     }
