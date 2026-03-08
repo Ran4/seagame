@@ -7,6 +7,17 @@ import { SpriteSheet } from './sprites';
 const WATER_COLOR_1 = '#1a5276';
 const WATER_COLOR_2 = '#1b6090';
 
+const TILE_NAMES: Partial<Record<TileType, string>> = {
+  [TileType.STAIRS]: 'Stairs',
+  [TileType.HELM]: 'Helm',
+  [TileType.MAST]: 'Mast',
+  [TileType.CANNON]: 'Cannon',
+  [TileType.STOVE]: 'Stove',
+  [TileType.BED]: 'Bed',
+  [TileType.BARREL]: 'Barrel',
+  [TileType.TABLE]: 'Table',
+};
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private sprites: SpriteSheet | null = null;
@@ -31,6 +42,7 @@ export class Renderer {
     camera: Camera,
     selectedCrewId: number | null,
     time: number,
+    mousePos: { x: number; y: number },
   ): void {
     const ctx = this.ctx;
 
@@ -47,6 +59,7 @@ export class Renderer {
     }
 
     this.drawUI(deck, deckIndex, crew, selectedCrewId);
+    this.drawTooltip(deck, camera, mousePos);
   }
 
   private drawWater(camera: Camera, time: number): void {
@@ -342,6 +355,32 @@ export class Renderer {
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     ctx.fillText(`Deck: ${member.deck === 0 ? 'Upper' : 'Lower'}`, px + 10, py + 112);
+  }
+
+  private drawTooltip(deck: Deck, camera: Camera, mousePos: { x: number; y: number }): void {
+    const worldX = mousePos.x + camera.x;
+    const worldY = mousePos.y + camera.y;
+    const tileX = Math.floor(worldX / TILE_SIZE);
+    const tileY = Math.floor(worldY / TILE_SIZE);
+
+    if (tileY < 0 || tileY >= deck.height || tileX < 0 || tileX >= deck.width) return;
+    const tile = deck.tiles[tileY][tileX];
+    const name = TILE_NAMES[tile];
+    if (!name) return;
+
+    const ctx = this.ctx;
+    ctx.font = '11px monospace';
+    const textW = ctx.measureText(name).width;
+    const px = mousePos.x + 16;
+    const py = mousePos.y - 8;
+    const pad = 4;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(px - pad, py - 12 - pad, textW + pad * 2, 16 + pad);
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(name, px, py);
   }
 
   private drawBar(x: number, y: number, w: number, h: number, fill: number, color: string): void {

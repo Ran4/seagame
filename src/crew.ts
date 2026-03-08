@@ -9,8 +9,8 @@ const EAT_DURATION = 8;
 const SLEEP_DURATION = 15;
 
 const PIRATE_NAMES = [
-  'Blackbeard', 'Anne Bonny', 'Calico Jack', 'Mary Read',
-  'Long John', 'Red Morgan', 'Salty Pete', 'Iron Jane',
+  'Anne', 'Jack', 'Mary', 'Flint',
+  'Morgan', 'Pete', 'Jane', 'Bones',
 ];
 
 const CREW_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];

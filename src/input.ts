@@ -1,14 +1,16 @@
-import { Camera, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, Deck, WALKABLE, DeckPoint } from './types';
+import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, Deck, WALKABLE, DeckPoint } from './types';
 
 export interface InputState {
   keysDown: Set<string>;
   mouseClick: { x: number; y: number } | null;
+  mousePos: { x: number; y: number };
 }
 
 export function createInputHandler(canvas: HTMLCanvasElement): InputState {
   const state: InputState = {
     keysDown: new Set(),
     mouseClick: null,
+    mousePos: { x: 0, y: 0 },
   };
 
   window.addEventListener('keydown', (e) => {
@@ -24,6 +26,16 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     state.mouseClick = {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    state.mousePos = {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
     };
@@ -50,7 +62,7 @@ export function handleClick(
   crew: CrewMember[],
   activeDeck: number,
   deck: Deck,
-): { type: 'selectCrew'; crewId: number } | { type: 'moveTo'; target: DeckPoint } | null {
+): { type: 'selectCrew'; crewId: number } | { type: 'moveTo'; target: DeckPoint } | { type: 'useStairs' } | null {
   const worldX = click.x + camera.x;
   const worldY = click.y + camera.y;
   const tileX = Math.floor(worldX / TILE_SIZE);
@@ -66,9 +78,14 @@ export function handleClick(
     }
   }
 
-  // Check walkable tile
+  // Check tile
   if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
-    if (WALKABLE.has(deck.tiles[tileY][tileX])) {
+    const clickedTile = deck.tiles[tileY][tileX];
+    // Stairs → switch deck
+    if (clickedTile === TileType.STAIRS) {
+      return { type: 'useStairs' };
+    }
+    if (WALKABLE.has(clickedTile)) {
       return { type: 'moveTo', target: { x: tileX, y: tileY, deck: activeDeck } };
     }
   }

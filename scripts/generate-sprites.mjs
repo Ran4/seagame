@@ -33,7 +33,7 @@ const CREW_STYLE = 'Pixel art game character sprite, exactly 32x32 pixel grid sc
 
 const SPRITES = [
   // Tiles
-  ['water', `${TILE_STYLE} Deep ocean water tile. Dark navy blue with subtle teal-colored wave ripple pattern. Seamless tileable.`],
+  ['water', `${TILE_STYLE} Deep ocean water tile. Dark navy blue with subtle teal-colored wave ripple pattern. Seamless tileable. No border, no outline, no frame - the art must go edge to edge filling the entire image.`],
   ['water2', `${TILE_STYLE} Deep ocean water tile, alternate frame. Dark navy blue with teal wave ripples in a slightly shifted position compared to the first frame. Seamless tileable.`],
   ['hull', `${TILE_STYLE} Wooden pirate ship hull wall seen from above. Dark brown weathered oak planks with visible wood grain and nail heads. Thick sturdy timber.`],
   ['floor', `${TILE_STYLE} Wooden ship deck floor planks. Warm golden-tan horizontal wood planks with thin dark gaps between them. Well-worn but maintained.`],

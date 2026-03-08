@@ -4,6 +4,7 @@ import { createCrew, updateCrew, orderCrewTo } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
+import { AudioManager } from './audio';
 
 export class Game {
   private decks: Deck[];
@@ -13,6 +14,7 @@ export class Game {
   private selectedCrewId: number | null = null;
   private renderer: Renderer;
   private input: InputState;
+  private audio: AudioManager;
   private time = 0;
   private lastTime = 0;
 
@@ -21,6 +23,7 @@ export class Game {
     this.crew = createCrew(4, this.decks);
     this.renderer = new Renderer(canvas);
     this.input = createInputHandler(canvas);
+    this.audio = new AudioManager();
 
     // Center camera on ship
     const deck = this.decks[0];
@@ -75,9 +78,11 @@ export class Game {
       const my = this.input.mouseClick.y;
       if (mx >= 10 && mx <= 170 && my >= 14 && my < 14 + 2 * 22) {
         const clicked = Math.floor((my - 14) / 22);
-        if (clicked >= 0 && clicked < this.decks.length) {
+        if (clicked >= 0 && clicked < this.decks.length && clicked !== this.activeDeck) {
           this.activeDeck = clicked;
+          this.audio.play('deck_change');
         }
+        this.audio.startMusicOnInteraction();
         this.input.mouseClick = null;
       }
     }
@@ -91,9 +96,15 @@ export class Game {
         this.decks[this.activeDeck],
       );
 
+      this.audio.startMusicOnInteraction();
+
       if (result) {
         if (result.type === 'selectCrew') {
           this.selectedCrewId = result.crewId;
+          this.audio.play('click');
+        } else if (result.type === 'useStairs') {
+          this.activeDeck = this.activeDeck === 0 ? 1 : 0;
+          this.audio.play('stairs');
         } else if (result.type === 'moveTo' && this.selectedCrewId !== null) {
           const member = this.crew.find(c => c.id === this.selectedCrewId);
           if (member) {
@@ -118,6 +129,7 @@ export class Game {
       this.camera,
       this.selectedCrewId,
       this.time,
+      this.input.mousePos,
     );
   }
 }
