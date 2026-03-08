@@ -48,9 +48,10 @@ Currently 2 decks (index 0 = upper, 1 = lower). Keys 2/3 switch. Plan for up to 
 
 ### Crew AI (`crew.ts`)
 Each crew member has hunger/energy (0-255, high = satisfied). Needs tick down over time.
-State machine: IDLE → WALKING → EATING/SLEEPING → IDLE.
+States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON.
 When idle: if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
-Player can click crew to select, then click a tile to order them there.
+Player gives orders via right-click context menus (see below).
+Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a fixed timer (8s).
 
 ### Pathfinding (`pathfinding.ts`)
 Standard A* with 4-directional movement. Stairs tiles connect decks (same x,y position).
@@ -64,8 +65,25 @@ Water animates by alternating two sprite frames.
 ### Input (`input.ts`)
 - Arrow keys / WASD: camera scroll
 - Mouse wheel: scroll 3 tiles per click
-- Click crew: select. Click tile: order selected crew. Click stairs: switch deck.
+- Left-click crew: select. Left-click stairs: switch deck view.
 - Hover over furniture: tooltip with tile name
+
+### Right-click context menu (`game.ts`, `types.ts`)
+Right-click opens a context menu with actions. Two targets:
+
+**Right-click a crew member:**
+- "Stop [action]" — shown if crew is busy (walking, eating, sleeping, steering, manning cannon)
+- "Go to Upper/Lower Deck" — sends crew to the other deck via stairs
+
+**Right-click a furniture tile (with crew selected):**
+- Bed → "Sleep" (restores energy gradually, ~480s for full restore)
+- Stove → "Eat"
+- Helm → "Steer"
+- Cannon → "Man Cannon"
+- Stairs → "Go to stairs"
+
+Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
+Escape or clicking outside closes the menu.
 
 ## Adding new tile types
 
@@ -82,6 +100,8 @@ Water animates by alternating two sprite frames.
 
 Edit `updateIdle()` in `crew.ts`. Pattern: check condition → find target tile → pathfind → set state.
 Add new `CrewState` values in `types.ts` if needed, handle in `updateCrew()` switch.
+Add display name to `STATE_NAMES` in `types.ts`.
+To make it orderable via context menu, add entry to `TILE_ACTIONS` in `types.ts`.
 
 ## Generating assets
 
