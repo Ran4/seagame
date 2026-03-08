@@ -48,6 +48,7 @@ export class Renderer {
     mousePos: { x: number; y: number },
     contextMenu: ContextMenu | null = null,
     decks: Deck[] = [],
+    soundMuted: boolean = false,
   ): void {
     const ctx = this.ctx;
 
@@ -92,6 +93,7 @@ export class Renderer {
     }
 
     this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks);
+    this.drawSoundButton(soundMuted);
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
       this.drawContextMenu(contextMenu, mousePos);
@@ -368,6 +370,57 @@ export class Renderer {
     // Selected object info
     if (selectedObject) {
       this.drawObjectPanel(selectedObject);
+    }
+  }
+
+  private drawSoundButton(muted: boolean): void {
+    const ctx = this.ctx;
+    const size = 24;
+    const x = 8;
+    const y = CANVAS_HEIGHT - size - 8;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+    const cx = x + size / 2 - 2;
+    const cy = y + size / 2;
+
+    // Speaker body
+    ctx.fillStyle = muted ? '#666' : '#ddd';
+    ctx.beginPath();
+    ctx.moveTo(cx - 6, cy - 3);
+    ctx.lineTo(cx - 3, cy - 3);
+    ctx.lineTo(cx + 1, cy - 7);
+    ctx.lineTo(cx + 1, cy + 7);
+    ctx.lineTo(cx - 3, cy + 3);
+    ctx.lineTo(cx - 6, cy + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    if (muted) {
+      // X mark
+      ctx.strokeStyle = '#cc4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 4, cy - 4);
+      ctx.lineTo(cx + 9, cy + 4);
+      ctx.moveTo(cx + 9, cy - 4);
+      ctx.lineTo(cx + 4, cy + 4);
+      ctx.stroke();
+    } else {
+      // Sound waves
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx + 3, cy, 4, -Math.PI / 4, Math.PI / 4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 3, cy, 7, -Math.PI / 4, Math.PI / 4);
+      ctx.stroke();
     }
   }
 

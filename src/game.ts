@@ -81,10 +81,20 @@ export class Game {
 
     // Clicks
     if (this.input.mouseClick) {
-      // Check deck selector panel (x:10-170, y:14 + i*22, h:22, 2 entries)
       const mx = this.input.mouseClick.x;
       const my = this.input.mouseClick.y;
-      if (mx >= 10 && mx <= 170 && my >= 14 && my < 14 + this.decks.length * 22) {
+
+      // Sound toggle button (bottom-left, 24x24 with 8px margin)
+      const btnSize = 24;
+      const btnX = 8;
+      const btnY = CANVAS_HEIGHT - btnSize - 8;
+      if (mx >= btnX && mx <= btnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+        this.audio.toggleMute();
+        this.input.mouseClick = null;
+      }
+
+      // Check deck selector panel (x:10-170, y:14 + i*22, h:22, 2 entries)
+      if (this.input.mouseClick && mx >= 10 && mx <= 170 && my >= 14 && my < 14 + this.decks.length * 22) {
         const clicked = Math.floor((my - 14) / 22);
         if (clicked >= 0 && clicked < this.decks.length && clicked !== this.activeDeck) {
           this.activeDeck = clicked;
@@ -334,6 +344,7 @@ export class Game {
       this.input.mousePos,
       this.contextMenu,
       this.decks,
+      this.audio.muted,
     );
   }
 }
