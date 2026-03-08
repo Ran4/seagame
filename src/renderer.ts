@@ -55,6 +55,19 @@ export class Renderer {
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     this.drawWater(camera, time);
+
+    // Crow's nest: draw upper deck faintly underneath (tiles + crew)
+    if (deckIndex === 0 && decks.length > 1) {
+      this.drawDeck(decks[1], camera, time);
+      for (const member of crew) {
+        if (member.deck === 1) {
+          this.drawCrewMember(member, camera, member.id === selectedCrewId);
+        }
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+
     this.drawDeck(deck, camera, time);
 
     // Lower decks are darker (below deck, less light)
