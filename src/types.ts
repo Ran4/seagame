@@ -160,6 +160,8 @@ export interface CrewMember {
   idleTimer: number;
   copulationTarget: CopulationTarget | null;
   relations: CrewRelation[];
+  thoughtBubble: ThoughtBubble | null;
+  thoughtBubbleTimer: number;
 }
 
 export interface Deck {
@@ -205,6 +207,8 @@ export interface Item {
   quantity: number;        // 1 for non-stackable items
   spoilAfter: number | null; // seconds until spoiled (null = never)
 }
+
+export type ThoughtBubble = 'heart' | 'broken_heart';
 
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }

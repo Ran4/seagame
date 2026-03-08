@@ -33,6 +33,8 @@ const CREW_STYLE = 'Pixel art game character sprite, exactly 32x32 pixel grid sc
 
 const ITEM_STYLE = 'Pixel art inventory icon, exactly 32x32 pixel grid scaled up. SNES 16-bit retro style like Harvest Moon. Centered on transparent background. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing.';
 
+const BUBBLE_STYLE = 'Pixel art thought bubble icon, exactly 32x32 pixel grid scaled up. SNES 16-bit retro style like Harvest Moon. Transparent background. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing. A small white round thought bubble with a symbol inside it and two small circles trailing below-left as the bubble tail.';
+
 const SPRITES = [
   // Tiles
   ['water', `${TILE_STYLE} Deep ocean water tile. Dark navy blue with subtle teal-colored wave ripple pattern. Seamless tileable. No border, no outline, no frame - the art must go edge to edge filling the entire image.`],
@@ -57,6 +59,10 @@ const SPRITES = [
   // Items
   ['item_cutlass', `${ITEM_STYLE} A pirate's cutlass — short curved steel sword with a brass hand guard and dark wooden grip. Diagonal orientation, blade pointing upper-right.`],
   ['item_semen', `${ITEM_STYLE} A small milky-white opaque splotch or splatter. Goopy viscous blob shape, slightly irregular edges. Off-white and pearlescent.`],
+
+  // Thought bubbles
+  ['bubble_heart', `${BUBBLE_STYLE} Inside the bubble is a bright red pixel-art heart symbol. The heart is solid red, classic valentine shape.`],
+  ['bubble_broken_heart', `${BUBBLE_STYLE} Inside the bubble is a broken heart symbol — a red heart cracked/split down the middle with a jagged lightning-bolt crack, pieces slightly separated. Dark crack line through the center.`],
 ];
 
 async function generate(name, prompt) {

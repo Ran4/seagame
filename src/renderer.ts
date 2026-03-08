@@ -360,6 +360,29 @@ export class Renderer {
       ctx.fillText('N', sx + 14, sy - 12);
     } else if (member.state === CrewState.COPULATING) {
       ctx.fillText('\u2665', sx + 14, sy - 12);
+    } else if (member.state === CrewState.KISSING) {
+      ctx.fillText('\u2665', sx + 14, sy - 12);
+    }
+
+    // Thought bubble
+    if (member.thoughtBubble) {
+      const bubbleSprite = this.sprites?.bubbles.get(member.thoughtBubble);
+      const bubbleSize = 24;
+      const bx = sx - bubbleSize / 2;
+      const by = sy - TILE_SIZE - bubbleSize + 4;
+      if (bubbleSprite) {
+        ctx.drawImage(bubbleSprite, bx, by, bubbleSize, bubbleSize);
+      } else {
+        // Fallback: draw a simple bubble with text
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = member.thoughtBubble === 'heart' ? '#e74c3c' : '#666666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(member.thoughtBubble === 'heart' ? '\u2665' : '\uD83D\uDC94', bx + bubbleSize / 2, by + bubbleSize / 2 + 5);
+      }
     }
 
     // Name label

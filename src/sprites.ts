@@ -14,6 +14,7 @@ export interface SpriteSheet {
   waterFrames: HTMLImageElement[];
   crew: HTMLImageElement[];
   items: Map<string, HTMLImageElement>;
+  bubbles: Map<string, HTMLImageElement>;
 }
 
 export async function loadSprites(): Promise<SpriteSheet> {
@@ -32,6 +33,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
   ];
 
   const itemNames = ['cutlass', 'semen'];
+  const bubbleNames = ['heart', 'broken_heart'];
 
   const coreLoads = await Promise.all([
     // Tile sprites
@@ -48,6 +50,11 @@ export async function loadSprites(): Promise<SpriteSheet> {
   // Item sprites loaded separately (optional, may not exist)
   const itemLoads = await Promise.all(
     itemNames.map(name => loadImage(`/sprites/item_${name}.png`).catch(() => null)),
+  );
+
+  // Bubble sprites (optional)
+  const bubbleLoads = await Promise.all(
+    bubbleNames.map(name => loadImage(`/sprites/bubble_${name}.png`).catch(() => null)),
   );
 
   const tiles = new Map<TileType, HTMLImageElement>();
@@ -69,10 +76,17 @@ export async function loadSprites(): Promise<SpriteSheet> {
   }
   console.log('Item sprites loaded:', [...items.keys()]);
 
+  const bubbles = new Map<string, HTMLImageElement>();
+  for (let i = 0; i < bubbleNames.length; i++) {
+    const img = bubbleLoads[i];
+    if (img) bubbles.set(bubbleNames[i], img);
+  }
+
   return {
     tiles,
     waterFrames: [tiles.get(TileType.WATER)!, water2],
     crew: coreLoads.slice(crewStart),
     items,
+    bubbles,
   };
 }

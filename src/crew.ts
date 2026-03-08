@@ -100,6 +100,8 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       idleTimer: Math.random() * 3,
       copulationTarget: null,
       relations: [],
+      thoughtBubble: null,
+      thoughtBubbleTimer: 0,
     });
   }
 
@@ -127,6 +129,15 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
+
+    // Tick down thought bubble
+    if (member.thoughtBubble) {
+      member.thoughtBubbleTimer -= dt;
+      if (member.thoughtBubbleTimer <= 0) {
+        member.thoughtBubble = null;
+        member.thoughtBubbleTimer = 0;
+      }
+    }
 
     switch (member.state) {
       case CrewState.IDLE:
@@ -191,12 +202,16 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
                   // Both attracted — positive kiss
                   myRelation.attraction = Math.min(255, myRelation.attraction + 32);
                   theirRelation.attraction = Math.min(255, theirRelation.attraction + 32);
+                  member.thoughtBubble = 'heart';
+                  member.thoughtBubbleTimer = 3;
                 } else {
                   // Unwelcome kiss — negative outcome
                   myRelation.attraction = Math.max(0, myRelation.attraction - 32);
                   myRelation.friendship = Math.max(0, myRelation.friendship - 32);
                   theirRelation.attraction = Math.max(0, theirRelation.attraction - 32);
                   theirRelation.friendship = Math.max(0, theirRelation.friendship - 32);
+                  member.thoughtBubble = 'broken_heart';
+                  member.thoughtBubbleTimer = 3;
                 }
               }
               if (partner.state === CrewState.KISSING) {
@@ -249,6 +264,8 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
               partner.idleTimer = 1 + Math.random() * 2;
               partner.copulationTarget = null;
             }
+            member.thoughtBubble = 'heart';
+            member.thoughtBubbleTimer = 3;
           }
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
