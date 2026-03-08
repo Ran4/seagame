@@ -153,6 +153,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         }
         break;
       case CrewState.COPULATING:
+        member.profile.energy = Math.max(0, member.profile.energy - 4.0 * dt);
         member.stateTimer -= dt;
         // Pull in crew partner on first frame
         if (member.copulationTarget?.type === 'crew') {

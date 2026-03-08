@@ -429,6 +429,13 @@ export class Game {
                 tileActions = [{ label: 'Climb down', targetState: CrewState.IDLE }];
               }
             }
+            // Only male crew can copulate with barrels
+            if (tileActions && tileType === TileType.BARREL) {
+              const selected = this.crew.find(c => c.id === this.selectedCrewId);
+              if (selected?.profile.sex !== 'M') {
+                tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
+              }
+            }
             if (tileActions) items.push(...tileActions);
           }
           // "Open Map" on map table when someone is navigating
