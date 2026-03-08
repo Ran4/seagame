@@ -5,7 +5,7 @@ import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
-import { createWorldMap, updateSailing, setDestination, stopSailing } from './worldmap';
+import { createWorldMap, updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing } from './worldmap';
 
 export class Game {
   private decks: Deck[];
@@ -65,11 +65,14 @@ export class Game {
   }
 
   private update(dt: number): void {
-    // Sailing always updates
+    // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
+    const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
+    const anySteering = this.crew.some(c => c.state === CrewState.STEERING);
+    if (anyNavigating) updateNavigator(this.worldMap);
+    if (anySteering) updateHelmsman(this.worldMap);
     updateSailing(this.worldMap, dt);
 
     // Auto-open overlay on transition into navigating; auto-close when nobody is
-    const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
     if (anyNavigating && !this.wasNavigating) {
       this.mapOverlayOpen = true;
     } else if (!anyNavigating && this.mapOverlayOpen) {
@@ -192,6 +195,14 @@ export class Game {
     if (this.input.mouseClick && this.contextMenu) {
       const menuItem = this.handleMenuClick(this.input.mouseClick);
       if (menuItem) {
+        // "Open Map" action — open overlay, not a crew order
+        if (menuItem.label === 'Open Map') {
+          this.mapOverlayOpen = true;
+          this.audio.play('click');
+          this.contextMenu = null;
+          this.input.mouseClick = null;
+          return;
+        }
         if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
           // "Go to deck" action
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
@@ -323,63 +334,59 @@ export class Game {
         }
       }
 
-      if (clickedCrew) {
+      {
+        const tileX = Math.floor(worldX / TILE_SIZE);
+        const tileY = Math.floor(worldY / TILE_SIZE);
+        const deck = this.decks[this.activeDeck];
         const items: ContextMenuItem[] = [];
-        // "Stop" option if busy
-        if (clickedCrew.state !== CrewState.IDLE) {
-          items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
-        }
-        // "Go to [deck]" options for other decks
-        for (let d = 0; d < this.decks.length; d++) {
-          if (d !== clickedCrew.deck) {
-            items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
+
+        // Crew member actions
+        if (clickedCrew) {
+          if (clickedCrew.state !== CrewState.IDLE) {
+            items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
+          }
+          for (let d = 0; d < this.decks.length; d++) {
+            if (d !== clickedCrew.deck) {
+              items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
+            }
           }
         }
+
+        // Tile actions from the tile under the click (or under the crew member)
+        if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
+          const tileType = deck.tiles[tileY][tileX];
+          // Tile order actions only if a crew member is selected
+          if (this.selectedCrewId !== null && !clickedCrew) {
+            let tileActions = TILE_ACTIONS[tileType] ? [...TILE_ACTIONS[tileType]!] : undefined;
+            if (tileType === TileType.MAST) {
+              const hasConnection = this.decks.some((d, i) =>
+                i !== this.activeDeck && tileY < d.height && tileX < d.width && d.tiles[tileY][tileX] === TileType.MAST
+              );
+              if (!hasConnection) {
+                tileActions = undefined;
+              } else if (this.activeDeck === 0) {
+                tileActions = [{ label: 'Climb down', targetState: CrewState.IDLE }];
+              }
+            }
+            if (tileActions) items.push(...tileActions);
+          }
+          // "Open Map" on map table when someone is navigating
+          if (tileType === TileType.MAP_TABLE && anyNavigating) {
+            items.push({ label: 'Open Map', targetState: CrewState.NAVIGATING });
+          }
+        }
+
         if (items.length > 0) {
           this.contextMenu = {
             screenX: click.x + 16,
             screenY: click.y,
-            tileX: Math.floor(clickedCrew.pixelX / TILE_SIZE),
-            tileY: Math.floor(clickedCrew.pixelY / TILE_SIZE),
-            deck: clickedCrew.deck,
+            tileX,
+            tileY,
+            deck: clickedCrew ? clickedCrew.deck : this.activeDeck,
             items,
-            crewId: clickedCrew.id,
+            crewId: clickedCrew?.id,
           };
           this.audio.play('click');
-        }
-      } else if (this.selectedCrewId !== null && !clickedCrew) {
-        // Right-click on tile → show tile actions
-        const tileX = Math.floor(worldX / TILE_SIZE);
-        const tileY = Math.floor(worldY / TILE_SIZE);
-        const deck = this.decks[this.activeDeck];
-
-        if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
-          const tileType = deck.tiles[tileY][tileX];
-          let actions = TILE_ACTIONS[tileType];
-          // Mast actions depend on context
-          if (tileType === TileType.MAST) {
-            const hasConnection = this.decks.some((d, i) =>
-              i !== this.activeDeck && tileY < d.height && tileX < d.width && d.tiles[tileY][tileX] === TileType.MAST
-            );
-            if (!hasConnection) {
-              actions = undefined;
-            } else if (this.activeDeck === 0) {
-              actions = [{ label: 'Climb down', targetState: CrewState.IDLE }];
-            }
-          }
-          if (actions && actions.length > 0) {
-            const screenX = tileX * TILE_SIZE - this.camera.x + TILE_SIZE;
-            const screenY = tileY * TILE_SIZE - this.camera.y;
-            this.contextMenu = {
-              screenX,
-              screenY,
-              tileX,
-              tileY,
-              deck: this.activeDeck,
-              items: actions,
-            };
-            this.audio.play('click');
-          }
         }
       }
       this.input.rightClick = null;
@@ -416,6 +423,8 @@ export class Game {
   }
 
   private render(): void {
+    const hasNavigator = this.crew.some(c => c.state === CrewState.NAVIGATING);
+    const hasHelmsman = this.crew.some(c => c.state === CrewState.STEERING);
     this.renderer.render(
       this.decks[this.activeDeck],
       this.activeDeck,
@@ -430,6 +439,8 @@ export class Game {
       this.audio.muted,
       this.worldMap,
       this.mapOverlayOpen,
+      hasNavigator,
+      hasHelmsman,
     );
   }
 }

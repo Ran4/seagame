@@ -161,8 +161,10 @@ export interface Island {
 export interface WorldMap {
   shipX: number;
   shipY: number;
-  destX: number | null;
-  destY: number | null;
+  currentHeading: number;   // radians, actual ship direction
+  currentSpeed: number;     // actual speed (0 to SHIP_SPEED)
+  targetHeading: number | null; // navigator's orders (null = no order)
+  targetSpeed: 'full' | 'stop';  // navigator's orders
   destinationIsland: Island | null;
   islands: Island[];
 }

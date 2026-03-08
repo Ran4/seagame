@@ -62,7 +62,7 @@ function currentTile(member: CrewMember): DeckPoint {
 export function createCrew(count: number, decks: Deck[]): CrewMember[] {
   const crew: CrewMember[] = [];
   for (let i = 0; i < count; i++) {
-    const spawnDeck = Math.floor(Math.random() * Math.min(2, decks.length));
+    const spawnDeck = 1 + Math.floor(Math.random() * Math.min(2, decks.length - 1));
     const walkable = getWalkableTiles(decks[spawnDeck], spawnDeck);
     const spawn = walkable[Math.floor(Math.random() * walkable.length)];
     crew.push({

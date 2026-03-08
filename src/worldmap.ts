@@ -13,48 +13,67 @@ const ISLANDS: Island[] = [
 // 1 cell = 1 league, 1 in-game day = 12 min IRL (720 sec)
 export const SECONDS_PER_DAY = 720;
 const LEAGUES_PER_DAY = 70;
-const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0367 cells/sec
+export const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0972 leagues/sec
 
 export function createWorldMap(): WorldMap {
   return {
     shipX: 50,
     shipY: 40,
-    destX: null,
-    destY: null,
+    currentHeading: 0,
+    currentSpeed: 0,
+    targetHeading: null,
+    targetSpeed: 'stop',
     destinationIsland: null,
     islands: ISLANDS,
   };
 }
 
-export function updateSailing(map: WorldMap, dt: number): void {
-  if (map.destX === null || map.destY === null) return;
+/** Navigator recalculates target heading toward destination island. */
+export function updateNavigator(map: WorldMap): void {
+  if (!map.destinationIsland) return;
 
-  const dx = map.destX - map.shipX;
-  const dy = map.destY - map.shipY;
+  const dx = map.destinationIsland.x - map.shipX;
+  const dy = map.destinationIsland.y - map.shipY;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
   if (dist < 0.5) {
-    map.shipX = map.destX;
-    map.shipY = map.destY;
-    map.destX = null;
-    map.destY = null;
+    // Arrived
     map.destinationIsland = null;
+    map.targetSpeed = 'stop';
+    map.targetHeading = null;
     return;
   }
 
-  const move = SHIP_SPEED * dt;
-  map.shipX += (dx / dist) * Math.min(move, dist);
-  map.shipY += (dy / dist) * Math.min(move, dist);
+  map.targetHeading = Math.atan2(dy, dx);
+  map.targetSpeed = 'full';
+}
+
+/** Helmsman executes navigator's orders — instantly sets heading/speed. */
+export function updateHelmsman(map: WorldMap): void {
+  if (map.targetHeading !== null) {
+    map.currentHeading = map.targetHeading;
+  }
+  map.currentSpeed = map.targetSpeed === 'full' ? SHIP_SPEED : 0;
+}
+
+/** Move ship along current heading at current speed. Always runs (coasting). */
+export function updateSailing(map: WorldMap, dt: number): void {
+  if (map.currentSpeed === 0) return;
+
+  map.shipX += Math.cos(map.currentHeading) * map.currentSpeed * dt;
+  map.shipY += Math.sin(map.currentHeading) * map.currentSpeed * dt;
+
+  // Clamp to world bounds
+  map.shipX = Math.max(0, Math.min(100, map.shipX));
+  map.shipY = Math.max(0, Math.min(80, map.shipY));
 }
 
 export function stopSailing(map: WorldMap): void {
-  map.destX = null;
-  map.destY = null;
   map.destinationIsland = null;
+  map.targetSpeed = 'stop';
+  map.targetHeading = null;
 }
 
 export function setDestination(map: WorldMap, island: Island): void {
-  map.destX = island.x;
-  map.destY = island.y;
   map.destinationIsland = island;
 }

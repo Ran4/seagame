@@ -4,7 +4,7 @@ import {
   ContextMenu, STATE_NAMES, WorldMap,
 } from './types';
 import { SpriteSheet } from './sprites';
-import { SECONDS_PER_DAY } from './worldmap';
+import { SECONDS_PER_DAY, SHIP_SPEED } from './worldmap';
 
 const WATER_COLOR_1 = '#1a5276';
 const WATER_COLOR_2 = '#1b6090';
@@ -53,6 +53,8 @@ export class Renderer {
     soundMuted: boolean = false,
     worldMap: WorldMap | null = null,
     mapOverlayOpen: boolean = false,
+    hasNavigator: boolean = false,
+    hasHelmsman: boolean = false,
   ): void {
     const ctx = this.ctx;
 
@@ -103,7 +105,7 @@ export class Renderer {
       this.drawContextMenu(contextMenu, mousePos);
     }
     if (mapOverlayOpen && worldMap) {
-      this.drawMapOverlay(worldMap, mousePos, time);
+      this.drawMapOverlay(worldMap, mousePos, time, hasNavigator, hasHelmsman);
     }
   }
 
@@ -615,7 +617,7 @@ export class Renderer {
     }
   }
 
-  private drawMapOverlay(worldMap: WorldMap, mousePos: { x: number; y: number }, time: number): void {
+  private drawMapOverlay(worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean = false, hasHelmsman: boolean = false): void {
     const ctx = this.ctx;
     const ox = 40, oy = 40, ow = 880, oh = 460;
 
@@ -653,12 +655,12 @@ export class Renderer {
     const toScreenX = (wx: number) => ox + (wx / 100) * ow;
     const toScreenY = (wy: number) => oy + 30 + ((wy / 80) * (oh - 50));
 
-    // Dashed line from ship to destination
-    if (worldMap.destX !== null && worldMap.destY !== null) {
+    // Dashed line from ship to destination island
+    if (worldMap.destinationIsland) {
       const sx = toScreenX(worldMap.shipX);
       const sy = toScreenY(worldMap.shipY);
-      const dx = toScreenX(worldMap.destX);
-      const dy = toScreenY(worldMap.destY);
+      const dx = toScreenX(worldMap.destinationIsland.x);
+      const dy = toScreenY(worldMap.destinationIsland.y);
       ctx.strokeStyle = '#88aacc';
       ctx.lineWidth = 1;
       ctx.setLineDash([6, 4]);
@@ -710,24 +712,29 @@ export class Renderer {
       ctx.fillText(island.name, ix, iy - radius - 4);
     }
 
-    // Ship (red triangle)
+    // Ship (red triangle, rotated to currentHeading)
     const shipSX = toScreenX(worldMap.shipX);
     const shipSY = toScreenY(worldMap.shipY);
+    ctx.save();
+    ctx.translate(shipSX, shipSY);
+    // heading 0 = right (east), triangle points up by default, so rotate heading + π/2
+    ctx.rotate(worldMap.currentHeading + Math.PI / 2);
     ctx.fillStyle = '#ee4444';
     ctx.beginPath();
-    ctx.moveTo(shipSX, shipSY - 7);
-    ctx.lineTo(shipSX - 5, shipSY + 5);
-    ctx.lineTo(shipSX + 5, shipSY + 5);
+    ctx.moveTo(0, -7);
+    ctx.lineTo(-5, 5);
+    ctx.lineTo(5, 5);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(shipSX, shipSY - 7);
-    ctx.lineTo(shipSX - 5, shipSY + 5);
-    ctx.lineTo(shipSX + 5, shipSY + 5);
+    ctx.moveTo(0, -7);
+    ctx.lineTo(-5, 5);
+    ctx.lineTo(5, 5);
     ctx.closePath();
     ctx.stroke();
+    ctx.restore();
 
     // Hovered island tooltip
     if (hoveredIsland) {
@@ -773,15 +780,36 @@ export class Renderer {
 
     ctx.fillText('ESC / M to close', ox + ow / 2, oy + oh - 6);
 
+    // Role status indicators (bottom-left of overlay)
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    const statusX = ox + 12;
+    const statusY = oy + oh - 30;
+    ctx.fillStyle = hasNavigator ? '#44cc66' : '#cc4444';
+    ctx.fillText('●', statusX, statusY);
+    ctx.fillStyle = '#aabbcc';
+    ctx.fillText(`Navigator: ${hasNavigator ? 'Active' : 'None'}`, statusX + 14, statusY);
+    ctx.fillStyle = hasHelmsman ? '#44cc66' : '#cc4444';
+    ctx.fillText('●', statusX, statusY + 16);
+    ctx.fillStyle = '#aabbcc';
+    ctx.fillText(`Helmsman: ${hasHelmsman ? 'Active' : 'None'}`, statusX + 14, statusY + 16);
+
+    ctx.textAlign = 'center';
+
     if (worldMap.destinationIsland) {
-      const dx = worldMap.destX! - worldMap.shipX;
-      const dy = worldMap.destY! - worldMap.shipY;
+      const dx = worldMap.destinationIsland.x - worldMap.shipX;
+      const dy = worldMap.destinationIsland.y - worldMap.shipY;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const etaSec = dist / (70 / SECONDS_PER_DAY);
-      const etaDays = etaSec / SECONDS_PER_DAY;
-      const days = Math.floor(etaDays);
-      const hours = Math.round((etaDays - days) * 24);
-      const etaStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+      let etaStr: string;
+      if (worldMap.currentSpeed > 0) {
+        const etaSec = dist / worldMap.currentSpeed;
+        const etaDays = etaSec / SECONDS_PER_DAY;
+        const days = Math.floor(etaDays);
+        const hours = Math.round((etaDays - days) * 24);
+        etaStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+      } else {
+        etaStr = 'Ship stopped';
+      }
       ctx.fillStyle = '#aabbcc';
       ctx.fillText(`Sailing to ${worldMap.destinationIsland.name} — ${Math.round(dist)} leagues — ETA: ${etaStr}`, ox + ow / 2, oy + oh - 22);
 
