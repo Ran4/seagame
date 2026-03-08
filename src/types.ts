@@ -74,12 +74,22 @@ export enum CrewState {
   EATING = 'eating',
   SLEEPING = 'sleeping',
   STEERING = 'steering',
-  MANNING_CANNON = 'manning',
+  MANNING_CANNON = 'manning_cannon',
 }
+
+export const STATE_NAMES: Record<CrewState, string> = {
+  [CrewState.IDLE]: 'Idle',
+  [CrewState.WALKING]: 'Walking',
+  [CrewState.EATING]: 'Eating',
+  [CrewState.SLEEPING]: 'Sleeping',
+  [CrewState.STEERING]: 'Steering',
+  [CrewState.MANNING_CANNON]: 'Manning cannon',
+};
 
 export interface ContextMenuItem {
   label: string;
   targetState: CrewState;
+  deckTarget?: number; // send crew to this deck
 }
 
 export interface ContextMenu {
@@ -89,6 +99,7 @@ export interface ContextMenu {
   tileY: number;
   deck: number;
   items: ContextMenuItem[];
+  crewId?: number; // set when menu targets a crew member (e.g. "stop" actions)
 }
 
 export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
@@ -96,6 +107,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.STOVE]: [{ label: 'Eat', targetState: CrewState.EATING }],
   [TileType.HELM]: [{ label: 'Steer', targetState: CrewState.STEERING }],
   [TileType.CANNON]: [{ label: 'Man Cannon', targetState: CrewState.MANNING_CANNON }],
+  [TileType.STAIRS]: [{ label: 'Go to stairs', targetState: CrewState.IDLE }],
 };
 
 export interface CrewMember {

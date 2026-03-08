@@ -1,12 +1,13 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
-  ContextMenu,
+  ContextMenu, STATE_NAMES,
 } from './types';
 import { SpriteSheet } from './sprites';
 
 const WATER_COLOR_1 = '#1a5276';
 const WATER_COLOR_2 = '#1b6090';
+
 
 const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.STAIRS]: 'Stairs',
@@ -379,7 +380,7 @@ export class Renderer {
 
     ctx.font = '11px monospace';
     ctx.fillStyle = '#aaaaaa';
-    ctx.fillText(`State: ${member.state}`, px + 10, py + 52);
+    ctx.fillText(`State: ${STATE_NAMES[member.state]}`, px + 10, py + 52);
 
     ctx.fillStyle = '#cccccc';
     ctx.font = '11px monospace';

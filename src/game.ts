@@ -1,4 +1,4 @@
-import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, ContextMenu, ContextMenuItem, TILE_ACTIONS } from './types';
+import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES } from './types';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
 import { Renderer } from './renderer';
@@ -101,16 +101,44 @@ export class Game {
     if (this.input.mouseClick && this.contextMenu) {
       const menuItem = this.handleMenuClick(this.input.mouseClick);
       if (menuItem) {
-        const member = this.crew.find(c => c.id === this.selectedCrewId);
-        if (member) {
-          orderCrewToAdjacentTile(
-            member,
-            { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
-            this.decks,
-            menuItem.targetState,
-          );
-          this.audio.play('click');
+        if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
+          // "Go to deck" action
+          const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
+          if (member) {
+            const targetDeck = this.decks[menuItem.deckTarget];
+            // Find a walkable tile on the target deck
+            for (let y = 0; y < targetDeck.height; y++) {
+              for (let x = 0; x < targetDeck.width; x++) {
+                if (WALKABLE.has(targetDeck.tiles[y][x])) {
+                  if (orderCrewTo(member, { x, y, deck: menuItem.deckTarget }, this.decks)) {
+                    break;
+                  }
+                }
+              }
+              if (member.state === CrewState.WALKING) break;
+            }
+          }
+        } else if (this.contextMenu.crewId !== undefined) {
+          // "Stop" action
+          const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
+          if (member) {
+            member.state = menuItem.targetState;
+            member.path = [];
+            member.idleTimer = 1 + Math.random() * 2;
+          }
+        } else {
+          // Tile-targeted menu (e.g. "sleep in this bed")
+          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          if (member) {
+            orderCrewToAdjacentTile(
+              member,
+              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
+              this.decks,
+              menuItem.targetState,
+            );
+          }
         }
+        this.audio.play('click');
         this.contextMenu = null;
         this.input.mouseClick = null;
       } else {
@@ -144,11 +172,6 @@ export class Game {
           this.activeDeck = this.activeDeck === 0 ? 1 : 0;
           this.contextMenu = null;
           this.audio.play('stairs');
-        } else if (result.type === 'moveTo' && this.selectedCrewId !== null) {
-          const member = this.crew.find(c => c.id === this.selectedCrewId);
-          if (member) {
-            orderCrewTo(member, result.target, this.decks);
-          }
         }
       } else {
         this.selectedCrewId = null;
@@ -161,10 +184,48 @@ export class Game {
     // Right-click → open context menu
     if (this.input.rightClick) {
       this.audio.startMusicOnInteraction();
-      if (this.selectedCrewId !== null) {
-        const click = this.input.rightClick;
-        const worldX = click.x + this.camera.x;
-        const worldY = click.y + this.camera.y;
+      const click = this.input.rightClick;
+      const worldX = click.x + this.camera.x;
+      const worldY = click.y + this.camera.y;
+
+      // Check if right-clicked a crew member
+      let clickedCrew: CrewMember | null = null;
+      for (const member of this.crew) {
+        if (member.deck !== this.activeDeck) continue;
+        const dx = worldX - member.pixelX;
+        const dy = worldY - member.pixelY;
+        if (dx * dx + dy * dy < 14 * 14) {
+          clickedCrew = member;
+          break;
+        }
+      }
+
+      if (clickedCrew) {
+        const items: ContextMenuItem[] = [];
+        // "Stop" option if busy
+        if (clickedCrew.state !== CrewState.IDLE) {
+          items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
+        }
+        // "Go to [deck]" options for other decks
+        for (let d = 0; d < this.decks.length; d++) {
+          if (d !== clickedCrew.deck) {
+            items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
+          }
+        }
+        if (items.length > 0) {
+          this.contextMenu = {
+            screenX: click.x + 16,
+            screenY: click.y,
+            tileX: Math.floor(clickedCrew.pixelX / TILE_SIZE),
+            tileY: Math.floor(clickedCrew.pixelY / TILE_SIZE),
+            deck: clickedCrew.deck,
+            items,
+            crewId: clickedCrew.id,
+          };
+          this.audio.play('click');
+        }
+      } else if (this.selectedCrewId !== null && !clickedCrew) {
+        // Right-click on tile → show tile actions
         const tileX = Math.floor(worldX / TILE_SIZE);
         const tileY = Math.floor(worldY / TILE_SIZE);
         const deck = this.decks[this.activeDeck];
@@ -173,7 +234,6 @@ export class Game {
           const tileType = deck.tiles[tileY][tileX];
           const actions = TILE_ACTIONS[tileType];
           if (actions && actions.length > 0) {
-            // Position menu next to the tile
             const screenX = tileX * TILE_SIZE - this.camera.x + TILE_SIZE;
             const screenY = tileY * TILE_SIZE - this.camera.y;
             this.contextMenu = {
