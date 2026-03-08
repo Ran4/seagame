@@ -4,6 +4,7 @@ import {
   ContextMenu, STATE_NAMES, WorldMap,
 } from './types';
 import { SpriteSheet } from './sprites';
+import { SECONDS_PER_DAY } from './worldmap';
 
 const WATER_COLOR_1 = '#1a5276';
 const WATER_COLOR_2 = '#1b6090';
@@ -750,18 +751,56 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = '11px monospace';
     ctx.fillStyle = '#667788';
-    ctx.fillText('Press ESC or M to close', ox + ow / 2, oy + oh - 6);
+    // Close button (X) in top-right corner
+    const closeX = ox + ow - 28;
+    const closeY = oy + 8;
+    const closeSize = 20;
+    // Hover highlight
+    const hoverClose = mousePos.x >= closeX && mousePos.x <= closeX + closeSize &&
+                       mousePos.y >= closeY && mousePos.y <= closeY + closeSize;
+    if (hoverClose) {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(closeX - 2, closeY - 2, closeSize + 4, closeSize + 4);
+    }
+    ctx.strokeStyle = hoverClose ? '#ffffff' : '#8899aa';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(closeX, closeY);
+    ctx.lineTo(closeX + closeSize, closeY + closeSize);
+    ctx.moveTo(closeX + closeSize, closeY);
+    ctx.lineTo(closeX, closeY + closeSize);
+    ctx.stroke();
+
+    ctx.fillText('ESC / M to close', ox + ow / 2, oy + oh - 6);
 
     if (worldMap.destinationIsland) {
       const dx = worldMap.destX! - worldMap.shipX;
       const dy = worldMap.destY! - worldMap.shipY;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const eta = Math.ceil(dist / 0.8);
-      const mins = Math.floor(eta / 60);
-      const secs = eta % 60;
-      const etaStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      const etaSec = dist / (70 / SECONDS_PER_DAY);
+      const etaDays = etaSec / SECONDS_PER_DAY;
+      const days = Math.floor(etaDays);
+      const hours = Math.round((etaDays - days) * 24);
+      const etaStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
       ctx.fillStyle = '#aabbcc';
-      ctx.fillText(`Sailing to ${worldMap.destinationIsland.name} — ETA: ${etaStr}`, ox + ow / 2, oy + oh - 22);
+      ctx.fillText(`Sailing to ${worldMap.destinationIsland.name} — ${Math.round(dist)} leagues — ETA: ${etaStr}`, ox + ow / 2, oy + oh - 22);
+
+      // Stop Sailing button
+      const btnW = 100;
+      const btnH = 22;
+      const btnX = ox + ow - btnW - 10;
+      const btnY = oy + oh - btnH - 8;
+      const hoverStop = mousePos.x >= btnX && mousePos.x <= btnX + btnW &&
+                        mousePos.y >= btnY && mousePos.y <= btnY + btnH;
+      ctx.fillStyle = hoverStop ? 'rgba(180, 60, 60, 0.9)' : 'rgba(120, 40, 40, 0.8)';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = '#aa5555';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Stop Sailing', btnX + btnW / 2, btnY + 15);
     }
   }
 

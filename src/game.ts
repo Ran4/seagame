@@ -5,7 +5,7 @@ import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
-import { createWorldMap, updateSailing, setDestination } from './worldmap';
+import { createWorldMap, updateSailing, setDestination, stopSailing } from './worldmap';
 
 export class Game {
   private decks: Deck[];
@@ -20,6 +20,7 @@ export class Game {
   private audio: AudioManager;
   private worldMap: WorldMap;
   private mapOverlayOpen = false;
+  private wasNavigating = false;
   private time = 0;
   private lastTime = 0;
 
@@ -67,13 +68,14 @@ export class Game {
     // Sailing always updates
     updateSailing(this.worldMap, dt);
 
-    // Auto-open/close map overlay based on whether anyone is navigating
+    // Auto-open overlay on transition into navigating; auto-close when nobody is
     const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
-    if (anyNavigating && !this.mapOverlayOpen) {
+    if (anyNavigating && !this.wasNavigating) {
       this.mapOverlayOpen = true;
     } else if (!anyNavigating && this.mapOverlayOpen) {
       this.mapOverlayOpen = false;
     }
+    this.wasNavigating = anyNavigating;
 
     // Escape closes overlay or context menu
     if (this.input.keysDown.has('Escape')) {
@@ -113,7 +115,26 @@ export class Game {
       const my = this.input.mouseClick.y;
       const ox = 40, oy = 40, ow = 880, oh = 460;
 
-      if (mx >= ox && mx <= ox + ow && my >= oy && my <= oy + oh) {
+      // Close button (top-right X)
+      const closeX = ox + ow - 28;
+      const closeY = oy + 8;
+      const closeSize = 20;
+      if (mx >= closeX && mx <= closeX + closeSize && my >= closeY && my <= closeY + closeSize) {
+        this.mapOverlayOpen = false;
+        this.input.mouseClick = null;
+      } else if (mx >= ox && mx <= ox + ow && my >= oy && my <= oy + oh) {
+        // Stop Sailing button (bottom-right of overlay)
+        if (this.worldMap.destinationIsland) {
+          const btnW = 100, btnH = 22;
+          const btnX = ox + ow - btnW - 10;
+          const btnY = oy + oh - btnH - 8;
+          if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
+            stopSailing(this.worldMap);
+            this.audio.play('click');
+            this.input.mouseClick = null;
+            return;
+          }
+        }
         // Check if clicked on an island
         const toScreenX = (wx: number) => ox + (wx / 100) * ow;
         const toScreenY = (wy: number) => oy + 30 + ((wy / 80) * (oh - 50));

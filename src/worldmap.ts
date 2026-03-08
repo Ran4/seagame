@@ -10,7 +10,10 @@ const ISLANDS: Island[] = [
   { id: 6, name: 'Serpent Isle', x: 45, y: 75, hasHarbor: false, description: 'Dense jungle. Strange sounds at night.' },
 ];
 
-const SHIP_SPEED = 0.8; // cells per second
+// 1 cell = 1 league, 1 in-game day = 12 min IRL (720 sec)
+export const SECONDS_PER_DAY = 720;
+const LEAGUES_PER_DAY = 70;
+const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0367 cells/sec
 
 export function createWorldMap(): WorldMap {
   return {
@@ -42,6 +45,12 @@ export function updateSailing(map: WorldMap, dt: number): void {
   const move = SHIP_SPEED * dt;
   map.shipX += (dx / dist) * Math.min(move, dist);
   map.shipY += (dy / dist) * Math.min(move, dist);
+}
+
+export function stopSailing(map: WorldMap): void {
+  map.destX = null;
+  map.destY = null;
+  map.destinationIsland = null;
 }
 
 export function setDestination(map: WorldMap, island: Island): void {
