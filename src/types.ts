@@ -1,0 +1,84 @@
+export const TILE_SIZE = 32;
+export const CANVAS_WIDTH = 960;
+export const CANVAS_HEIGHT = 540;
+export const CREW_SPEED = 64; // pixels per second
+
+export enum TileType {
+  WATER,
+  HULL,
+  FLOOR,
+  STAIRS,
+  HELM,
+  MAST,
+  CANNON,
+  STOVE,
+  BED,
+  BARREL,
+  TABLE,
+}
+
+export const WALKABLE = new Set<TileType>([
+  TileType.FLOOR,
+  TileType.STAIRS,
+  TileType.HELM,
+  TileType.BED,
+  TileType.STOVE,
+]);
+
+export const TILE_COLORS: Record<TileType, string> = {
+  [TileType.WATER]: '#1a5276',
+  [TileType.HULL]: '#5c3d2e',
+  [TileType.FLOOR]: '#c4a46c',
+  [TileType.STAIRS]: '#a08050',
+  [TileType.HELM]: '#8b7355',
+  [TileType.MAST]: '#3e2723',
+  [TileType.CANNON]: '#333333',
+  [TileType.STOVE]: '#8b2500',
+  [TileType.BED]: '#6b8cae',
+  [TileType.BARREL]: '#8b6914',
+  [TileType.TABLE]: '#6d4c2e',
+};
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface DeckPoint extends Point {
+  deck: number;
+}
+
+export enum CrewState {
+  IDLE = 'idle',
+  WALKING = 'walking',
+  EATING = 'eating',
+  SLEEPING = 'sleeping',
+}
+
+export interface CrewMember {
+  id: number;
+  name: string;
+  pixelX: number;
+  pixelY: number;
+  deck: number;
+  hunger: number;  // 0-255, high = full
+  energy: number;  // 0-255, high = rested
+  state: CrewState;
+  targetState: CrewState;
+  color: string;
+  path: DeckPoint[];
+  stateTimer: number;
+  idleTimer: number;
+}
+
+export interface Deck {
+  name: string;
+  tiles: TileType[][];
+  width: number;
+  height: number;
+}
+
+export interface Camera {
+  x: number;
+  y: number;
+}
