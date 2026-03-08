@@ -23,11 +23,11 @@ export const WALKABLE = new Set<TileType>([
   TileType.HELM,
   TileType.BED,
   TileType.STOVE,
+  TileType.MAST,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
   TileType.HELM,
-  TileType.MAST,
   TileType.CANNON,
   TileType.STOVE,
   TileType.BED,
@@ -75,6 +75,7 @@ export enum CrewState {
   SLEEPING = 'sleeping',
   STEERING = 'steering',
   MANNING_CANNON = 'manning_cannon',
+  LOOKOUT = 'lookout',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -84,6 +85,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.SLEEPING]: 'Sleeping',
   [CrewState.STEERING]: 'Steering',
   [CrewState.MANNING_CANNON]: 'Manning cannon',
+  [CrewState.LOOKOUT]: 'Lookout',
 };
 
 export interface ContextMenuItem {
@@ -108,6 +110,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.HELM]: [{ label: 'Steer', targetState: CrewState.STEERING }],
   [TileType.CANNON]: [{ label: 'Man Cannon', targetState: CrewState.MANNING_CANNON }],
   [TileType.STAIRS]: [{ label: 'Go to stairs', targetState: CrewState.IDLE }],
+  [TileType.MAST]: [{ label: 'Lookout', targetState: CrewState.LOOKOUT }],
 };
 
 export interface CrewMember {

@@ -47,6 +47,7 @@ export class Renderer {
     time: number,
     mousePos: { x: number; y: number },
     contextMenu: ContextMenu | null = null,
+    decks: Deck[] = [],
   ): void {
     const ctx = this.ctx;
 
@@ -77,7 +78,7 @@ export class Renderer {
       }
     }
 
-    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject);
+    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks);
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
       this.drawContextMenu(contextMenu, mousePos);
@@ -298,6 +299,8 @@ export class Renderer {
       ctx.fillText('*', sx + 14, sy - 12);
     } else if (member.state === CrewState.MANNING_CANNON) {
       ctx.fillText('!', sx + 14, sy - 12);
+    } else if (member.state === CrewState.LOOKOUT) {
+      ctx.fillText('?', sx + 14, sy - 12);
     }
 
     // Name label
@@ -316,19 +319,20 @@ export class Renderer {
     deck: Deck, deckIndex: number, crew: CrewMember[],
     selectedCrewId: number | null,
     selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
+    decks: Deck[] = [],
   ): void {
     const ctx = this.ctx;
 
     // Deck selector
-    const decks = ['[2] Upper Deck', '[3] Lower Deck'];
+    const deckLabels = decks.map((d, i) => `[${i + 1}] ${d.name}`);
     const lineH = 22;
     const panelW = 160;
-    const panelH = decks.length * lineH + 8;
+    const panelH = deckLabels.length * lineH + 8;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(10, 10, panelW, panelH);
     ctx.font = '13px monospace';
     ctx.textAlign = 'left';
-    for (let i = 0; i < decks.length; i++) {
+    for (let i = 0; i < deckLabels.length; i++) {
       const active = i === deckIndex;
       if (active) {
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -337,7 +341,7 @@ export class Renderer {
       } else {
         ctx.fillStyle = '#777777';
       }
-      ctx.fillText((active ? '▸ ' : '  ') + decks[i], 18, 28 + i * lineH);
+      ctx.fillText((active ? '▸ ' : '  ') + deckLabels[i], 18, 28 + i * lineH);
     }
 
     // Selected crew info
@@ -392,7 +396,8 @@ export class Renderer {
 
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
-    ctx.fillText(`Deck: ${member.deck === 0 ? 'Upper' : 'Lower'}`, px + 10, py + 112);
+    const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
+    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 112);
   }
 
   private drawObjectPanel(obj: { tileType: TileType; x: number; y: number; deck: number }): void {

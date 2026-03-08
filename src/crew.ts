@@ -9,6 +9,7 @@ const EAT_DURATION = 8;
 const ENERGY_RESTORE_RATE = 255 / 480; // full restore in ~480s (8 hours)
 const STEER_DURATION = 20;
 const CANNON_DURATION = 15;
+const LOOKOUT_DURATION = 30;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -59,7 +60,8 @@ function currentTile(member: CrewMember): DeckPoint {
 
 export function createCrew(count: number, decks: Deck[]): CrewMember[] {
   const crew: CrewMember[] = [];
-  const walkable = getWalkableTiles(decks[0], 0);
+  const spawnDeck = Math.min(1, decks.length - 1);
+  const walkable = getWalkableTiles(decks[spawnDeck], spawnDeck);
 
   for (let i = 0; i < count; i++) {
     const spawn = walkable[Math.floor(Math.random() * walkable.length)];
@@ -68,7 +70,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       name: PIRATE_NAMES[i % PIRATE_NAMES.length],
       pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
       pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
-      deck: 0,
+      deck: spawnDeck,
       hunger: 200 + Math.random() * 55,
       energy: 200 + Math.random() * 55,
       state: CrewState.IDLE,
@@ -111,6 +113,13 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number): void 
         break;
       case CrewState.STEERING:
       case CrewState.MANNING_CANNON:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.LOOKOUT:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
@@ -186,6 +195,8 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = STEER_DURATION;
     } else if (member.state === CrewState.MANNING_CANNON) {
       member.stateTimer = CANNON_DURATION;
+    } else if (member.state === CrewState.LOOKOUT) {
+      member.stateTimer = LOOKOUT_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

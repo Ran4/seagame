@@ -10,7 +10,7 @@ export class Game {
   private decks: Deck[];
   private crew: CrewMember[];
   private camera: Camera;
-  private activeDeck = 0;
+  private activeDeck = 1;
   private selectedCrewId: number | null = null;
   private selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null = null;
   private contextMenu: ContextMenu | null = null;
@@ -27,8 +27,8 @@ export class Game {
     this.input = createInputHandler(canvas);
     this.audio = new AudioManager();
 
-    // Center camera on ship
-    const deck = this.decks[0];
+    // Center camera on ship (upper deck)
+    const deck = this.decks[1];
     this.camera = {
       x: (deck.width * TILE_SIZE - CANVAS_WIDTH) / 2,
       y: (deck.height * TILE_SIZE - CANVAS_HEIGHT) / 2,
@@ -66,16 +66,14 @@ export class Game {
       this.input.keysDown.delete('Escape');
     }
 
-    // Deck switching (2 = upper deck, 3 = lower deck; 1 & 4 reserved for future)
-    if (this.input.keysDown.has('2')) {
-      this.activeDeck = 0;
-      this.contextMenu = null;
-      this.input.keysDown.delete('2');
-    }
-    if (this.input.keysDown.has('3')) {
-      this.activeDeck = 1;
-      this.contextMenu = null;
-      this.input.keysDown.delete('3');
+    // Deck switching (1 = crow's nest, 2 = upper deck, 3 = lower deck)
+    for (let d = 0; d < this.decks.length; d++) {
+      const key = String(d + 1);
+      if (this.input.keysDown.has(key)) {
+        this.activeDeck = d;
+        this.contextMenu = null;
+        this.input.keysDown.delete(key);
+      }
     }
 
     // Camera
@@ -86,7 +84,7 @@ export class Game {
       // Check deck selector panel (x:10-170, y:14 + i*22, h:22, 2 entries)
       const mx = this.input.mouseClick.x;
       const my = this.input.mouseClick.y;
-      if (mx >= 10 && mx <= 170 && my >= 14 && my < 14 + 2 * 22) {
+      if (mx >= 10 && mx <= 170 && my >= 14 && my < 14 + this.decks.length * 22) {
         const clicked = Math.floor((my - 14) / 22);
         if (clicked >= 0 && clicked < this.decks.length && clicked !== this.activeDeck) {
           this.activeDeck = clicked;
@@ -130,12 +128,34 @@ export class Game {
           // Tile-targeted menu (e.g. "sleep in this bed")
           const member = this.crew.find(c => c.id === this.selectedCrewId);
           if (member) {
-            orderCrewToAdjacentTile(
-              member,
-              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
-              this.decks,
-              menuItem.targetState,
-            );
+            let targetDeck = this.contextMenu.deck;
+            // Mast actions: send crew to the connected deck
+            const clickedTile = this.decks[this.contextMenu.deck].tiles[this.contextMenu.tileY]?.[this.contextMenu.tileX];
+            if (clickedTile === TileType.MAST) {
+              for (let d = 0; d < this.decks.length; d++) {
+                if (d === this.contextMenu.deck) continue;
+                const other = this.decks[d];
+                if (this.contextMenu.tileY < other.height && this.contextMenu.tileX < other.width &&
+                    other.tiles[this.contextMenu.tileY][this.contextMenu.tileX] === TileType.MAST) {
+                  targetDeck = d;
+                  break;
+                }
+              }
+            }
+            if (menuItem.targetState === CrewState.LOOKOUT) {
+              // Go to a tile next to the mast, not onto it
+              const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+              for (const [dx, dy] of DIRS) {
+                if (orderCrewTo(member, { x: this.contextMenu.tileX + dx, y: this.contextMenu.tileY + dy, deck: targetDeck }, this.decks, menuItem.targetState)) break;
+              }
+            } else {
+              orderCrewToAdjacentTile(
+                member,
+                { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: targetDeck },
+                this.decks,
+                menuItem.targetState,
+              );
+            }
           }
         }
         this.audio.play('click');
@@ -169,7 +189,17 @@ export class Game {
           this.contextMenu = null;
           this.audio.play('click');
         } else if (result.type === 'useStairs') {
-          this.activeDeck = this.activeDeck === 0 ? 1 : 0;
+          // Find connected deck — stairs at same (x,y) on adjacent deck
+          for (const d of [this.activeDeck - 1, this.activeDeck + 1]) {
+            if (d >= 0 && d < this.decks.length) {
+              const otherDeck = this.decks[d];
+              if (result.tileY < otherDeck.height && result.tileX < otherDeck.width &&
+                  (otherDeck.tiles[result.tileY][result.tileX] === TileType.STAIRS || otherDeck.tiles[result.tileY][result.tileX] === TileType.MAST)) {
+                this.activeDeck = d;
+                break;
+              }
+            }
+          }
           this.contextMenu = null;
           this.audio.play('stairs');
         }
@@ -232,7 +262,18 @@ export class Game {
 
         if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
           const tileType = deck.tiles[tileY][tileX];
-          const actions = TILE_ACTIONS[tileType];
+          let actions = TILE_ACTIONS[tileType];
+          // Mast actions depend on context
+          if (tileType === TileType.MAST) {
+            const hasConnection = this.decks.some((d, i) =>
+              i !== this.activeDeck && tileY < d.height && tileX < d.width && d.tiles[tileY][tileX] === TileType.MAST
+            );
+            if (!hasConnection) {
+              actions = undefined;
+            } else if (this.activeDeck === 0) {
+              actions = [{ label: 'Climb down', targetState: CrewState.IDLE }];
+            }
+          }
           if (actions && actions.length > 0) {
             const screenX = tileX * TILE_SIZE - this.camera.x + TILE_SIZE;
             const screenY = tileY * TILE_SIZE - this.camera.y;
@@ -292,6 +333,7 @@ export class Game {
       this.time,
       this.input.mousePos,
       this.contextMenu,
+      this.decks,
     );
   }
 }

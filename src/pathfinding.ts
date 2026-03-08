@@ -89,12 +89,16 @@ export function findPath(
       });
     }
 
-    // Stairs: switch deck
+    // Stairs / Mast: switch deck
     const currentTile = decks[current.deck].tiles[current.y][current.x];
-    if (currentTile === TileType.STAIRS) {
+    if (currentTile === TileType.STAIRS || currentTile === TileType.MAST) {
       for (let d = 0; d < decks.length; d++) {
         if (d === current.deck) continue;
-        if (isWalkable(decks, current.x, current.y, d)) {
+        const otherDeck = decks[d];
+        if (current.y >= otherDeck.height || current.x >= otherDeck.width) continue;
+        const otherTile = otherDeck.tiles[current.y][current.x];
+        // Stairs connect to any walkable tile; masts only connect to other masts
+        if (currentTile === TileType.STAIRS ? isWalkable(decks, current.x, current.y, d) : otherTile === TileType.MAST) {
           const nk = key(current.x, current.y, d);
           if (closed.has(nk)) continue;
           const g = current.g + 1;

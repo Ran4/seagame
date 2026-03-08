@@ -90,7 +90,7 @@ export function handleClick(
   deck: Deck,
 ): { type: 'selectCrew'; crewId: number }
   | { type: 'moveTo'; target: DeckPoint }
-  | { type: 'useStairs' }
+  | { type: 'useStairs'; tileX: number; tileY: number }
   | { type: 'selectObject'; tileType: TileType; x: number; y: number; deck: number }
   | null {
   const worldX = click.x + camera.x;
@@ -112,13 +112,12 @@ export function handleClick(
   if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
     const clickedTile = deck.tiles[tileY][tileX];
     // Stairs → switch deck
-    if (clickedTile === TileType.STAIRS) {
-      return { type: 'useStairs' };
+    if (clickedTile === TileType.STAIRS || clickedTile === TileType.MAST) {
+      return { type: 'useStairs', tileX, tileY };
     }
     if (WALKABLE.has(clickedTile)) {
       return { type: 'moveTo', target: { x: tileX, y: tileY, deck: activeDeck } };
     }
-    // Selectable objects (non-walkable but interesting)
     if (SELECTABLE_OBJECTS.has(clickedTile)) {
       return { type: 'selectObject', tileType: clickedTile, x: tileX, y: tileY, deck: activeDeck };
     }
