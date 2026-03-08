@@ -25,6 +25,8 @@ const TILE_NAMES: Partial<Record<TileType, string>> = {
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private sprites: SpriteSheet | null = null;
+  private hoveredItem: { item: Item; x: number; y: number } | null = null;
+  private mousePos: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor(private canvas: HTMLCanvasElement) {
     canvas.width = CANVAS_WIDTH;
@@ -58,6 +60,8 @@ export class Renderer {
     barrelInventory: Map<string, Item[]> = new Map(),
   ): void {
     const ctx = this.ctx;
+    this.hoveredItem = null as typeof this.hoveredItem;
+    this.mousePos = mousePos;
 
     ctx.fillStyle = WATER_COLOR_1;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -107,6 +111,10 @@ export class Renderer {
     }
     if (mapOverlayOpen && worldMap) {
       this.drawMapOverlay(worldMap, mousePos, time, hasNavigator, hasHelmsman);
+    }
+    const hovered = this.hoveredItem;
+    if (hovered) {
+      this.drawItemTooltip(hovered.item, mousePos);
     }
   }
 
@@ -301,7 +309,7 @@ export class Renderer {
     const sx = member.pixelX - camera.x;
     const sy = member.pixelY - camera.y;
 
-    const crewSprite = this.sprites?.crew[member.id % (this.sprites?.crew.length ?? 1)];
+    const crewSprite = this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)];
 
     if (crewSprite) {
       // Draw sprite centered on position
@@ -314,7 +322,7 @@ export class Renderer {
       ctx.ellipse(sx, sy + 10, 8, 4, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = member.color;
+      ctx.fillStyle = member.profile.color;
       ctx.beginPath();
       ctx.arc(sx, sy, 10, 0, Math.PI * 2);
       ctx.fill();
@@ -360,9 +368,9 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
-    ctx.strokeText(member.name, sx, sy - 22);
+    ctx.strokeText(member.profile.name, sx, sy - 22);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(member.name, sx, sy - 22);
+    ctx.fillText(member.profile.name, sx, sy - 22);
     ctx.textBaseline = 'alphabetic';
   }
 
@@ -467,7 +475,19 @@ export class Renderer {
     const px = CANVAS_WIDTH - 210;
     const py = 10;
     const pw = 200;
-    const ph = 120;
+    const p = member.profile;
+    const slotSize = 28;
+    const slotGap = 4;
+    const sectionGap = 14; // label height
+    // Hands row (always shown)
+    let extraH = sectionGap + slotSize + slotGap;
+    // Inventory rows
+    const invCols = 5;
+    if (p.inventory.length > 0) {
+      const invRows = Math.ceil(p.inventory.length / invCols);
+      extraH += sectionGap + invRows * (slotSize + slotGap);
+    }
+    const ph = 126 + extraH + 8;
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -476,7 +496,7 @@ export class Renderer {
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
 
     // Color dot + name
-    ctx.fillStyle = member.color;
+    ctx.fillStyle = member.profile.color;
     ctx.beginPath();
     ctx.arc(px + 20, py + 25, 8, 0, Math.PI * 2);
     ctx.fill();
@@ -484,7 +504,7 @@ export class Renderer {
     ctx.fillStyle = '#ffffff';
     ctx.font = '14px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`${member.name} (${member.gender})`, px + 35, py + 30);
+    ctx.fillText(`${member.profile.name} (${member.profile.sex})`, px + 35, py + 30);
 
     ctx.font = '11px monospace';
     ctx.fillStyle = '#aaaaaa';
@@ -493,15 +513,139 @@ export class Renderer {
     ctx.fillStyle = '#cccccc';
     ctx.font = '11px monospace';
     ctx.fillText('Hunger', px + 10, py + 72);
-    this.drawBar(px + 75, py + 62, 115, 12, member.hunger / 255, '#e67e22');
+    this.drawBar(px + 75, py + 62, 115, 12, member.profile.hunger / 255, '#e67e22');
 
     ctx.fillText('Energy', px + 10, py + 92);
-    this.drawBar(px + 75, py + 82, 115, 12, member.energy / 255, '#3498db');
+    this.drawBar(px + 75, py + 82, 115, 12, member.profile.energy / 255, '#3498db');
 
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
     ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 112);
+
+    this.drawCrewHandsAndInventory(member, px, py + 124, pw);
+  }
+
+  private drawCrewHandsAndInventory(member: CrewMember, px: number, startY: number, pw: number): void {
+    const ctx = this.ctx;
+    const p = member.profile;
+    const s = 28;   // slot size
+    const gap = 4;
+    let cy = startY;
+
+    // Hands label + slots
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = p.numberOfHands === 0 ? '#666666' : '#aaaaaa';
+    ctx.fillText(p.numberOfHands === 0 ? 'No hands' : 'Hands:', px + 10, cy);
+    cy += 14;
+    for (let i = 0; i < p.numberOfHands; i++) {
+      const sx = px + 10 + i * (s + gap);
+      this.drawItemSlot(sx, cy, s, p.hands[i] ?? null);
+    }
+    if (p.numberOfHands > 0) cy += s + gap;
+
+    // Inventory label + grid
+    if (p.inventory.length > 0) {
+      ctx.fillStyle = '#aaaaaa';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('Inventory:', px + 10, cy);
+      cy += 14;
+      const cols = 5;
+      for (let i = 0; i < p.inventory.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const sx = px + 10 + col * (s + gap);
+        const sy = cy + row * (s + gap);
+        this.drawItemSlot(sx, sy, s, p.inventory[i]);
+      }
+    }
+  }
+
+  private drawItemSlot(x: number, y: number, size: number, item: Item | null): void {
+    const ctx = this.ctx;
+    // Slot background
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+    if (!item) return;
+
+    // Try sprite
+    const spriteKey = item.name.toLowerCase();
+    const sprite = this.sprites?.items.get(spriteKey);
+    if (sprite) {
+      // Sprites are 1024x1024 with 32x32 pixel art centered — crop to inner ~60%
+      const inset = Math.floor(sprite.width * 0.2);
+      const srcSize = sprite.width - inset * 2;
+      ctx.drawImage(sprite, inset, inset, srcSize, srcSize, x + 2, y + 2, size - 4, size - 4);
+    } else {
+      // Fallback: first 2 letters
+      ctx.fillStyle = '#cccccc';
+      ctx.font = `bold ${Math.floor(size * 0.4)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.name.slice(0, 2), x + size / 2, y + size / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Quantity badge
+    if (item.quantity > 1) {
+      const label = `${item.quantity}`;
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      const tw = ctx.measureText(label).width + 4;
+      ctx.fillRect(x + size - tw, y + size - 12, tw, 12);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, x + size - 2, y + size - 3);
+    }
+
+    // Hover detection
+    const mp = this.mousePos;
+    if (mp.x >= x && mp.x <= x + size && mp.y >= y && mp.y <= y + size) {
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+      this.hoveredItem = { item, x: mp.x, y: mp.y };
+    }
+  }
+
+  private drawItemTooltip(item: Item, mousePos: { x: number; y: number }): void {
+    const ctx = this.ctx;
+    ctx.font = '11px monospace';
+
+    const lines: string[] = [item.name];
+    const weightStr = item.weight >= 1000 ? `${(item.weight / 1000).toFixed(1)} kg` : `${item.weight}g`;
+    lines.push(weightStr);
+    if (item.quantity > 1) lines.push(`Qty: ${item.quantity}`);
+    if (item.description) lines.push(item.description);
+
+    const pad = 6;
+    const lineH = 14;
+    const maxW = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const tw = maxW + pad * 2;
+    const th = lines.length * lineH + pad * 2;
+
+    let tx = mousePos.x + 14;
+    let ty = mousePos.y - th - 4;
+    if (tx + tw > CANVAS_WIDTH) tx = mousePos.x - tw - 4;
+    if (ty < 0) ty = mousePos.y + 18;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(tx, ty, tw, th);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
+
+    ctx.textAlign = 'left';
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillStyle = i === 0 ? '#ffffff' : '#aaaaaa';
+      ctx.fillText(lines[i], tx + pad, ty + pad + (i + 1) * lineH - 3);
+    }
   }
 
   private drawObjectPanel(
@@ -523,11 +667,13 @@ export class Renderer {
       const key = `${obj.deck}-${obj.x}-${obj.y}`;
       items = barrelInventory.get(key) || [];
     }
-    const maxDisplay = 6;
-    const displayItems = items.slice(0, maxDisplay);
+    const slotSize = 28;
+    const slotGap = 4;
+    const slotCols = 5;
     const contentsHeight = obj.tileType === TileType.BARREL
-      ? (displayItems.length > 0 ? displayItems.length * 14 + 22 : 28)
-        + (items.length > maxDisplay ? 14 : 0)
+      ? 14 + (items.length > 0
+          ? Math.ceil(items.length / slotCols) * (slotSize + slotGap) + slotGap
+          : 18)
       : 0;
     const ph = 80 + contentsHeight;
 
@@ -581,18 +727,13 @@ export class Renderer {
         ctx.fillStyle = '#666666';
         ctx.fillText('(empty)', px + 20, cy + 28);
       } else {
-        for (let i = 0; i < displayItems.length; i++) {
-          const item = displayItems[i];
-          const age = Math.floor(gameTime - item.createdAt);
-          const ageStr = age < 60 ? `${age}s` : age < 3600 ? `${Math.floor(age / 60)}m` : `${Math.floor(age / 3600)}h`;
-          const qty = item.quantity > 1 ? `x${item.quantity} ` : '';
-          const spoiled = item.spoilAfter !== null && age >= item.spoilAfter;
-          ctx.fillStyle = spoiled ? '#cc4444' : '#aaaaaa';
-          ctx.fillText(`${qty}${item.name} ${item.weight}g ${ageStr}`, px + 14, cy + 28 + i * 14);
-        }
-        if (items.length > maxDisplay) {
-          ctx.fillStyle = '#666666';
-          ctx.fillText(`...and ${items.length - maxDisplay} more`, px + 14, cy + 28 + displayItems.length * 14);
+        const gridY = cy + 18;
+        for (let i = 0; i < items.length; i++) {
+          const col = i % slotCols;
+          const row = Math.floor(i / slotCols);
+          const sx = px + 10 + col * (slotSize + slotGap);
+          const sy = gridY + row * (slotSize + slotGap);
+          this.drawItemSlot(sx, sy, slotSize, items[i]);
         }
       }
     }

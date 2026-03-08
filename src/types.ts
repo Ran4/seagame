@@ -125,21 +125,29 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.BARREL]: [{ label: 'Copulate', targetState: CrewState.COPULATING }],
 };
 
+export interface CrewProfile {
+  name: string;
+  sex: Sex;
+  color: string;
+  spriteIndex: number;
+  numberOfHands: number;
+  hunger: number;   // 0-255
+  energy: number;   // 0-255
+  inventory: Item[];
+  hands: Item[];    // length <= numberOfHands
+}
+
 export interface CrewMember {
   id: number;
-  name: string;
+  profile: CrewProfile;
   pixelX: number;
   pixelY: number;
   deck: number;
-  hunger: number;  // 0-255, high = full
-  energy: number;  // 0-255, high = rested
   state: CrewState;
   targetState: CrewState;
-  color: string;
   path: DeckPoint[];
   stateTimer: number;
   idleTimer: number;
-  gender: Gender;
   copulationTarget: CopulationTarget | null;
 }
 
@@ -175,7 +183,7 @@ export interface WorldMap {
   islands: Island[];
 }
 
-export type Gender = 'M' | 'F';
+export type Sex = 'M' | 'F';
 
 export interface Item {
   name: string;

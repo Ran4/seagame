@@ -1,5 +1,6 @@
-import { CrewMember, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Gender, Item } from './types';
+import { CrewMember, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item } from './types';
 import { findPath } from './pathfinding';
+import { createCutlass, createSemen } from './items';
 
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
@@ -20,7 +21,7 @@ const PIRATE_NAMES = [
 
 const CREW_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
-const PIRATE_GENDERS: Record<string, Gender> = {
+const PIRATE_SEXES: Record<string, Sex> = {
   'Anne': 'F', 'Jack': 'M', 'Mary': 'F', 'Flint': 'M',
   'Morgan': 'M', 'Pete': 'M', 'Jane': 'F', 'Bones': 'M',
 };
@@ -71,31 +72,47 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
     const spawnDeck = 1 + Math.floor(Math.random() * Math.min(2, decks.length - 1));
     const walkable = getWalkableTiles(decks[spawnDeck], spawnDeck);
     const spawn = walkable[Math.floor(Math.random() * walkable.length)];
+    // Weighted random for numberOfHands: 99.5% → 2, 0.4% → 1, 0.1% → 0
+    const handRoll = Math.random();
+    const numberOfHands = handRoll < 0.001 ? 0 : handRoll < 0.005 ? 1 : 2;
+
     crew.push({
       id: i,
-      name: PIRATE_NAMES[i % PIRATE_NAMES.length],
+      profile: {
+        name: PIRATE_NAMES[i % PIRATE_NAMES.length],
+        sex: PIRATE_SEXES[PIRATE_NAMES[i % PIRATE_NAMES.length]] ?? (Math.random() < 0.5 ? 'M' : 'F'),
+        color: CREW_COLORS[i % CREW_COLORS.length],
+        spriteIndex: i,
+        numberOfHands,
+        hunger: 200 + Math.random() * 55,
+        energy: 200 + Math.random() * 55,
+        inventory: [],
+        hands: [],
+      },
       pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
       pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
       deck: spawnDeck,
-      hunger: 200 + Math.random() * 55,
-      energy: 200 + Math.random() * 55,
       state: CrewState.IDLE,
       targetState: CrewState.IDLE,
-      color: CREW_COLORS[i % CREW_COLORS.length],
       path: [],
       stateTimer: 0,
       idleTimer: Math.random() * 3,
-      gender: PIRATE_GENDERS[PIRATE_NAMES[i % PIRATE_NAMES.length]] ?? (Math.random() < 0.5 ? 'M' : 'F'),
       copulationTarget: null,
     });
   }
+
+  const jack = crew.find(c => c.profile.name === 'Jack');
+  if (jack) {
+    jack.profile.hands.push(createCutlass());
+  }
+
   return crew;
 }
 
 export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number): void {
   for (const member of crew) {
-    member.hunger = Math.max(0, member.hunger - HUNGER_RATE * dt);
-    member.energy = Math.max(0, member.energy - ENERGY_RATE * dt);
+    member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
+    member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
 
     switch (member.state) {
       case CrewState.IDLE:
@@ -107,14 +124,14 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
       case CrewState.EATING:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
-          member.hunger = Math.min(255, member.hunger + 180);
+          member.profile.hunger = Math.min(255, member.profile.hunger + 180);
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
       case CrewState.SLEEPING:
-        member.energy = Math.min(255, member.energy + ENERGY_RESTORE_RATE * dt);
-        if (member.energy >= 255) {
+        member.profile.energy = Math.min(255, member.profile.energy + ENERGY_RESTORE_RATE * dt);
+        if (member.profile.energy >= 255) {
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
@@ -150,7 +167,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         }
         if (member.stateTimer <= 0) {
           // Male + barrel → produce semen
-          if (member.gender === 'M' && member.copulationTarget?.type === 'barrel') {
+          if (member.profile.sex === 'M' && member.copulationTarget?.type === 'barrel') {
             const t = member.copulationTarget;
             const key = `${t.deck}-${t.x}-${t.y}`;
             const items = barrelInventory.get(key) || [];
@@ -159,11 +176,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
               existing.quantity += 1;
               existing.weight += 5;
             } else {
-              items.push({
-                name: 'Semen', createdAt: gameTime, weight: 5,
-                description: 'A viscous fluid.',
-                stackable: true, quantity: 1, spoilAfter: 3600,
-              });
+              items.push(createSemen(gameTime));
             }
             barrelInventory.set(key, items);
           }
@@ -196,7 +209,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
   const from = currentTile(member);
 
   // Hungry? Go eat
-  if (member.hunger < HUNGER_THRESHOLD) {
+  if (member.profile.hunger < HUNGER_THRESHOLD) {
     const stoves = findTilesOfType(decks, TileType.STOVE);
     const target = pickRandom(stoves);
     if (target) {
@@ -211,7 +224,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
   }
 
   // Tired? Go sleep
-  if (member.energy < ENERGY_THRESHOLD) {
+  if (member.profile.energy < ENERGY_THRESHOLD) {
     const beds = findTilesOfType(decks, TileType.BED);
     const target = pickRandom(beds);
     if (target) {

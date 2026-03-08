@@ -1,4 +1,5 @@
 import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item } from './types';
+import { createSemen } from './items';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
 import { Renderer } from './renderer';
@@ -33,6 +34,21 @@ export class Game {
     this.input = createInputHandler(canvas);
     this.audio = new AudioManager();
     this.worldMap = createWorldMap();
+
+    // Seed barrels with starting items
+    for (let d = 0; d < this.decks.length; d++) {
+      const deck = this.decks[d];
+      for (let y = 0; y < deck.height; y++) {
+        for (let x = 0; x < deck.width; x++) {
+          if (deck.tiles[y][x] === TileType.BARREL) {
+            const semen = createSemen(0);
+            semen.quantity = 2;
+            semen.weight = 10;
+            this.barrelInventory.set(`${d}-${x}-${y}`, [semen]);
+          }
+        }
+      }
+    }
 
     // Center camera on ship (upper deck)
     const deck = this.decks[1];
