@@ -1,10 +1,11 @@
-import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES } from './types';
+import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap } from './types';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
+import { createWorldMap, updateSailing, setDestination } from './worldmap';
 
 export class Game {
   private decks: Deck[];
@@ -17,6 +18,8 @@ export class Game {
   private renderer: Renderer;
   private input: InputState;
   private audio: AudioManager;
+  private worldMap: WorldMap;
+  private mapOverlayOpen = false;
   private time = 0;
   private lastTime = 0;
 
@@ -26,6 +29,7 @@ export class Game {
     this.renderer = new Renderer(canvas);
     this.input = createInputHandler(canvas);
     this.audio = new AudioManager();
+    this.worldMap = createWorldMap();
 
     // Center camera on ship (upper deck)
     const deck = this.decks[1];
@@ -60,10 +64,34 @@ export class Game {
   }
 
   private update(dt: number): void {
-    // Escape closes context menu
+    // Sailing always updates
+    updateSailing(this.worldMap, dt);
+
+    // Auto-open/close map overlay based on whether anyone is navigating
+    const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
+    if (anyNavigating && !this.mapOverlayOpen) {
+      this.mapOverlayOpen = true;
+    } else if (!anyNavigating && this.mapOverlayOpen) {
+      this.mapOverlayOpen = false;
+    }
+
+    // Escape closes overlay or context menu
     if (this.input.keysDown.has('Escape')) {
-      this.contextMenu = null;
+      if (this.mapOverlayOpen) {
+        this.mapOverlayOpen = false;
+      } else {
+        this.contextMenu = null;
+      }
       this.input.keysDown.delete('Escape');
+    }
+
+    // M key toggles overlay (only when someone is navigating)
+    if (this.input.keysDown.has('m') || this.input.keysDown.has('M')) {
+      if (anyNavigating) {
+        this.mapOverlayOpen = !this.mapOverlayOpen;
+      }
+      this.input.keysDown.delete('m');
+      this.input.keysDown.delete('M');
     }
 
     // Deck switching (1 = crow's nest, 2 = upper deck, 3 = lower deck)
@@ -78,6 +106,40 @@ export class Game {
 
     // Camera
     updateCamera(this.camera, this.input, dt, this.decks[this.activeDeck].height);
+
+    // Map overlay click interception
+    if (this.input.mouseClick && this.mapOverlayOpen) {
+      const mx = this.input.mouseClick.x;
+      const my = this.input.mouseClick.y;
+      const ox = 40, oy = 40, ow = 880, oh = 460;
+
+      if (mx >= ox && mx <= ox + ow && my >= oy && my <= oy + oh) {
+        // Check if clicked on an island
+        const toScreenX = (wx: number) => ox + (wx / 100) * ow;
+        const toScreenY = (wy: number) => oy + 30 + ((wy / 80) * (oh - 50));
+
+        let clickedIsland = false;
+        for (const island of this.worldMap.islands) {
+          const ix = toScreenX(island.x);
+          const iy = toScreenY(island.y);
+          const dx = mx - ix;
+          const dy = my - iy;
+          if (dx * dx + dy * dy < 14 * 14) {
+            setDestination(this.worldMap, island);
+            this.audio.play('click');
+            clickedIsland = true;
+            break;
+          }
+        }
+        if (!clickedIsland) {
+          // Clicked inside overlay but not on island — do nothing
+        }
+      } else {
+        // Clicked outside overlay — close it
+        this.mapOverlayOpen = false;
+      }
+      this.input.mouseClick = null;
+    }
 
     // Clicks
     if (this.input.mouseClick) {
@@ -345,6 +407,8 @@ export class Game {
       this.contextMenu,
       this.decks,
       this.audio.muted,
+      this.worldMap,
+      this.mapOverlayOpen,
     );
   }
 }

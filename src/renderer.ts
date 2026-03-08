@@ -1,7 +1,7 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
-  ContextMenu, STATE_NAMES,
+  ContextMenu, STATE_NAMES, WorldMap,
 } from './types';
 import { SpriteSheet } from './sprites';
 
@@ -18,6 +18,7 @@ const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.BED]: 'Bed',
   [TileType.BARREL]: 'Barrel',
   [TileType.TABLE]: 'Table',
+  [TileType.MAP_TABLE]: 'Map Table',
 };
 
 export class Renderer {
@@ -49,6 +50,8 @@ export class Renderer {
     contextMenu: ContextMenu | null = null,
     decks: Deck[] = [],
     soundMuted: boolean = false,
+    worldMap: WorldMap | null = null,
+    mapOverlayOpen: boolean = false,
   ): void {
     const ctx = this.ctx;
 
@@ -97,6 +100,9 @@ export class Renderer {
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
       this.drawContextMenu(contextMenu, mousePos);
+    }
+    if (mapOverlayOpen && worldMap) {
+      this.drawMapOverlay(worldMap, mousePos, time);
     }
   }
 
@@ -261,6 +267,28 @@ export class Renderer {
         ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
         break;
       }
+      case TileType.MAP_TABLE: {
+        // Green table with parchment + compass cross
+        ctx.fillStyle = '#3a5a34';
+        ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+        // Parchment
+        ctx.fillStyle = '#d4c49a';
+        ctx.fillRect(sx + 7, sy + 7, TILE_SIZE - 14, TILE_SIZE - 14);
+        // Compass cross
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, sy + 9);
+        ctx.lineTo(cx, sy + TILE_SIZE - 9);
+        ctx.moveTo(sx + 9, cy);
+        ctx.lineTo(sx + TILE_SIZE - 9, cy);
+        ctx.stroke();
+        // Compass circle
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
     }
   }
 
@@ -316,6 +344,8 @@ export class Renderer {
       ctx.fillText('!', sx + 14, sy - 12);
     } else if (member.state === CrewState.LOOKOUT) {
       ctx.fillText('?', sx + 14, sy - 12);
+    } else if (member.state === CrewState.NAVIGATING) {
+      ctx.fillText('N', sx + 14, sy - 12);
     }
 
     // Name label
@@ -581,6 +611,157 @@ export class Renderer {
         ctx.lineTo(mx + itemW - 4, iy + itemH);
         ctx.stroke();
       }
+    }
+  }
+
+  private drawMapOverlay(worldMap: WorldMap, mousePos: { x: number; y: number }, time: number): void {
+    const ctx = this.ctx;
+    const ox = 40, oy = 40, ow = 880, oh = 460;
+
+    // Dark blue overlay background
+    ctx.fillStyle = 'rgba(10, 20, 50, 0.92)';
+    ctx.fillRect(ox, oy, ow, oh);
+    ctx.strokeStyle = '#5577aa';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox, oy, ow, oh);
+
+    // Title
+    ctx.fillStyle = '#aaccee';
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('World Map', ox + ow / 2, oy + 22);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(80, 120, 180, 0.15)';
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx <= 100; gx += 10) {
+      const sx = ox + (gx / 100) * ow;
+      ctx.beginPath();
+      ctx.moveTo(sx, oy + 30);
+      ctx.lineTo(sx, oy + oh - 20);
+      ctx.stroke();
+    }
+    for (let gy = 0; gy <= 80; gy += 10) {
+      const sy = oy + 30 + ((gy / 80) * (oh - 50));
+      ctx.beginPath();
+      ctx.moveTo(ox, sy);
+      ctx.lineTo(ox + ow, sy);
+      ctx.stroke();
+    }
+
+    const toScreenX = (wx: number) => ox + (wx / 100) * ow;
+    const toScreenY = (wy: number) => oy + 30 + ((wy / 80) * (oh - 50));
+
+    // Dashed line from ship to destination
+    if (worldMap.destX !== null && worldMap.destY !== null) {
+      const sx = toScreenX(worldMap.shipX);
+      const sy = toScreenY(worldMap.shipY);
+      const dx = toScreenX(worldMap.destX);
+      const dy = toScreenY(worldMap.destY);
+      ctx.strokeStyle = '#88aacc';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(dx, dy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Islands
+    let hoveredIsland: typeof worldMap.islands[0] | null = null;
+    for (const island of worldMap.islands) {
+      const ix = toScreenX(island.x);
+      const iy = toScreenY(island.y);
+      const radius = 8;
+
+      // Check hover
+      const hdx = mousePos.x - ix;
+      const hdy = mousePos.y - iy;
+      if (hdx * hdx + hdy * hdy < (radius + 4) * (radius + 4)) {
+        hoveredIsland = island;
+      }
+
+      // Destination highlight (golden ring)
+      if (worldMap.destinationIsland && worldMap.destinationIsland.id === island.id) {
+        ctx.strokeStyle = '#ffcc00';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ix, iy, radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Island dot
+      ctx.fillStyle = island.hasHarbor ? '#44aa55' : '#8b6644';
+      ctx.beginPath();
+      ctx.arc(ix, iy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(ix, iy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Name label
+      ctx.fillStyle = '#ccddee';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(island.name, ix, iy - radius - 4);
+    }
+
+    // Ship (red triangle)
+    const shipSX = toScreenX(worldMap.shipX);
+    const shipSY = toScreenY(worldMap.shipY);
+    ctx.fillStyle = '#ee4444';
+    ctx.beginPath();
+    ctx.moveTo(shipSX, shipSY - 7);
+    ctx.lineTo(shipSX - 5, shipSY + 5);
+    ctx.lineTo(shipSX + 5, shipSY + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(shipSX, shipSY - 7);
+    ctx.lineTo(shipSX - 5, shipSY + 5);
+    ctx.lineTo(shipSX + 5, shipSY + 5);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Hovered island tooltip
+    if (hoveredIsland) {
+      const ix = toScreenX(hoveredIsland.x);
+      const iy = toScreenY(hoveredIsland.y);
+      ctx.font = '11px monospace';
+      const desc = hoveredIsland.description;
+      const tw = ctx.measureText(desc).width + 12;
+      let ttx = ix - tw / 2;
+      const tty = iy + 18;
+      if (ttx < ox + 4) ttx = ox + 4;
+      if (ttx + tw > ox + ow - 4) ttx = ox + ow - tw - 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillRect(ttx, tty, tw, 20);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.fillText(desc, ttx + 6, tty + 14);
+    }
+
+    // Bottom info
+    ctx.textAlign = 'center';
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#667788';
+    ctx.fillText('Press ESC or M to close', ox + ow / 2, oy + oh - 6);
+
+    if (worldMap.destinationIsland) {
+      const dx = worldMap.destX! - worldMap.shipX;
+      const dy = worldMap.destY! - worldMap.shipY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const eta = Math.ceil(dist / 0.8);
+      const mins = Math.floor(eta / 60);
+      const secs = eta % 60;
+      const etaStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      ctx.fillStyle = '#aabbcc';
+      ctx.fillText(`Sailing to ${worldMap.destinationIsland.name} — ETA: ${etaStr}`, ox + ow / 2, oy + oh - 22);
     }
   }
 

@@ -10,6 +10,7 @@ const ENERGY_RESTORE_RATE = 255 / 480; // full restore in ~480s (8 hours)
 const STEER_DURATION = 20;
 const CANNON_DURATION = 15;
 const LOOKOUT_DURATION = 30;
+const NAVIGATE_DURATION = 999999;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -113,6 +114,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number): void 
         break;
       case CrewState.STEERING:
       case CrewState.MANNING_CANNON:
+      case CrewState.NAVIGATING:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
@@ -197,6 +199,8 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = CANNON_DURATION;
     } else if (member.state === CrewState.LOOKOUT) {
       member.stateTimer = LOOKOUT_DURATION;
+    } else if (member.state === CrewState.NAVIGATING) {
+      member.stateTimer = NAVIGATE_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

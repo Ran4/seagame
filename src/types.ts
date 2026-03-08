@@ -15,6 +15,7 @@ export enum TileType {
   BED,
   BARREL,
   TABLE,
+  MAP_TABLE,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -24,6 +25,7 @@ export const WALKABLE = new Set<TileType>([
   TileType.BED,
   TileType.STOVE,
   TileType.MAST,
+  TileType.MAP_TABLE,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -33,6 +35,7 @@ export const SELECTABLE_OBJECTS = new Set<TileType>([
   TileType.BED,
   TileType.BARREL,
   TileType.TABLE,
+  TileType.MAP_TABLE,
 ]);
 
 export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
@@ -43,6 +46,7 @@ export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
   [TileType.BED]: 40,
   [TileType.BARREL]: 30,
   [TileType.TABLE]: 30,
+  [TileType.MAP_TABLE]: 60,
 };
 
 export const TILE_COLORS: Record<TileType, string> = {
@@ -57,6 +61,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.BED]: '#6b8cae',
   [TileType.BARREL]: '#8b6914',
   [TileType.TABLE]: '#6d4c2e',
+  [TileType.MAP_TABLE]: '#4a6644',
 };
 
 export interface Point {
@@ -76,6 +81,7 @@ export enum CrewState {
   STEERING = 'steering',
   MANNING_CANNON = 'manning_cannon',
   LOOKOUT = 'lookout',
+  NAVIGATING = 'navigating',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -86,6 +92,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.STEERING]: 'Steering',
   [CrewState.MANNING_CANNON]: 'Manning cannon',
   [CrewState.LOOKOUT]: 'Lookout',
+  [CrewState.NAVIGATING]: 'Navigating',
 };
 
 export interface ContextMenuItem {
@@ -111,6 +118,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.CANNON]: [{ label: 'Man Cannon', targetState: CrewState.MANNING_CANNON }],
   [TileType.STAIRS]: [{ label: 'Go to stairs', targetState: CrewState.IDLE }],
   [TileType.MAST]: [{ label: 'Lookout', targetState: CrewState.LOOKOUT }],
+  [TileType.MAP_TABLE]: [{ label: 'Navigate', targetState: CrewState.NAVIGATING }],
 };
 
 export interface CrewMember {
@@ -139,4 +147,22 @@ export interface Deck {
 export interface Camera {
   x: number;
   y: number;
+}
+
+export interface Island {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  hasHarbor: boolean;
+  description: string;
+}
+
+export interface WorldMap {
+  shipX: number;
+  shipY: number;
+  destX: number | null;
+  destY: number | null;
+  destinationIsland: Island | null;
+  islands: Island[];
 }
