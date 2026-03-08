@@ -235,12 +235,14 @@ export class Game {
             let targetDeck = this.contextMenu.deck;
             // Mast actions: send crew to the connected deck
             const clickedTile = this.decks[this.contextMenu.deck].tiles[this.contextMenu.tileY]?.[this.contextMenu.tileX];
-            if (clickedTile === TileType.MAST) {
+            if (clickedTile === TileType.MAST || clickedTile === TileType.STAIRS) {
               for (let d = 0; d < this.decks.length; d++) {
                 if (d === this.contextMenu.deck) continue;
                 const other = this.decks[d];
                 if (this.contextMenu.tileY < other.height && this.contextMenu.tileX < other.width &&
-                    other.tiles[this.contextMenu.tileY][this.contextMenu.tileX] === TileType.MAST) {
+                    (clickedTile === TileType.STAIRS
+                      ? WALKABLE.has(other.tiles[this.contextMenu.tileY][this.contextMenu.tileX])
+                      : other.tiles[this.contextMenu.tileY][this.contextMenu.tileX] === TileType.MAST)) {
                   targetDeck = d;
                   break;
                 }
