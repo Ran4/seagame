@@ -1,4 +1,4 @@
-import { Deck, CrewMember, Camera, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT } from './types';
+import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT } from './types';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo } from './crew';
 import { Renderer } from './renderer';
@@ -12,6 +12,7 @@ export class Game {
   private camera: Camera;
   private activeDeck = 0;
   private selectedCrewId: number | null = null;
+  private selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null = null;
   private renderer: Renderer;
   private input: InputState;
   private audio: AudioManager;
@@ -101,6 +102,11 @@ export class Game {
       if (result) {
         if (result.type === 'selectCrew') {
           this.selectedCrewId = result.crewId;
+          this.selectedObject = null;
+          this.audio.play('click');
+        } else if (result.type === 'selectObject') {
+          this.selectedObject = result;
+          this.selectedCrewId = null;
           this.audio.play('click');
         } else if (result.type === 'useStairs') {
           this.activeDeck = this.activeDeck === 0 ? 1 : 0;
@@ -113,6 +119,7 @@ export class Game {
         }
       } else {
         this.selectedCrewId = null;
+        this.selectedObject = null;
       }
       this.input.mouseClick = null;
     }
@@ -128,6 +135,7 @@ export class Game {
       this.crew,
       this.camera,
       this.selectedCrewId,
+      this.selectedObject,
       this.time,
       this.input.mousePos,
     );

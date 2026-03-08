@@ -1,6 +1,6 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
-  TileType, TILE_COLORS, Deck, CrewMember, Camera, CrewState,
+  TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
 } from './types';
 import { SpriteSheet } from './sprites';
 
@@ -41,6 +41,7 @@ export class Renderer {
     crew: CrewMember[],
     camera: Camera,
     selectedCrewId: number | null,
+    selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
     time: number,
     mousePos: { x: number; y: number },
   ): void {
@@ -52,13 +53,28 @@ export class Renderer {
     this.drawWater(camera, time);
     this.drawDeck(deck, camera, time);
 
+    // Lower decks are darker (below deck, less light)
+    if (deckIndex > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${0.125 * deckIndex})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
+
+    // Selected object highlight
+    if (selectedObject && selectedObject.deck === deckIndex) {
+      const ox = selectedObject.x * TILE_SIZE - camera.x;
+      const oy = selectedObject.y * TILE_SIZE - camera.y;
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ox + 1, oy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    }
+
     for (const member of crew) {
       if (member.deck === deckIndex) {
         this.drawCrewMember(member, camera, member.id === selectedCrewId);
       }
     }
 
-    this.drawUI(deck, deckIndex, crew, selectedCrewId);
+    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject);
     this.drawTooltip(deck, camera, mousePos);
   }
 
@@ -275,15 +291,22 @@ export class Renderer {
     }
 
     // Name label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '9px monospace';
+    ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2.5;
+    ctx.strokeText(member.name, sx, sy - 22);
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(member.name, sx, sy - 22);
     ctx.textBaseline = 'alphabetic';
   }
 
-  private drawUI(deck: Deck, deckIndex: number, crew: CrewMember[], selectedCrewId: number | null): void {
+  private drawUI(
+    deck: Deck, deckIndex: number, crew: CrewMember[],
+    selectedCrewId: number | null,
+    selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
+  ): void {
     const ctx = this.ctx;
 
     // Deck selector
@@ -313,6 +336,11 @@ export class Renderer {
       if (member) {
         this.drawCrewPanel(member);
       }
+    }
+
+    // Selected object info
+    if (selectedObject) {
+      this.drawObjectPanel(selectedObject);
     }
   }
 
@@ -355,6 +383,49 @@ export class Renderer {
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     ctx.fillText(`Deck: ${member.deck === 0 ? 'Upper' : 'Lower'}`, px + 10, py + 112);
+  }
+
+  private drawObjectPanel(obj: { tileType: TileType; x: number; y: number; deck: number }): void {
+    const ctx = this.ctx;
+    const px = CANVAS_WIDTH - 210;
+    const py = 10;
+    const pw = 200;
+    const ph = 80;
+
+    const name = TILE_NAMES[obj.tileType] ?? 'Object';
+    const maxHp = OBJECT_MAX_HP[obj.tileType] ?? 50;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+    // Draw sprite or colored square
+    const sprite = this.sprites?.tiles.get(obj.tileType);
+    if (sprite) {
+      ctx.drawImage(sprite, px + 8, py + 10, 24, 24);
+    } else {
+      ctx.fillStyle = TILE_COLORS[obj.tileType];
+      ctx.fillRect(px + 8, py + 10, 24, 24);
+    }
+
+    // Name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(name, px + 40, py + 28);
+
+    // HP bar
+    ctx.fillStyle = '#cccccc';
+    ctx.font = '11px monospace';
+    ctx.fillText('HP', px + 10, py + 58);
+    this.drawBar(px + 35, py + 48, 155, 12, 1.0, '#4caf50');
+
+    // HP text
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px monospace';
+    ctx.fillText(`${maxHp}/${maxHp}`, px + 135, py + 72);
   }
 
   private drawTooltip(deck: Deck, camera: Camera, mousePos: { x: number; y: number }): void {

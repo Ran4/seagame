@@ -25,6 +25,26 @@ export const WALKABLE = new Set<TileType>([
   TileType.STOVE,
 ]);
 
+export const SELECTABLE_OBJECTS = new Set<TileType>([
+  TileType.HELM,
+  TileType.MAST,
+  TileType.CANNON,
+  TileType.STOVE,
+  TileType.BED,
+  TileType.BARREL,
+  TileType.TABLE,
+]);
+
+export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
+  [TileType.HELM]: 100,
+  [TileType.MAST]: 150,
+  [TileType.CANNON]: 80,
+  [TileType.STOVE]: 60,
+  [TileType.BED]: 40,
+  [TileType.BARREL]: 30,
+  [TileType.TABLE]: 30,
+};
+
 export const TILE_COLORS: Record<TileType, string> = {
   [TileType.WATER]: '#1a5276',
   [TileType.HULL]: '#5c3d2e',

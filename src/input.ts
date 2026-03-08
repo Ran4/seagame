@@ -1,9 +1,10 @@
-import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, Deck, WALKABLE, DeckPoint } from './types';
+import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, Deck, WALKABLE, SELECTABLE_OBJECTS, DeckPoint } from './types';
 
 export interface InputState {
   keysDown: Set<string>;
   mouseClick: { x: number; y: number } | null;
   mousePos: { x: number; y: number };
+  scrollY: number; // accumulated scroll in pixels
 }
 
 export function createInputHandler(canvas: HTMLCanvasElement): InputState {
@@ -11,6 +12,7 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
     keysDown: new Set(),
     mouseClick: null,
     mousePos: { x: 0, y: 0 },
+    scrollY: 0,
   };
 
   window.addEventListener('keydown', (e) => {
@@ -30,6 +32,11 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
       y: (e.clientY - rect.top) * scaleY,
     };
   });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    state.scrollY += Math.sign(e.deltaY) * TILE_SIZE * 5;
+  }, { passive: false });
 
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -52,6 +59,12 @@ export function updateCamera(camera: Camera, input: InputState, dt: number, ship
   if (input.keysDown.has('ArrowLeft') || input.keysDown.has('a')) camera.x -= scrollSpeed * dt;
   if (input.keysDown.has('ArrowRight') || input.keysDown.has('d')) camera.x += scrollSpeed * dt;
 
+  // Mouse wheel scroll
+  if (input.scrollY !== 0) {
+    camera.y += input.scrollY;
+    input.scrollY = 0;
+  }
+
   const maxY = shipHeight * TILE_SIZE - CANVAS_HEIGHT;
   camera.y = Math.max(-TILE_SIZE * 3, Math.min(maxY + TILE_SIZE * 3, camera.y));
 }
@@ -62,7 +75,11 @@ export function handleClick(
   crew: CrewMember[],
   activeDeck: number,
   deck: Deck,
-): { type: 'selectCrew'; crewId: number } | { type: 'moveTo'; target: DeckPoint } | { type: 'useStairs' } | null {
+): { type: 'selectCrew'; crewId: number }
+  | { type: 'moveTo'; target: DeckPoint }
+  | { type: 'useStairs' }
+  | { type: 'selectObject'; tileType: TileType; x: number; y: number; deck: number }
+  | null {
   const worldX = click.x + camera.x;
   const worldY = click.y + camera.y;
   const tileX = Math.floor(worldX / TILE_SIZE);
@@ -87,6 +104,10 @@ export function handleClick(
     }
     if (WALKABLE.has(clickedTile)) {
       return { type: 'moveTo', target: { x: tileX, y: tileY, deck: activeDeck } };
+    }
+    // Selectable objects (non-walkable but interesting)
+    if (SELECTABLE_OBJECTS.has(clickedTile)) {
+      return { type: 'selectObject', tileType: clickedTile, x: tileX, y: tileY, deck: activeDeck };
     }
   }
 
