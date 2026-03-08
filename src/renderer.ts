@@ -95,10 +95,17 @@ export class Renderer {
 
     this.drawDeck(deck, camera, time);
 
-    // Combined darkness overlay: night + deck depth
+    // Combined darkness overlay: night + deck depth, reduced by lit lanterns
     {
+      // Count lit lanterns on this deck
+      let litCount = 0;
+      for (const [key, oil] of lanternOil) {
+        if (oil > 0 && key.startsWith(`${deckIndex}-`)) litCount++;
+      }
+      const lanternLift = Math.min(0.35, litCount * 0.07); // each lantern lifts ~0.07, max 0.35
+
       const nightDark = (1 - brightness) * 2; // 0 at day, 1 at night
-      const nightAlpha = nightDark * 0.55;
+      const nightAlpha = Math.max(0, nightDark * 0.55 - lanternLift);
       const deckAlpha = deckIndex > 0 ? 0.125 * deckIndex : 0;
       const totalAlpha = Math.min(0.75, nightAlpha + deckAlpha);
       if (totalAlpha > 0) {
