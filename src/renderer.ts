@@ -96,6 +96,14 @@ export class Renderer {
 
         const sprite = this.sprites?.tiles.get(tile);
         if (sprite) {
+          // Draw floor underneath furniture/objects with transparent backgrounds
+          const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR;
+          if (needsFloorUnder) {
+            const floorSprite = this.sprites?.tiles.get(TileType.FLOOR);
+            if (floorSprite) {
+              ctx.drawImage(floorSprite, sx, sy, TILE_SIZE, TILE_SIZE);
+            }
+          }
           ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
         } else {
           ctx.fillStyle = TILE_COLORS[tile];
