@@ -1,6 +1,7 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
+  ContextMenu,
 } from './types';
 import { SpriteSheet } from './sprites';
 
@@ -44,6 +45,7 @@ export class Renderer {
     selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
     time: number,
     mousePos: { x: number; y: number },
+    contextMenu: ContextMenu | null = null,
   ): void {
     const ctx = this.ctx;
 
@@ -76,6 +78,9 @@ export class Renderer {
 
     this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject);
     this.drawTooltip(deck, camera, mousePos);
+    if (contextMenu) {
+      this.drawContextMenu(contextMenu, mousePos);
+    }
   }
 
   private drawWater(camera: Camera, time: number): void {
@@ -288,6 +293,10 @@ export class Renderer {
       ctx.fillText('z', sx + 14, sy - 12);
     } else if (member.state === CrewState.EATING) {
       ctx.fillText('~', sx + 14, sy - 12);
+    } else if (member.state === CrewState.STEERING) {
+      ctx.fillText('*', sx + 14, sy - 12);
+    } else if (member.state === CrewState.MANNING_CANNON) {
+      ctx.fillText('!', sx + 14, sy - 12);
     }
 
     // Name label
@@ -452,6 +461,55 @@ export class Renderer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(name, px, py);
+  }
+
+  private drawContextMenu(menu: ContextMenu, mousePos: { x: number; y: number }): void {
+    const ctx = this.ctx;
+    const itemW = 140;
+    const itemH = 24;
+    const pad = 4;
+    const totalH = menu.items.length * itemH + pad * 2;
+
+    // Position next to the tile, clamped to canvas
+    let mx = menu.screenX;
+    let my = menu.screenY;
+    if (mx + itemW > CANVAS_WIDTH) mx = mx - itemW - 4;
+    if (my + totalH > CANVAS_HEIGHT) my = CANVAS_HEIGHT - totalH - 4;
+    if (mx < 0) mx = 4;
+    if (my < 0) my = 4;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(mx, my, itemW, totalH);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx + 0.5, my + 0.5, itemW - 1, totalH - 1);
+
+    // Items
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'left';
+    for (let i = 0; i < menu.items.length; i++) {
+      const iy = my + pad + i * itemH;
+
+      // Hover highlight
+      if (mousePos.x >= mx && mousePos.x <= mx + itemW &&
+          mousePos.y >= iy && mousePos.y <= iy + itemH) {
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(mx + 1, iy, itemW - 2, itemH);
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(menu.items[i].label, mx + 10, iy + 16);
+
+      // Separator
+      if (i < menu.items.length - 1) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.moveTo(mx + 4, iy + itemH);
+        ctx.lineTo(mx + itemW - 4, iy + itemH);
+        ctx.stroke();
+      }
+    }
   }
 
   private drawBar(x: number, y: number, w: number, h: number, fill: number, color: string): void {

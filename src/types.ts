@@ -73,7 +73,30 @@ export enum CrewState {
   WALKING = 'walking',
   EATING = 'eating',
   SLEEPING = 'sleeping',
+  STEERING = 'steering',
+  MANNING_CANNON = 'manning',
 }
+
+export interface ContextMenuItem {
+  label: string;
+  targetState: CrewState;
+}
+
+export interface ContextMenu {
+  screenX: number;
+  screenY: number;
+  tileX: number;
+  tileY: number;
+  deck: number;
+  items: ContextMenuItem[];
+}
+
+export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
+  [TileType.BED]: [{ label: 'Sleep', targetState: CrewState.SLEEPING }],
+  [TileType.STOVE]: [{ label: 'Eat', targetState: CrewState.EATING }],
+  [TileType.HELM]: [{ label: 'Steer', targetState: CrewState.STEERING }],
+  [TileType.CANNON]: [{ label: 'Man Cannon', targetState: CrewState.MANNING_CANNON }],
+};
 
 export interface CrewMember {
   id: number;

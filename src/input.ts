@@ -3,6 +3,7 @@ import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, D
 export interface InputState {
   keysDown: Set<string>;
   mouseClick: { x: number; y: number } | null;
+  rightClick: { x: number; y: number } | null;
   mousePos: { x: number; y: number };
   scrollY: number; // accumulated scroll in pixels
 }
@@ -11,6 +12,7 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
   const state: InputState = {
     keysDown: new Set(),
     mouseClick: null,
+    rightClick: null,
     mousePos: { x: 0, y: 0 },
     scrollY: 0,
   };
@@ -28,6 +30,17 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     state.mouseClick = {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
+  });
+
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    state.rightClick = {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
     };

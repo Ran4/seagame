@@ -6,7 +6,9 @@ const ENERGY_RATE = 0.4;
 const HUNGER_THRESHOLD = 80;
 const ENERGY_THRESHOLD = 60;
 const EAT_DURATION = 8;
-const SLEEP_DURATION = 15;
+const ENERGY_RESTORE_RATE = 255 / 480; // full restore in ~480s (8 hours)
+const STEER_DURATION = 20;
+const CANNON_DURATION = 15;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -101,9 +103,16 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number): void 
         }
         break;
       case CrewState.SLEEPING:
+        member.energy = Math.min(255, member.energy + ENERGY_RESTORE_RATE * dt);
+        if (member.energy >= 255) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.STEERING:
+      case CrewState.MANNING_CANNON:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
-          member.energy = Math.min(255, member.energy + 180);
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
@@ -172,7 +181,11 @@ function updateWalking(member: CrewMember, dt: number): void {
     if (member.state === CrewState.EATING) {
       member.stateTimer = EAT_DURATION;
     } else if (member.state === CrewState.SLEEPING) {
-      member.stateTimer = SLEEP_DURATION;
+      // No timer — sleeps until energy is full (rate-based)
+    } else if (member.state === CrewState.STEERING) {
+      member.stateTimer = STEER_DURATION;
+    } else if (member.state === CrewState.MANNING_CANNON) {
+      member.stateTimer = CANNON_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }
@@ -202,14 +215,27 @@ function updateWalking(member: CrewMember, dt: number): void {
   }
 }
 
-export function orderCrewTo(member: CrewMember, target: DeckPoint, decks: Deck[]): boolean {
+export function orderCrewTo(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE): boolean {
   const from = currentTile(member);
   const path = findPath(decks, from, target);
   if (path && path.length > 0) {
     member.path = path;
     member.state = CrewState.WALKING;
-    member.targetState = CrewState.IDLE;
+    member.targetState = targetState;
     return true;
+  }
+  return false;
+}
+
+export function orderCrewToAdjacentTile(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+  // Try direct path first (works for walkable tiles like BED, STOVE, HELM)
+  if (orderCrewTo(member, target, decks, targetState)) return true;
+
+  // Try adjacent walkable tiles (for non-walkable targets like CANNON)
+  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (const [dx, dy] of DIRS) {
+    const adj: DeckPoint = { x: target.x + dx, y: target.y + dy, deck: target.deck };
+    if (orderCrewTo(member, adj, decks, targetState)) return true;
   }
   return false;
 }
