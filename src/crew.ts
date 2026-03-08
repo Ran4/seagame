@@ -1,4 +1,4 @@
-import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item } from './types';
+import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION } from './types';
 import { findPath } from './pathfinding';
 import { createCutlass, createSemen } from './items';
 
@@ -125,7 +125,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
   return crew;
 }
 
-export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number): void {
+export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0): void {
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
@@ -141,7 +141,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
 
     switch (member.state) {
       case CrewState.IDLE:
-        updateIdle(member, decks, dt);
+        updateIdle(member, decks, dt, crew, lanternOil, brightness);
         break;
       case CrewState.WALKING:
         updateWalking(member, dt);
@@ -173,6 +173,28 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
       case CrewState.LOOKOUT:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.LIGHTING_LANTERN:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          // Find the lantern tile adjacent to this crew member
+          const ct = currentTile(member);
+          const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0], [0, 0]];
+          for (const [dx, dy] of DIRS) {
+            const lx = ct.x + dx;
+            const ly = ct.y + dy;
+            if (ly >= 0 && ly < decks[ct.deck].height && lx >= 0 && lx < decks[ct.deck].width) {
+              if (decks[ct.deck].tiles[ly][lx] === TileType.LANTERN) {
+                const key = `${ct.deck}-${lx}-${ly}`;
+                const oil = lanternOil.get(key) ?? 0;
+                lanternOil.set(key, oil <= 0 ? 100 : 0);
+                break;
+              }
+            }
+          }
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
@@ -276,7 +298,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   }
 }
 
-function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
+function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMember[], lanternOil: Map<string, number>, brightness: number): void {
   // Waiting for copulation partner — don't wander
   if (member.copulationTarget) return;
 
@@ -300,8 +322,8 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
     }
   }
 
-  // Tired? Go sleep
-  if (member.profile.energy < ENERGY_THRESHOLD) {
+  // Tired? Go sleep (daytime restriction: only if brightness < 0.7 or energy < 30)
+  if (member.profile.energy < ENERGY_THRESHOLD && (brightness < 0.7 || member.profile.energy < 30)) {
     const beds = findTilesOfType(decks, TileType.BED);
     const target = pickRandom(beds);
     if (target) {
@@ -310,6 +332,49 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
         member.path = path;
         member.state = CrewState.WALKING;
         member.targetState = CrewState.SLEEPING;
+        return;
+      }
+    }
+  }
+
+  // Light unlit lanterns when dark
+  if (brightness < 0.7) {
+    const lanterns = findTilesOfType(decks, TileType.LANTERN);
+    const unlit = lanterns.filter(l => {
+      const key = `${l.deck}-${l.x}-${l.y}`;
+      const oil = lanternOil.get(key) ?? 0;
+      if (oil > 0) return false;
+      // Deconflict: skip if another crew is already heading there
+      return !crew.some(c => c.id !== member.id && c.targetState === CrewState.LIGHTING_LANTERN && c.state === CrewState.WALKING && c.path.length > 0 && c.path[c.path.length - 1].x === l.x && c.path[c.path.length - 1].y === l.y && c.path[c.path.length - 1].deck === l.deck);
+    });
+    const target = pickRandom(unlit);
+    if (target) {
+      const path = findPath(decks, from, target);
+      if (path) {
+        member.path = path;
+        member.state = CrewState.WALKING;
+        member.targetState = CrewState.LIGHTING_LANTERN;
+        return;
+      }
+    }
+  }
+
+  // Extinguish lit lanterns when bright
+  if (brightness > 0.9) {
+    const lanterns = findTilesOfType(decks, TileType.LANTERN);
+    const lit = lanterns.filter(l => {
+      const key = `${l.deck}-${l.x}-${l.y}`;
+      const oil = lanternOil.get(key) ?? 0;
+      if (oil <= 0) return false;
+      return !crew.some(c => c.id !== member.id && c.targetState === CrewState.LIGHTING_LANTERN && c.state === CrewState.WALKING && c.path.length > 0 && c.path[c.path.length - 1].x === l.x && c.path[c.path.length - 1].y === l.y && c.path[c.path.length - 1].deck === l.deck);
+    });
+    const target = pickRandom(lit);
+    if (target) {
+      const path = findPath(decks, from, target);
+      if (path) {
+        member.path = path;
+        member.state = CrewState.WALKING;
+        member.targetState = CrewState.LIGHTING_LANTERN;
         return;
       }
     }
@@ -352,6 +417,8 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = COPULATE_DURATION;
     } else if (member.state === CrewState.KISSING) {
       member.stateTimer = KISS_DURATION;
+    } else if (member.state === CrewState.LIGHTING_LANTERN) {
+      member.stateTimer = LIGHT_LANTERN_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

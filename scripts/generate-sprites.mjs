@@ -49,6 +49,7 @@ const SPRITES = [
   ['bed', `${TILE_STYLE} Simple wooden-frame sailor's bed/bunk, seen from above. Blue-striped blanket or sheet with a small white pillow at one end. Compact shipboard sleeping berth.`],
   ['barrel', `${TILE_STYLE} Round wooden storage barrel seen from directly above. The circular top has visible wood grain in a radial pattern with two dark iron bands/hoops crossing it.`],
   ['table', `${TILE_STYLE} Rectangular wooden dining table, seen from directly above. Dark brown sturdy wood surface with visible grain. Simple ship's mess table.`],
+  ['lantern', `${TILE_STYLE} A brass ship's lantern on the deck, seen from directly above. Round brass base with a glass dome on top containing a warm yellow flame. Golden metallic color with warm light glow.`],
 
   // Crew
   ['crew_red', `${CREW_STYLE} Small pirate character seen from directly above. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],

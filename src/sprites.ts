@@ -30,14 +30,18 @@ export async function loadSprites(): Promise<SpriteSheet> {
     [TileType.BED, 'bed'],
     [TileType.BARREL, 'barrel'],
     [TileType.TABLE, 'table'],
+    [TileType.LANTERN, 'lantern'],
   ];
 
   const itemNames = ['cutlass', 'semen'];
   const bubbleNames = ['heart', 'broken_heart'];
 
-  const coreLoads = await Promise.all([
-    // Tile sprites
-    ...tileNames.map(([, name]) => loadImage(`/sprites/${name}.png`)),
+  // Tile sprites (individually fault-tolerant so missing ones don't break everything)
+  const tileLoads = await Promise.all(
+    tileNames.map(([, name]) => loadImage(`/sprites/${name}.png`).catch(() => null)),
+  );
+
+  const otherCoreLoads = await Promise.all([
     // Water frame 2
     loadImage('/sprites/water2.png'),
     // Crew sprites
@@ -59,11 +63,12 @@ export async function loadSprites(): Promise<SpriteSheet> {
 
   const tiles = new Map<TileType, HTMLImageElement>();
   for (let i = 0; i < tileNames.length; i++) {
-    tiles.set(tileNames[i][0], coreLoads[i]);
+    const img = tileLoads[i];
+    if (img) tiles.set(tileNames[i][0], img);
   }
 
-  const water2 = coreLoads[tileNames.length];
-  const crewStart = tileNames.length + 1;
+  const water2 = otherCoreLoads[0];
+  const crewSprites = otherCoreLoads.slice(1);
 
   const items = new Map<string, HTMLImageElement>();
   for (let i = 0; i < itemNames.length; i++) {
@@ -85,7 +90,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
   return {
     tiles,
     waterFrames: [tiles.get(TileType.WATER)!, water2],
-    crew: coreLoads.slice(crewStart),
+    crew: crewSprites,
     items,
     bubbles,
   };

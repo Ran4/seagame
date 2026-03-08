@@ -1,4 +1,5 @@
-import { Island, WorldMap } from './types';
+import { Island, WorldMap, SECONDS_PER_DAY } from './types';
+export { SECONDS_PER_DAY };
 
 const ISLANDS: Island[] = [
   { id: 0, name: 'Tortuga', x: 20, y: 30, hasHarbor: true, description: 'A bustling pirate haven with taverns and trade.' },
@@ -10,8 +11,7 @@ const ISLANDS: Island[] = [
   { id: 6, name: 'Serpent Isle', x: 45, y: 75, hasHarbor: false, description: 'Dense jungle. Strange sounds at night.' },
 ];
 
-// 1 cell = 1 league, 1 in-game day = 12 min IRL (720 sec)
-export const SECONDS_PER_DAY = 720;
+// 1 cell = 1 league
 const LEAGUES_PER_DAY = 70;
 export const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0972 leagues/sec
 

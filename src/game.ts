@@ -1,4 +1,4 @@
-import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item } from './types';
+import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
 import { createSemen } from './items';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
@@ -21,6 +21,8 @@ export class Game {
   private audio: AudioManager;
   private worldMap: WorldMap;
   private barrelInventory: Map<string, Item[]> = new Map();
+  private lanternOil: Map<string, number> = new Map();
+  private dayTimeOffset = Math.random() * SECONDS_PER_DAY;
   private mapOverlayOpen = false;
   private wasNavigating = false;
   private navTimer = 0;
@@ -46,6 +48,18 @@ export class Game {
             semen.quantity = 2;
             semen.weight = 10;
             this.barrelInventory.set(`${d}-${x}-${y}`, [semen]);
+          }
+        }
+      }
+    }
+
+    // Init lantern oil to 0 (crew will light them if it's night)
+    for (let d = 0; d < this.decks.length; d++) {
+      const deck = this.decks[d];
+      for (let y = 0; y < deck.height; y++) {
+        for (let x = 0; x < deck.width; x++) {
+          if (deck.tiles[y][x] === TileType.LANTERN) {
+            this.lanternOil.set(`${d}-${x}-${y}`, 0);
           }
         }
       }
@@ -466,6 +480,16 @@ export class Game {
                 tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
               }
             }
+            // Dynamic lantern actions based on oil state
+            if (tileType === TileType.LANTERN) {
+              const lanternKey = `${this.activeDeck}-${tileX}-${tileY}`;
+              const oil = this.lanternOil.get(lanternKey) ?? 0;
+              if (oil <= 0) {
+                tileActions = [{ label: 'Light', targetState: CrewState.LIGHTING_LANTERN }];
+              } else {
+                tileActions = [{ label: 'Extinguish', targetState: CrewState.LIGHTING_LANTERN }];
+              }
+            }
             if (tileActions) items.push(...tileActions);
           }
           // "Open Map" on map table when someone is navigating
@@ -490,8 +514,19 @@ export class Game {
       this.input.rightClick = null;
     }
 
+    // Burn lantern oil
+    for (const [key, oil] of this.lanternOil) {
+      if (oil > 0) {
+        this.lanternOil.set(key, Math.max(0, oil - LANTERN_BURNOUT_RATE * dt));
+      }
+    }
+
+    // Time of day + brightness
+    const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
+    const brightness = getShipBrightness(timeOfDay);
+
     // Crew AI
-    updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time);
+    updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
   }
 
   // Returns the clicked menu item, or undefined to mean "click was on menu, don't close"
@@ -548,6 +583,8 @@ export class Game {
   private render(): void {
     const hasNavigator = this.crew.some(c => c.state === CrewState.NAVIGATING);
     const hasHelmsman = this.crew.some(c => c.state === CrewState.STEERING);
+    const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
+    const brightness = getShipBrightness(timeOfDay);
     this.renderer.render(
       this.decks[this.activeDeck],
       this.activeDeck,
@@ -566,6 +603,9 @@ export class Game {
       hasHelmsman,
       this.barrelInventory,
       this.waterOffset,
+      brightness,
+      this.lanternOil,
+      timeOfDay,
     );
   }
 }

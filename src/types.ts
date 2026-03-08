@@ -3,6 +3,28 @@ export const CANVAS_WIDTH = 960;
 export const CANVAS_HEIGHT = 540;
 export const CREW_SPEED = 64; // pixels per second
 
+// Time-of-day system
+// 1 in-game day = 12 minutes IRL (720 seconds)
+export const SECONDS_PER_DAY = 720;
+// Dawn: 0–60s, Day: 60–420s, Dusk: 420–480s, Night: 480–720s
+export const DAWN_START = 0;
+export const DAY_START = 60;
+export const DUSK_START = 420;
+export const NIGHT_START = 480;
+
+// TODO: when seasons exist, make this change over the seasons!
+export function getShipBrightness(timeOfDay: number): number {
+  if (timeOfDay < DAWN_START) return 0.5;
+  if (timeOfDay < DAY_START) return 0.5 + 0.5 * (timeOfDay - DAWN_START) / (DAY_START - DAWN_START);
+  if (timeOfDay < DUSK_START) return 1.0;
+  if (timeOfDay < NIGHT_START) return 1.0 - 0.5 * (timeOfDay - DUSK_START) / (NIGHT_START - DUSK_START);
+  return 0.5;
+}
+
+// Lantern constants
+export const LANTERN_BURNOUT_RATE = 0.4;
+export const LIGHT_LANTERN_DURATION = 3;
+
 export enum TileType {
   WATER,
   HULL,
@@ -16,6 +38,7 @@ export enum TileType {
   BARREL,
   TABLE,
   MAP_TABLE,
+  LANTERN,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -26,6 +49,7 @@ export const WALKABLE = new Set<TileType>([
   TileType.STOVE,
   TileType.MAST,
   TileType.MAP_TABLE,
+  TileType.LANTERN,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -36,6 +60,7 @@ export const SELECTABLE_OBJECTS = new Set<TileType>([
   TileType.BARREL,
   TileType.TABLE,
   TileType.MAP_TABLE,
+  TileType.LANTERN,
 ]);
 
 export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
@@ -47,6 +72,7 @@ export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
   [TileType.BARREL]: 30,
   [TileType.TABLE]: 30,
   [TileType.MAP_TABLE]: 60,
+  [TileType.LANTERN]: 30,
 };
 
 export const TILE_COLORS: Record<TileType, string> = {
@@ -62,6 +88,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.BARREL]: '#8b6914',
   [TileType.TABLE]: '#6d4c2e',
   [TileType.MAP_TABLE]: '#4a6644',
+  [TileType.LANTERN]: '#c89b3c',
 };
 
 export interface Point {
@@ -84,6 +111,7 @@ export enum CrewState {
   NAVIGATING = 'navigating',
   COPULATING = 'copulating',
   KISSING = 'kissing',
+  LIGHTING_LANTERN = 'lighting_lantern',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -97,6 +125,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.NAVIGATING]: 'Navigating',
   [CrewState.COPULATING]: 'Copulating',
   [CrewState.KISSING]: 'Kissing',
+  [CrewState.LIGHTING_LANTERN]: 'Lighting lantern',
 };
 
 export interface ContextMenuItem {
@@ -127,6 +156,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.MAST]: [{ label: 'Lookout', targetState: CrewState.LOOKOUT }],
   [TileType.MAP_TABLE]: [{ label: 'Navigate', targetState: CrewState.NAVIGATING }],
   [TileType.BARREL]: [{ label: 'Copulate', targetState: CrewState.COPULATING }],
+  [TileType.LANTERN]: [],
 };
 
 export interface CrewProfile {

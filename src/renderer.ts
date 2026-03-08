@@ -1,10 +1,10 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
-  ContextMenu, STATE_NAMES, WorldMap, Item,
+  ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY,
 } from './types';
 import { SpriteSheet } from './sprites';
-import { SECONDS_PER_DAY, SHIP_SPEED } from './worldmap';
+import { SHIP_SPEED } from './worldmap';
 
 const WATER_COLOR_1 = '#1a5276';
 const WATER_COLOR_2 = '#1b6090';
@@ -20,6 +20,7 @@ const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.BARREL]: 'Barrel',
   [TileType.TABLE]: 'Table',
   [TileType.MAP_TABLE]: 'Map Table',
+  [TileType.LANTERN]: 'Lantern',
 };
 
 export class Renderer {
@@ -27,6 +28,10 @@ export class Renderer {
   private sprites: SpriteSheet | null = null;
   private hoveredItem: { item: Item; x: number; y: number } | null = null;
   private mousePos: { x: number; y: number } = { x: 0, y: 0 };
+  private lanternOil: Map<string, number> = new Map();
+  private brightness: number = 1.0;
+  private renderCamera: Camera = { x: 0, y: 0 };
+  private renderDeckIndex: number = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     canvas.width = CANVAS_WIDTH;
@@ -59,10 +64,17 @@ export class Renderer {
     hasHelmsman: boolean = false,
     barrelInventory: Map<string, Item[]> = new Map(),
     waterOffset: { x: number; y: number } = { x: 0, y: 0 },
+    brightness: number = 1.0,
+    lanternOil: Map<string, number> = new Map(),
+    timeOfDay: number = 0,
   ): void {
     const ctx = this.ctx;
     this.hoveredItem = null as typeof this.hoveredItem;
     this.mousePos = mousePos;
+    this.lanternOil = lanternOil;
+    this.brightness = brightness;
+    this.renderCamera = camera;
+    this.renderDeckIndex = deckIndex;
 
     ctx.fillStyle = WATER_COLOR_1;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -83,10 +95,41 @@ export class Renderer {
 
     this.drawDeck(deck, camera, time);
 
-    // Lower decks are darker (below deck, less light)
-    if (deckIndex > 0) {
-      ctx.fillStyle = `rgba(0,0,0,${0.125 * deckIndex})`;
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // Combined darkness overlay: night + deck depth
+    {
+      const nightDark = (1 - brightness) * 2; // 0 at day, 1 at night
+      const nightAlpha = nightDark * 0.55;
+      const deckAlpha = deckIndex > 0 ? 0.125 * deckIndex : 0;
+      const totalAlpha = Math.min(0.75, nightAlpha + deckAlpha);
+      if (totalAlpha > 0) {
+        ctx.fillStyle = `rgba(0, 0, 20, ${totalAlpha})`;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      }
+    }
+
+    // Lantern glow (drawn after darkness, before crew)
+    {
+      const prevComp = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [key, oil] of lanternOil) {
+        if (oil <= 0) continue;
+        const parts = key.split('-');
+        const d = parseInt(parts[0]);
+        if (d !== deckIndex) continue;
+        const lx = parseInt(parts[1]);
+        const ly = parseInt(parts[2]);
+        const sx = lx * TILE_SIZE + TILE_SIZE / 2 - camera.x;
+        const sy = ly * TILE_SIZE + TILE_SIZE / 2 - camera.y;
+        const intensity = Math.min(1, oil / 20);
+        const radius = TILE_SIZE * 3.5;
+        const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
+        grad.addColorStop(0, `rgba(255, 200, 80, ${0.35 * intensity})`);
+        grad.addColorStop(0.5, `rgba(255, 180, 60, ${0.15 * intensity})`);
+        grad.addColorStop(1, 'rgba(255, 160, 40, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(sx - radius, sy - radius, radius * 2, radius * 2);
+      }
+      ctx.globalCompositeOperation = prevComp;
     }
 
     // Selected object highlight
@@ -106,7 +149,7 @@ export class Renderer {
 
     this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks, barrelInventory, time);
     if (worldMap) {
-      this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length);
+      this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }
     this.drawSoundButton(soundMuted);
     this.drawTooltip(deck, camera, mousePos);
@@ -287,6 +330,36 @@ export class Renderer {
         ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
         break;
       }
+      case TileType.LANTERN: {
+        const litKey = this.getLanternKeyFromScreen(sx, sy);
+        const litOil = litKey ? (this.lanternOil.get(litKey) ?? 0) : 0;
+        // Base/handle
+        ctx.fillStyle = '#8a6820';
+        ctx.fillRect(cx - 2, sy + 4, 4, 4);   // handle top
+        ctx.fillRect(cx - 1, sy + 3, 2, 2);   // handle tip
+        // Glass body
+        ctx.fillStyle = litOil > 0 ? 'rgba(255,200,60,0.5)' : 'rgba(180,180,180,0.3)';
+        ctx.fillRect(cx - 5, sy + 8, 10, 14);
+        // Brass frame
+        ctx.strokeStyle = '#b8892e';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 5, sy + 8, 10, 14);
+        ctx.fillStyle = '#b8892e';
+        ctx.fillRect(cx - 6, sy + 7, 12, 2);  // top rim
+        ctx.fillRect(cx - 6, sy + 21, 12, 3); // bottom base
+        // Flame when lit
+        if (litOil > 0) {
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath();
+          ctx.ellipse(cx, sy + 15, 2, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ff8800';
+          ctx.beginPath();
+          ctx.ellipse(cx, sy + 14, 1, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
       case TileType.MAP_TABLE: {
         // Green table with parchment + compass cross
         ctx.fillStyle = '#3a5a34';
@@ -310,6 +383,12 @@ export class Renderer {
         break;
       }
     }
+  }
+
+  private getLanternKeyFromScreen(sx: number, sy: number): string | null {
+    const tileX = Math.floor((sx + this.renderCamera.x) / TILE_SIZE);
+    const tileY = Math.floor((sy + this.renderCamera.y) / TILE_SIZE);
+    return `${this.renderDeckIndex}-${tileX}-${tileY}`;
   }
 
   private drawCrewMember(member: CrewMember, camera: Camera, selected: boolean): void {
@@ -370,6 +449,8 @@ export class Renderer {
       ctx.fillText('\u2665', sx + 14, sy - 12);
     } else if (member.state === CrewState.KISSING) {
       ctx.fillText('\u2665', sx + 14, sy - 12);
+    } else if (member.state === CrewState.LIGHTING_LANTERN) {
+      ctx.fillText('L', sx + 14, sy - 12);
     }
 
     // Thought bubble
@@ -501,7 +582,7 @@ export class Renderer {
     }
   }
 
-  private drawCompass(heading: number, moving: boolean, deckCount: number): void {
+  private drawCompass(heading: number, moving: boolean, deckCount: number, timeOfDay: number = 0): void {
     const ctx = this.ctx;
     const panelH = deckCount * 22 + 8;
     const size = panelH;
@@ -561,6 +642,24 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(cx, cy, 2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Clock display below compass
+    // timeOfDay 0 = midnight (00:00), 360 = noon (12:00)
+    const totalHours = (timeOfDay / SECONDS_PER_DAY) * 24;
+    const hours = Math.floor(totalHours);
+    const minutes = Math.floor((totalHours - hours) * 60);
+    const clockStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    const clockW = 50;
+    const clockH = 18;
+    const clockX = x + (size - clockW) / 2;
+    const clockY = y + size + 4;
+    ctx.fillRect(clockX, clockY, clockW, clockH);
+    ctx.fillStyle = '#cccccc';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(clockStr, clockX + clockW / 2, clockY + clockH / 2);
 
     ctx.textBaseline = 'alphabetic';
   }
@@ -770,7 +869,8 @@ export class Renderer {
           ? Math.ceil(items.length / slotCols) * (slotSize + slotGap) + slotGap
           : 18)
       : 0;
-    const ph = 80 + contentsHeight;
+    const oilHeight = obj.tileType === TileType.LANTERN ? 24 : 0;
+    const ph = 80 + contentsHeight + oilHeight;
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -831,6 +931,18 @@ export class Renderer {
           this.drawItemSlot(sx, sy, slotSize, items[i]);
         }
       }
+    }
+
+    // Oil bar for lanterns
+    if (obj.tileType === TileType.LANTERN) {
+      const oilKey = `${obj.deck}-${obj.x}-${obj.y}`;
+      const oil = this.lanternOil.get(oilKey) ?? 0;
+      const oilY = py + 76;
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('Oil', px + 10, oilY + 12);
+      this.drawBar(px + 35, oilY + 2, 155, 12, oil / 100, '#e6a822');
     }
   }
 
