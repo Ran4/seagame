@@ -409,7 +409,17 @@ export class Game {
           }
           // Copulate with this crew member (requires a different crew selected)
           if (this.selectedCrewId !== null && this.selectedCrewId !== clickedCrew.id) {
-            items.push({ label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id });
+            const selected = this.crew.find(c => c.id === this.selectedCrewId);
+            if (selected) {
+              const selRelation = selected.relations.find(r => r.crewId === clickedCrew!.id);
+              const targetRelation = clickedCrew.relations.find(r => r.crewId === selected.id);
+              const mutualAttraction = (selRelation?.attraction ?? 0) >= 128 && (targetRelation?.attraction ?? 0) >= 128;
+              if (mutualAttraction) {
+                items.push({ label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id });
+              } else {
+                items.push({ label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id, disabled: true });
+              }
+            }
           }
         }
 
@@ -467,7 +477,7 @@ export class Game {
   private handleMenuClick(click: { x: number; y: number }): ContextMenuItem | null {
     if (!this.contextMenu) return null;
 
-    const itemW = 140;
+    const itemW = 200;
     const itemH = 24;
     const pad = 4;
     const totalH = this.contextMenu.items.length * itemH + pad * 2;
@@ -484,6 +494,7 @@ export class Game {
       const iy = my + pad + i * itemH;
       if (click.x >= mx && click.x <= mx + itemW &&
           click.y >= iy && click.y <= iy + itemH) {
+        if (this.contextMenu.items[i].disabled) return null;
         return this.contextMenu.items[i];
       }
     }

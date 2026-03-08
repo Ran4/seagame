@@ -767,7 +767,7 @@ export class Renderer {
 
   private drawContextMenu(menu: ContextMenu, mousePos: { x: number; y: number }): void {
     const ctx = this.ctx;
-    const itemW = 140;
+    const itemW = 200;
     const itemH = 24;
     const pad = 4;
     const totalH = menu.items.length * itemH + pad * 2;
@@ -793,15 +793,17 @@ export class Renderer {
     for (let i = 0; i < menu.items.length; i++) {
       const iy = my + pad + i * itemH;
 
-      // Hover highlight
-      if (mousePos.x >= mx && mousePos.x <= mx + itemW &&
+      const item = menu.items[i];
+
+      // Hover highlight (skip for disabled items)
+      if (!item.disabled && mousePos.x >= mx && mousePos.x <= mx + itemW &&
           mousePos.y >= iy && mousePos.y <= iy + itemH) {
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
         ctx.fillRect(mx + 1, iy, itemW - 2, itemH);
       }
 
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(menu.items[i].label, mx + 10, iy + 16);
+      ctx.fillStyle = item.disabled ? '#666666' : '#ffffff';
+      ctx.fillText(item.label, mx + 10, iy + 16);
 
       // Separator
       if (i < menu.items.length - 1) {

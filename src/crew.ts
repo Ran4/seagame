@@ -1,4 +1,4 @@
-import { CrewMember, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item } from './types';
+import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item } from './types';
 import { findPath } from './pathfinding';
 import { createCutlass, createSemen } from './items';
 
@@ -98,7 +98,20 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       stateTimer: 0,
       idleTimer: Math.random() * 3,
       copulationTarget: null,
+      relations: [],
     });
+  }
+
+  // Initialize relations between all crew members
+  for (const member of crew) {
+    for (const other of crew) {
+      if (other.id === member.id) continue;
+      member.relations.push({
+        crewId: other.id,
+        friendship: 64 + Math.floor(Math.random() * 129), // 64-192
+        attraction: Math.floor(Math.random() * 161),       // 0-160
+      });
+    }
   }
 
   const jack = crew.find(c => c.profile.name === 'Jack');

@@ -102,6 +102,7 @@ export interface ContextMenuItem {
   targetState: CrewState;
   deckTarget?: number; // send crew to this deck
   targetCrewId?: number; // for crew-crew copulation
+  disabled?: boolean;
 }
 
 export interface ContextMenu {
@@ -137,6 +138,12 @@ export interface CrewProfile {
   hands: Item[];    // length <= numberOfHands
 }
 
+export interface CrewRelation {
+  crewId: number;
+  friendship: number;  // 0-255, >=128 friend, <64 dislike
+  attraction: number;  // 0-255, >=128 both = willing to copulate
+}
+
 export interface CrewMember {
   id: number;
   profile: CrewProfile;
@@ -149,6 +156,7 @@ export interface CrewMember {
   stateTimer: number;
   idleTimer: number;
   copulationTarget: CopulationTarget | null;
+  relations: CrewRelation[];
 }
 
 export interface Deck {
