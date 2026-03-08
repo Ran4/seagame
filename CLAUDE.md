@@ -50,10 +50,24 @@ Currently 2 decks (index 0 = upper, 1 = lower). Keys 2/3 switch. Plan for up to 
 
 ### Crew AI (`crew.ts`)
 Each crew member has hunger/energy (0-255, high = satisfied). Needs tick down over time.
-States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON.
+States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, KISSING, COPULATING.
 When idle: if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 Player gives orders via right-click context menus (see below).
 Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a fixed timer (8s).
+
+**Relations:** Each crew member has `relations: CrewRelation[]` with entries for every other crew.
+- `friendship` (0-255): >=128 friend, <64 dislike. Initialized randomly 64-192.
+- `attraction` (0-255): >=128 both sides required for copulation. Initialized randomly 0-160.
+
+**Interactions** (right-click crew with another selected → "Interact ▶" submenu):
+- **Kiss** (3s): enabled if initiator's friendship >= 64 OR attraction >= 64. If both sides have attraction >= 64: +32 attraction each. Otherwise: -32 attraction and -32 friendship each.
+- **Copulate** (15s): enabled if both sides have attraction >= 128. Barrel copulation has no attraction check.
+
+**Thought bubbles:** Shown above the initiator for 3s after kiss/copulation completes.
+- Kiss (positive) → heart bubble. Kiss (negative) → broken heart bubble.
+- Copulation (crew-crew) → heart bubble.
+Sprites: `bubble_heart.png`, `bubble_broken_heart.png`. Fallback: circle with unicode symbol.
+Stored as `thoughtBubble: ThoughtBubble | null` + `thoughtBubbleTimer` on CrewMember.
 
 ### Pathfinding (`pathfinding.ts`)
 Standard A* with 4-directional movement. Stairs tiles connect decks (same x,y position).
@@ -76,6 +90,7 @@ Right-click opens a context menu with actions. Two targets:
 **Right-click a crew member:**
 - "Stop [action]" — shown if crew is busy (walking, eating, sleeping, steering, manning cannon)
 - "Go to Upper/Lower Deck" — sends crew to the other deck via stairs
+- "Interact ▶" — submenu with Kiss/Copulate (shown when another crew is selected)
 
 **Right-click a furniture tile (with crew selected):**
 - Bed → "Sleep" (restores energy gradually, ~480s for full restore)
@@ -83,6 +98,8 @@ Right-click opens a context menu with actions. Two targets:
 - Helm → "Steer"
 - Cannon → "Man Cannon"
 - Stairs → "Go to stairs"
+
+**Submenus:** `ContextMenuItem` supports `submenu?: ContextMenuItem[]`. Parent items show "▶" and open a flyout on hover. `handleMenuClick` returns `undefined` (keep menu open) for submenu parents/disabled sub-items, vs `null` (close) for outside clicks. Disabled items (`disabled: true`) render grey and are not clickable.
 
 Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
 Escape or clicking outside closes the menu.
@@ -104,6 +121,15 @@ Edit `updateIdle()` in `crew.ts`. Pattern: check condition → find target tile 
 Add new `CrewState` values in `types.ts` if needed, handle in `updateCrew()` switch.
 Add display name to `STATE_NAMES` in `types.ts`.
 To make it orderable via context menu, add entry to `TILE_ACTIONS` in `types.ts`.
+
+## Adding new thought bubbles
+
+1. Add the type to `ThoughtBubble` union in `types.ts` (e.g. `'skull'`)
+2. Add sprite prompt in `generate-sprites.mjs` using `BUBBLE_STYLE` (name: `bubble_<type>`)
+3. Add the name to `bubbleNames` array in `sprites.ts`
+4. Run `node scripts/generate-sprites.mjs` to generate the PNG
+5. Set `member.thoughtBubble = '<type>'` and `member.thoughtBubbleTimer = <seconds>` where needed in `crew.ts`
+6. Fallback rendering (no sprite) is handled in `drawCrewMember()` in `renderer.ts` — add a case there if needed
 
 ## Generating assets
 
