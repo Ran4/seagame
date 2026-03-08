@@ -1,7 +1,7 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
-  ContextMenu, STATE_NAMES, WorldMap,
+  ContextMenu, STATE_NAMES, WorldMap, Item,
 } from './types';
 import { SpriteSheet } from './sprites';
 import { SECONDS_PER_DAY, SHIP_SPEED } from './worldmap';
@@ -55,6 +55,7 @@ export class Renderer {
     mapOverlayOpen: boolean = false,
     hasNavigator: boolean = false,
     hasHelmsman: boolean = false,
+    barrelInventory: Map<string, Item[]> = new Map(),
   ): void {
     const ctx = this.ctx;
 
@@ -98,7 +99,7 @@ export class Renderer {
       }
     }
 
-    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks);
+    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks, barrelInventory, time);
     this.drawSoundButton(soundMuted);
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
@@ -349,6 +350,8 @@ export class Renderer {
       ctx.fillText('?', sx + 14, sy - 12);
     } else if (member.state === CrewState.NAVIGATING) {
       ctx.fillText('N', sx + 14, sy - 12);
+    } else if (member.state === CrewState.COPULATING) {
+      ctx.fillText('\u2665', sx + 14, sy - 12);
     }
 
     // Name label
@@ -368,6 +371,8 @@ export class Renderer {
     selectedCrewId: number | null,
     selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
     decks: Deck[] = [],
+    barrelInventory: Map<string, Item[]> = new Map(),
+    gameTime: number = 0,
   ): void {
     const ctx = this.ctx;
 
@@ -402,7 +407,7 @@ export class Renderer {
 
     // Selected object info
     if (selectedObject) {
-      this.drawObjectPanel(selectedObject);
+      this.drawObjectPanel(selectedObject, barrelInventory, gameTime);
     }
   }
 
@@ -479,7 +484,7 @@ export class Renderer {
     ctx.fillStyle = '#ffffff';
     ctx.font = '14px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(member.name, px + 35, py + 30);
+    ctx.fillText(`${member.name} (${member.gender})`, px + 35, py + 30);
 
     ctx.font = '11px monospace';
     ctx.fillStyle = '#aaaaaa';
@@ -499,15 +504,32 @@ export class Renderer {
     ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 112);
   }
 
-  private drawObjectPanel(obj: { tileType: TileType; x: number; y: number; deck: number }): void {
+  private drawObjectPanel(
+    obj: { tileType: TileType; x: number; y: number; deck: number },
+    barrelInventory: Map<string, Item[]> = new Map(),
+    gameTime: number = 0,
+  ): void {
     const ctx = this.ctx;
     const px = CANVAS_WIDTH - 210;
     const py = 10;
     const pw = 200;
-    const ph = 80;
 
     const name = TILE_NAMES[obj.tileType] ?? 'Object';
     const maxHp = OBJECT_MAX_HP[obj.tileType] ?? 50;
+
+    // Calculate barrel contents for dynamic panel height
+    let items: Item[] = [];
+    if (obj.tileType === TileType.BARREL) {
+      const key = `${obj.deck}-${obj.x}-${obj.y}`;
+      items = barrelInventory.get(key) || [];
+    }
+    const maxDisplay = 6;
+    const displayItems = items.slice(0, maxDisplay);
+    const contentsHeight = obj.tileType === TileType.BARREL
+      ? (displayItems.length > 0 ? displayItems.length * 14 + 22 : 28)
+        + (items.length > maxDisplay ? 14 : 0)
+      : 0;
+    const ph = 80 + contentsHeight;
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -540,6 +562,40 @@ export class Renderer {
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     ctx.fillText(`${maxHp}/${maxHp}`, px + 135, py + 72);
+
+    // Barrel contents
+    if (obj.tileType === TileType.BARREL) {
+      const cy = py + 76;
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.beginPath();
+      ctx.moveTo(px + 8, cy);
+      ctx.lineTo(px + pw - 8, cy);
+      ctx.stroke();
+
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('Contents:', px + 10, cy + 14);
+
+      if (items.length === 0) {
+        ctx.fillStyle = '#666666';
+        ctx.fillText('(empty)', px + 20, cy + 28);
+      } else {
+        for (let i = 0; i < displayItems.length; i++) {
+          const item = displayItems[i];
+          const age = Math.floor(gameTime - item.createdAt);
+          const ageStr = age < 60 ? `${age}s` : age < 3600 ? `${Math.floor(age / 60)}m` : `${Math.floor(age / 3600)}h`;
+          const qty = item.quantity > 1 ? `x${item.quantity} ` : '';
+          const spoiled = item.spoilAfter !== null && age >= item.spoilAfter;
+          ctx.fillStyle = spoiled ? '#cc4444' : '#aaaaaa';
+          ctx.fillText(`${qty}${item.name} ${item.weight}g ${ageStr}`, px + 14, cy + 28 + i * 14);
+        }
+        if (items.length > maxDisplay) {
+          ctx.fillStyle = '#666666';
+          ctx.fillText(`...and ${items.length - maxDisplay} more`, px + 14, cy + 28 + displayItems.length * 14);
+        }
+      }
+    }
   }
 
   private drawTooltip(deck: Deck, camera: Camera, mousePos: { x: number; y: number }): void {

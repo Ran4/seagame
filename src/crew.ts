@@ -1,4 +1,4 @@
-import { CrewMember, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED } from './types';
+import { CrewMember, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Gender, Item } from './types';
 import { findPath } from './pathfinding';
 
 const HUNGER_RATE = 0.7;
@@ -11,6 +11,7 @@ const STEER_DURATION = 999999;
 const CANNON_DURATION = 15;
 const LOOKOUT_DURATION = 30;
 const NAVIGATE_DURATION = 999999;
+const COPULATE_DURATION = 15;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -18,6 +19,11 @@ const PIRATE_NAMES = [
 ];
 
 const CREW_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+
+const PIRATE_GENDERS: Record<string, Gender> = {
+  'Anne': 'F', 'Jack': 'M', 'Mary': 'F', 'Flint': 'M',
+  'Morgan': 'M', 'Pete': 'M', 'Jane': 'F', 'Bones': 'M',
+};
 
 function getWalkableTiles(deck: Deck, deckIndex: number): DeckPoint[] {
   const tiles: DeckPoint[] = [];
@@ -79,12 +85,14 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       path: [],
       stateTimer: 0,
       idleTimer: Math.random() * 3,
+      gender: PIRATE_GENDERS[PIRATE_NAMES[i % PIRATE_NAMES.length]] ?? (Math.random() < 0.5 ? 'M' : 'F'),
+      copulationTarget: null,
     });
   }
   return crew;
 }
 
-export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number): void {
+export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number): void {
   for (const member of crew) {
     member.hunger = Math.max(0, member.hunger - HUNGER_RATE * dt);
     member.energy = Math.max(0, member.energy - ENERGY_RATE * dt);
@@ -127,11 +135,61 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number): void 
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
+      case CrewState.COPULATING:
+        member.stateTimer -= dt;
+        // Pull in crew partner on first frame
+        if (member.copulationTarget?.type === 'crew') {
+          const target = member.copulationTarget;
+          const partner = crew.find(c => c.id === target.crewId);
+          if (partner && partner.state !== CrewState.COPULATING) {
+            partner.state = CrewState.COPULATING;
+            partner.stateTimer = member.stateTimer;
+            partner.copulationTarget = { type: 'crew', crewId: member.id };
+            partner.path = [];
+          }
+        }
+        if (member.stateTimer <= 0) {
+          // Male + barrel → produce semen
+          if (member.gender === 'M' && member.copulationTarget?.type === 'barrel') {
+            const t = member.copulationTarget;
+            const key = `${t.deck}-${t.x}-${t.y}`;
+            const items = barrelInventory.get(key) || [];
+            const existing = items.find(i => i.name === 'Semen' && i.stackable);
+            if (existing) {
+              existing.quantity += 1;
+              existing.weight += 5;
+            } else {
+              items.push({
+                name: 'Semen', createdAt: gameTime, weight: 5,
+                description: 'A viscous fluid.',
+                stackable: true, quantity: 1, spoilAfter: 3600,
+              });
+            }
+            barrelInventory.set(key, items);
+          }
+          // End partner's copulation
+          if (member.copulationTarget?.type === 'crew') {
+            const target = member.copulationTarget;
+            const partner = crew.find(c => c.id === target.crewId);
+            if (partner && partner.state === CrewState.COPULATING) {
+              partner.state = CrewState.IDLE;
+              partner.idleTimer = 1 + Math.random() * 2;
+              partner.copulationTarget = null;
+            }
+          }
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+          member.copulationTarget = null;
+        }
+        break;
     }
   }
 }
 
 function updateIdle(member: CrewMember, decks: Deck[], dt: number): void {
+  // Waiting for copulation partner — don't wander
+  if (member.copulationTarget) return;
+
   member.idleTimer -= dt;
   if (member.idleTimer > 0) return;
 
@@ -200,6 +258,8 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = LOOKOUT_DURATION;
     } else if (member.state === CrewState.NAVIGATING) {
       member.stateTimer = NAVIGATE_DURATION;
+    } else if (member.state === CrewState.COPULATING) {
+      member.stateTimer = COPULATE_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

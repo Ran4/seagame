@@ -82,6 +82,7 @@ export enum CrewState {
   MANNING_CANNON = 'manning_cannon',
   LOOKOUT = 'lookout',
   NAVIGATING = 'navigating',
+  COPULATING = 'copulating',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -93,12 +94,14 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.MANNING_CANNON]: 'Manning cannon',
   [CrewState.LOOKOUT]: 'Lookout',
   [CrewState.NAVIGATING]: 'Navigating',
+  [CrewState.COPULATING]: 'Copulating',
 };
 
 export interface ContextMenuItem {
   label: string;
   targetState: CrewState;
   deckTarget?: number; // send crew to this deck
+  targetCrewId?: number; // for crew-crew copulation
 }
 
 export interface ContextMenu {
@@ -119,6 +122,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.STAIRS]: [{ label: 'Go to stairs', targetState: CrewState.IDLE }],
   [TileType.MAST]: [{ label: 'Lookout', targetState: CrewState.LOOKOUT }],
   [TileType.MAP_TABLE]: [{ label: 'Navigate', targetState: CrewState.NAVIGATING }],
+  [TileType.BARREL]: [{ label: 'Copulate', targetState: CrewState.COPULATING }],
 };
 
 export interface CrewMember {
@@ -135,6 +139,8 @@ export interface CrewMember {
   path: DeckPoint[];
   stateTimer: number;
   idleTimer: number;
+  gender: Gender;
+  copulationTarget: CopulationTarget | null;
 }
 
 export interface Deck {
@@ -168,3 +174,19 @@ export interface WorldMap {
   destinationIsland: Island | null;
   islands: Island[];
 }
+
+export type Gender = 'M' | 'F';
+
+export interface Item {
+  name: string;
+  createdAt: number;      // game time in seconds when created
+  weight: number;         // grams per unit (integer)
+  description: string;
+  stackable: boolean;
+  quantity: number;        // 1 for non-stackable items
+  spoilAfter: number | null; // seconds until spoiled (null = never)
+}
+
+export type CopulationTarget =
+  | { type: 'barrel'; x: number; y: number; deck: number }
+  | { type: 'crew'; crewId: number };

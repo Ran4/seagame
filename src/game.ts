@@ -1,4 +1,4 @@
-import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap } from './types';
+import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item } from './types';
 import { createShip } from './ship';
 import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
 import { Renderer } from './renderer';
@@ -19,8 +19,10 @@ export class Game {
   private input: InputState;
   private audio: AudioManager;
   private worldMap: WorldMap;
+  private barrelInventory: Map<string, Item[]> = new Map();
   private mapOverlayOpen = false;
   private wasNavigating = false;
+  private navTimer = 0;
   private time = 0;
   private lastTime = 0;
 
@@ -68,7 +70,11 @@ export class Game {
     // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
     const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
     const anySteering = this.crew.some(c => c.state === CrewState.STEERING);
-    if (anyNavigating) updateNavigator(this.worldMap);
+    this.navTimer += dt;
+    if (anyNavigating && this.navTimer >= 0.5) {
+      updateNavigator(this.worldMap);
+      this.navTimer = 0;
+    }
     if (anySteering) updateHelmsman(this.worldMap);
     updateSailing(this.worldMap, dt);
 
@@ -203,7 +209,25 @@ export class Game {
           this.input.mouseClick = null;
           return;
         }
-        if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
+        if (menuItem.targetCrewId !== undefined) {
+          // Copulate with crew member — order selected crew to target
+          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          const target = this.crew.find(c => c.id === menuItem.targetCrewId);
+          if (member && target) {
+            member.copulationTarget = { type: 'crew', crewId: target.id };
+            // Stop target and make them wait
+            target.copulationTarget = { type: 'crew', crewId: member.id };
+            target.state = CrewState.IDLE;
+            target.path = [];
+            target.idleTimer = 999;
+            orderCrewToAdjacentTile(
+              member,
+              { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck },
+              this.decks,
+              CrewState.COPULATING,
+            );
+          }
+        } else if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
           // "Go to deck" action
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
           if (member) {
@@ -224,6 +248,17 @@ export class Game {
           // "Stop" action
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
           if (member) {
+            // If has copulation partner (walking toward or actively copulating), free them
+            if (member.copulationTarget?.type === 'crew') {
+              const partnerTarget = member.copulationTarget;
+              const partner = this.crew.find(c => c.id === partnerTarget.crewId);
+              if (partner) {
+                partner.state = CrewState.IDLE;
+                partner.idleTimer = 1 + Math.random() * 2;
+                partner.copulationTarget = null;
+              }
+            }
+            member.copulationTarget = null;
             member.state = menuItem.targetState;
             member.path = [];
             member.idleTimer = 1 + Math.random() * 2;
@@ -261,6 +296,10 @@ export class Game {
                 this.decks,
                 menuItem.targetState,
               );
+            }
+            // Set copulation target for barrel
+            if (menuItem.targetState === CrewState.COPULATING) {
+              member.copulationTarget = { type: 'barrel', x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck };
             }
           }
         }
@@ -352,6 +391,10 @@ export class Game {
               items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
             }
           }
+          // Copulate with this crew member (requires a different crew selected)
+          if (this.selectedCrewId !== null && this.selectedCrewId !== clickedCrew.id) {
+            items.push({ label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id });
+          }
         }
 
         // Tile actions from the tile under the click (or under the crew member)
@@ -395,7 +438,7 @@ export class Game {
     }
 
     // Crew AI
-    updateCrew(this.crew, this.decks, dt);
+    updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time);
   }
 
   private handleMenuClick(click: { x: number; y: number }): ContextMenuItem | null {
@@ -443,6 +486,7 @@ export class Game {
       this.mapOverlayOpen,
       hasNavigator,
       hasHelmsman,
+      this.barrelInventory,
     );
   }
 }
