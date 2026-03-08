@@ -12,7 +12,7 @@ export const DAY_START = 60;
 export const DUSK_START = 420;
 export const NIGHT_START = 480;
 
-export const NIGHT_BRIGHTNESS = 0.4;
+export const NIGHT_BRIGHTNESS = 0.3;
 const BRIGHTNESS_RANGE = 1.0 - NIGHT_BRIGHTNESS;
 
 // TODO: when seasons exist, make this change over the seasons!
