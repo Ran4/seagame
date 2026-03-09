@@ -51,13 +51,12 @@ export class AudioManager {
     this.sounds.set(name, { audio, category });
   }
 
-  /** Play a sound. For 'world' sounds, pass soundDeck to attenuate by distance. */
-  play(name: string, soundDeck?: number): void {
+  play(name: string, soundDeck: number): void {
     const entry = this.sounds.get(name);
     if (!entry) return;
     const clone = entry.audio.cloneNode() as HTMLAudioElement;
     let volume = entry.audio.volume;
-    if (entry.category === 'world' && soundDeck !== undefined) {
+    if (entry.category === 'world') {
       const dist = Math.abs(soundDeck - this.activeDeck);
       volume *= Math.pow(0.4, dist);
     }

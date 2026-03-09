@@ -194,7 +194,7 @@ export class Game {
           const btnY = oy + oh - btnH - 8;
           if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
             stopSailing(this.worldMap);
-            this.audio.play('click');
+            this.audio.play('click', this.activeDeck);
             this.input.mouseClick = null;
             return;
           }
@@ -211,7 +211,7 @@ export class Game {
           const dy = my - iy;
           if (dx * dx + dy * dy < 14 * 14) {
             setDestination(this.worldMap, island);
-            this.audio.play('click');
+            this.audio.play('click', this.activeDeck);
             clickedIsland = true;
             break;
           }
@@ -245,7 +245,7 @@ export class Game {
         const clicked = Math.floor((my - 14) / 22);
         if (clicked >= 0 && clicked < this.decks.length && clicked !== this.activeDeck) {
           this.activeDeck = clicked;
-          this.audio.play('deck_change');
+          this.audio.play('deck_change', this.activeDeck);
         }
         this.audio.startMusicOnInteraction();
         this.input.mouseClick = null;
@@ -268,7 +268,7 @@ export class Game {
               CrewState.TAKING_ITEM,
             );
           }
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
           this.contextMenu = null;
           this.input.mouseClick = null;
           return;
@@ -276,7 +276,7 @@ export class Game {
         // "Open Map" action — open overlay, not a crew order
         if (menuItem.label === 'Open Map') {
           this.mapOverlayOpen = true;
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
           this.contextMenu = null;
           this.input.mouseClick = null;
           return;
@@ -392,7 +392,7 @@ export class Game {
             }
           }
         }
-        this.audio.play('click');
+        this.audio.play('click', this.activeDeck);
         this.contextMenu = null;
         this.input.mouseClick = null;
       } else if (menuItem === null) {
@@ -420,7 +420,7 @@ export class Game {
               CrewState.TAKING_ITEM,
             );
           }
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
           this.contextMenu = null;
         }
         this.input.rightClick = null;
@@ -455,12 +455,12 @@ export class Game {
         if (result.type === 'selectCrew') {
           this.selectedCrewId = result.crewId;
           this.selectedObject = null;
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
         } else if (result.type === 'selectObject') {
           this.selectedObject = result;
           this.selectedCrewId = null;
           this.contextMenu = null;
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
         } else if (result.type === 'useStairs') {
           // Find connected deck — stairs at same (x,y) on adjacent deck
           for (const d of [this.activeDeck - 1, this.activeDeck + 1]) {
@@ -474,7 +474,7 @@ export class Game {
             }
           }
           this.contextMenu = null;
-          this.audio.play('stairs');
+          this.audio.play('stairs', this.activeDeck);
         }
       } else {
         this.selectedCrewId = null;
@@ -511,7 +511,7 @@ export class Game {
               items: panelItems,
               crewId: member.id,
             };
-            this.audio.play('click');
+            this.audio.play('click', this.activeDeck);
           } else {
             this.contextMenu = null;
           }
@@ -647,7 +647,7 @@ export class Game {
             crewId: clickedCrew?.id,
             barrelItems: pendingBarrelItems,
           };
-          this.audio.play('click');
+          this.audio.play('click', this.activeDeck);
         }
       }
       this.input.rightClick = null;
