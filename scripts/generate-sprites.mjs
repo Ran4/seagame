@@ -60,6 +60,7 @@ const SPRITES = [
   // Items
   ['item_cutlass', `${ITEM_STYLE} A pirate's cutlass — short curved steel sword with a brass hand guard and dark wooden grip. Diagonal orientation, blade pointing upper-right.`],
   ['item_semen', `${ITEM_STYLE} A small milky-white opaque splotch or splatter. Goopy viscous blob shape, slightly irregular edges. Off-white and pearlescent.`],
+  ['item_grog_ration', `${ITEM_STYLE} A small wooden tankard or mug filled with dark amber grog rum. Simple round mug shape with a handle on the right side. Dark brown wood, amber liquid visible at top. Slight foam.`],
 
   // Thought bubbles
   ['bubble_heart', `${BUBBLE_STYLE} Inside the bubble is a bright red pixel-art heart symbol. The heart is solid red, classic valentine shape.`],

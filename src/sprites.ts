@@ -33,7 +33,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
     [TileType.LANTERN, 'lantern'],
   ];
 
-  const itemNames = ['cutlass', 'semen'];
+  const itemNames = ['cutlass', 'semen', 'grog_ration'];
   const bubbleNames = ['heart', 'broken_heart'];
 
   // Tile sprites (individually fault-tolerant so missing ones don't break everything)

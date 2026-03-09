@@ -864,7 +864,7 @@ export class Renderer {
     if (!item) return;
 
     // Try sprite
-    const spriteKey = item.name.toLowerCase();
+    const spriteKey = item.name.toLowerCase().replace(/ /g, '_');
     const sprite = this.sprites?.items.get(spriteKey);
     if (sprite) {
       // Sprites are 1024x1024 with 32x32 pixel art centered — crop to inner ~60%
