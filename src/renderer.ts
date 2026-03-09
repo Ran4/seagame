@@ -525,7 +525,7 @@ export class Renderer {
     const bubbleW = metrics.width + padX * 2;
     const bubbleH = 16;
     const bubbleX = sx - bubbleW / 2;
-    const bubbleY = sy - TILE_SIZE - 32;
+    const bubbleY = sy - TILE_SIZE - 22;
     const radius = 4;
     const tailSize = 4;
 

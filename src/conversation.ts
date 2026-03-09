@@ -1,3 +1,21 @@
+/**
+ * Crew conversation system.
+ *
+ * Idle or wandering crew within 2 tiles on the same deck can autonomously
+ * start talking (15% chance per idle decision or per walking step).
+ * Conversations can also be player-ordered via Interact > Converse.
+ * Snippets are loaded from /CONVERSATION_SNIPPETS.json at startup.
+ *
+ * A conversation consists of 3–5 exchanges (~3 s each). Crew alternate turns
+ * showing a canvas-drawn speech bubble with a short pirate-themed snippet.
+ * Snippet category (generic, work, hungry, tired, friendly, unfriendly, night)
+ * is chosen by weighted random based on the speaker's state and context.
+ *
+ * At the end: +2 friendship to both participants, or −3 for "disagreement"
+ * conversations (15% chance). Each crew gets a 30–60 s cooldown before they
+ * can start another autonomous conversation.
+ */
+
 import { CrewMember, CrewState, TILE_SIZE } from './types';
 
 const CONVERSATION_PROXIMITY = 2; // tiles
@@ -11,70 +29,12 @@ const CONVERSATION_DISAGREE_CHANCE = 0.15;
 const CONVERSATION_FRIENDSHIP_GAIN = 2;
 const CONVERSATION_FRIENDSHIP_LOSS = 3;
 
-const CONVERSATION_SNIPPETS: Record<string, string[]> = {
-  generic: [
-    "Fine weather, aye?",
-    "Pass the grog...",
-    "Heard any shanties?",
-    "The sea be calm today",
-    "Aye, that she is",
-    "Reminds me of Nassau",
-    "Could be worse, mate",
-    "Arr, indeed",
-    "Wind's picking up",
-    "What a life, eh?",
-  ],
-  work: [
-    "She's listing to port",
-    "Cannons need polishing",
-    "Decks could use a scrub",
-    "Rigging's holding well",
-    "Sails look good",
-    "Hull's creaking again",
-    "Barnacles everywhere",
-    "Anchor chain's rusty",
-  ],
-  mood_hungry: [
-    "Me belly's growlin'...",
-    "When's supper?",
-    "I'd kill for hardtack",
-    "Starving out here",
-    "Smells like stew!",
-    "Got any biscuits?",
-  ],
-  mood_tired: [
-    "Could use some shut-eye",
-    "I'm knackered",
-    "Can barely stand",
-    "Need me hammock",
-    "Yaaawn...",
-    "Eyes won't stay open",
-  ],
-  friendly: [
-    "Glad ye're aboard",
-    "Ye're a good mate",
-    "Cheers, friend",
-    "I owe ye a drink",
-    "Good to see ye",
-    "Best crew I've sailed with",
-  ],
-  unfriendly: [
-    "Keep yer distance",
-    "Hmph.",
-    "What d'ye want?",
-    "Leave me be",
-    "Don't push yer luck",
-    "Out of me way",
-  ],
-  night: [
-    "Stars are bright tonight",
-    "Dark as Davy Jones",
-    "Hear that? Wind...",
-    "Quiet night at sea",
-    "Moon's out tonight",
-    "Spooky waters these",
-  ],
-};
+let CONVERSATION_SNIPPETS: Record<string, string[]> = {};
+
+fetch('/CONVERSATION_SNIPPETS.json')
+  .then(r => r.json())
+  .then(data => { CONVERSATION_SNIPPETS = data; })
+  .catch(err => console.warn('Failed to load conversation snippets:', err));
 
 function pickConversationSnippet(speaker: CrewMember, partner: CrewMember, brightness: number): string {
   const weights: [string, number][] = [['generic', 3], ['work', 2]];
@@ -99,6 +59,7 @@ function pickConversationSnippet(speaker: CrewMember, partner: CrewMember, brigh
   }
 
   const snippets = CONVERSATION_SNIPPETS[category];
+  if (!snippets || snippets.length === 0) return 'Arr...';
   return snippets[Math.floor(Math.random() * snippets.length)];
 }
 
@@ -113,26 +74,8 @@ function endConversation(member: CrewMember): void {
     Math.random() * (CONVERSATION_COOLDOWN_MAX - CONVERSATION_COOLDOWN_MIN);
 }
 
-export function tryStartConversation(member: CrewMember, crew: CrewMember[], brightness: number): boolean {
-  if (member.conversationCooldown > 0) return false;
-
-  const mx = Math.floor(member.pixelX / TILE_SIZE);
-  const my = Math.floor(member.pixelY / TILE_SIZE);
-
-  const nearbyCrew = crew.filter(c =>
-    c.id !== member.id &&
-    c.deck === member.deck &&
-    c.state === CrewState.IDLE &&
-    c.conversationCooldown <= 0 &&
-    c.conversationPartnerId === null &&
-    !c.copulationTarget &&
-    Math.abs(Math.floor(c.pixelX / TILE_SIZE) - mx) <= CONVERSATION_PROXIMITY &&
-    Math.abs(Math.floor(c.pixelY / TILE_SIZE) - my) <= CONVERSATION_PROXIMITY
-  );
-
-  if (nearbyCrew.length === 0 || Math.random() >= CONVERSATION_CHANCE) return false;
-
-  const partner = nearbyCrew[Math.floor(Math.random() * nearbyCrew.length)];
+/** Start a conversation between two adjacent crew (called when initiator arrives or from idle trigger). */
+export function beginConversation(member: CrewMember, partner: CrewMember): void {
   const exchanges = CONVERSATION_MIN_EXCHANGES +
     Math.floor(Math.random() * (CONVERSATION_MAX_EXCHANGES - CONVERSATION_MIN_EXCHANGES + 1));
   const positive = Math.random() >= CONVERSATION_DISAGREE_CHANCE;
@@ -146,7 +89,6 @@ export function tryStartConversation(member: CrewMember, crew: CrewMember[], bri
   member.speechBubbleTimer = 0;
   member.path = [];
 
-  // Pull partner in immediately
   partner.state = CrewState.TALKING;
   partner.conversationPartnerId = member.id;
   partner.conversationExchangesLeft = exchanges;
@@ -155,7 +97,53 @@ export function tryStartConversation(member: CrewMember, crew: CrewMember[], bri
   partner.speechBubbleText = null;
   partner.speechBubbleTimer = 0;
   partner.path = [];
+}
 
+/** True if crew member is available for conversation (idle or wandering aimlessly). */
+function isAvailableForConversation(c: CrewMember): boolean {
+  if (c.conversationCooldown > 0 || c.conversationPartnerId !== null || c.copulationTarget) return false;
+  if (c.state === CrewState.IDLE) return true;
+  // Wandering = walking with no real destination
+  if (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE) return true;
+  return false;
+}
+
+function findNearbyPartner(member: CrewMember, crew: CrewMember[]): CrewMember | undefined {
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+
+  const nearbyCrew = crew.filter(c =>
+    c.id !== member.id &&
+    c.deck === member.deck &&
+    isAvailableForConversation(c) &&
+    Math.abs(Math.floor(c.pixelX / TILE_SIZE) - mx) <= CONVERSATION_PROXIMITY &&
+    Math.abs(Math.floor(c.pixelY / TILE_SIZE) - my) <= CONVERSATION_PROXIMITY
+  );
+
+  if (nearbyCrew.length === 0) return undefined;
+  return nearbyCrew[Math.floor(Math.random() * nearbyCrew.length)];
+}
+
+/** Called from updateIdle — try to start a conversation with a nearby idle/wandering crew. */
+export function tryStartConversation(member: CrewMember, crew: CrewMember[], brightness: number): boolean {
+  if (member.conversationCooldown > 0) return false;
+
+  const partner = findNearbyPartner(member, crew);
+  if (!partner || Math.random() >= CONVERSATION_CHANCE) return false;
+
+  beginConversation(member, partner);
+  return true;
+}
+
+/** Called from updateWalking for wandering crew — stop and chat if passing someone. */
+export function tryStartConversationWhileWalking(member: CrewMember, crew: CrewMember[]): boolean {
+  if (member.conversationCooldown > 0) return false;
+  if (member.targetState !== CrewState.IDLE) return false; // only wandering, not walking to a task
+
+  const partner = findNearbyPartner(member, crew);
+  if (!partner || Math.random() >= CONVERSATION_CHANCE) return false;
+
+  beginConversation(member, partner);
   return true;
 }
 

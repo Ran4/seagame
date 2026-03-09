@@ -1,7 +1,7 @@
 import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION } from './types';
 import { findPath } from './pathfinding';
 import { createCutlass, createSemen } from './items';
-import { tryStartConversation, updateTalking, tickConversationCooldown } from './conversation';
+import { tryStartConversation, tryStartConversationWhileWalking, updateTalking, tickConversationCooldown, beginConversation } from './conversation';
 
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
@@ -154,7 +154,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         updateIdle(member, decks, dt, crew, lanternOil, brightness);
         break;
       case CrewState.WALKING:
-        updateWalking(member, dt);
+        updateWalking(member, dt, crew);
         break;
       case CrewState.EATING:
         member.stateTimer -= dt;
@@ -414,7 +414,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   }
 }
 
-function updateWalking(member: CrewMember, dt: number): void {
+function updateWalking(member: CrewMember, dt: number, crew: CrewMember[]): void {
   if (member.path.length === 0) {
     member.state = member.targetState;
     if (member.state === CrewState.EATING) {
@@ -435,6 +435,18 @@ function updateWalking(member: CrewMember, dt: number): void {
       member.stateTimer = KISS_DURATION;
     } else if (member.state === CrewState.LIGHTING_LANTERN) {
       member.stateTimer = LIGHT_LANTERN_DURATION;
+    } else if (member.state === CrewState.TALKING) {
+      // Player-ordered conversation: initiator arrived at target
+      const target = member.copulationTarget;
+      const partner = target?.type === 'crew' ? crew.find(c => c.id === target.crewId) : undefined;
+      member.copulationTarget = null;
+      if (partner) {
+        partner.copulationTarget = null;
+        beginConversation(member, partner);
+      } else {
+        member.state = CrewState.IDLE;
+        member.idleTimer = 1 + Math.random() * 2;
+      }
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }
@@ -461,6 +473,11 @@ function updateWalking(member: CrewMember, dt: number): void {
     const move = CREW_SPEED * dt;
     member.pixelX += (dx / dist) * Math.min(move, dist);
     member.pixelY += (dy / dist) * Math.min(move, dist);
+  }
+
+  // Wandering crew can stop and chat when passing someone
+  if (member.state === CrewState.WALKING) {
+    tryStartConversationWhileWalking(member, crew);
   }
 }
 

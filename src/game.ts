@@ -450,6 +450,7 @@ export class Game {
               const mutualAttraction = selAttraction >= 128 && targetAttraction >= 128;
 
               const submenu: ContextMenuItem[] = [
+                { label: 'Converse', targetState: CrewState.TALKING, targetCrewId: clickedCrew.id },
                 canKiss
                   ? { label: 'Kiss', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id }
                   : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id, disabled: true },
