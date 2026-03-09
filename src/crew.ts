@@ -226,8 +226,8 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
             const kdx = partner.pixelX - member.pixelX;
             const kdy = partner.pixelY - member.pixelY;
             const kdist = Math.sqrt(kdx * kdx + kdy * kdy);
-            if (kdist > 6) {
-              const lean = Math.min(20 * dt, (kdist - 6) / 2);
+            if (kdist > 8) {
+              const lean = Math.min(20 * dt, (kdist - 8) / 2);
               member.pixelX += (kdx / kdist) * lean;
               member.pixelY += (kdy / kdist) * lean;
               partner.pixelX -= (kdx / kdist) * lean;
