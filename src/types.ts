@@ -115,6 +115,7 @@ export enum CrewState {
   COPULATING = 'copulating',
   KISSING = 'kissing',
   LIGHTING_LANTERN = 'lighting_lantern',
+  TALKING = 'talking',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -129,6 +130,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.COPULATING]: 'Copulating',
   [CrewState.KISSING]: 'Kissing',
   [CrewState.LIGHTING_LANTERN]: 'Lighting lantern',
+  [CrewState.TALKING]: 'Talking',
 };
 
 export interface ContextMenuItem {
@@ -195,6 +197,13 @@ export interface CrewMember {
   relations: CrewRelation[];
   thoughtBubble: ThoughtBubble | null;
   thoughtBubbleTimer: number;
+  conversationPartnerId: number | null;
+  conversationExchangesLeft: number;
+  conversationPositive: boolean;
+  conversationCooldown: number;
+  conversationMyTurn: boolean;
+  speechBubbleText: string | null;
+  speechBubbleTimer: number;
 }
 
 export interface Deck {

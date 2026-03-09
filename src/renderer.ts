@@ -477,10 +477,15 @@ export class Renderer {
       ctx.fillText('\u2665', sx + 14, sy - 12);
     } else if (member.state === CrewState.LIGHTING_LANTERN) {
       ctx.fillText('L', sx + 14, sy - 12);
+    } else if (member.state === CrewState.TALKING) {
+      ctx.fillText('...', sx + 14, sy - 12);
     }
 
-    // Thought bubble
-    if (member.thoughtBubble) {
+    // Speech bubble (conversation) — takes priority over thought bubble
+    if (member.speechBubbleText) {
+      this.drawSpeechBubble(member.speechBubbleText, sx, sy);
+    } else if (member.thoughtBubble) {
+      // Thought bubble
       const bubbleSprite = this.sprites?.bubbles.get(member.thoughtBubble);
       const bubbleSize = 24;
       const bx = sx - bubbleSize / 2;
@@ -509,6 +514,67 @@ export class Renderer {
     ctx.strokeText(member.profile.name, sx, sy - 22);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(member.profile.name, sx, sy - 22);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  private drawSpeechBubble(text: string, sx: number, sy: number): void {
+    const ctx = this.ctx;
+    ctx.font = 'bold 9px sans-serif';
+    const metrics = ctx.measureText(text);
+    const padX = 6;
+    const bubbleW = metrics.width + padX * 2;
+    const bubbleH = 16;
+    const bubbleX = sx - bubbleW / 2;
+    const bubbleY = sy - TILE_SIZE - 32;
+    const radius = 4;
+    const tailSize = 4;
+
+    // Rounded rect
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + radius, bubbleY);
+    ctx.lineTo(bubbleX + bubbleW - radius, bubbleY);
+    ctx.arcTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + radius, radius);
+    ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - radius);
+    ctx.arcTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - radius, bubbleY + bubbleH, radius);
+    ctx.lineTo(bubbleX + radius, bubbleY + bubbleH);
+    ctx.arcTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - radius, radius);
+    ctx.lineTo(bubbleX, bubbleY + radius);
+    ctx.arcTo(bubbleX, bubbleY, bubbleX + radius, bubbleY, radius);
+    ctx.closePath();
+    ctx.fill();
+
+    // Tail pointing down toward crew head
+    ctx.beginPath();
+    ctx.moveTo(sx - tailSize, bubbleY + bubbleH);
+    ctx.lineTo(sx, bubbleY + bubbleH + tailSize + 2);
+    ctx.lineTo(sx + tailSize, bubbleY + bubbleH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Also stroke the rounded rect
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + radius, bubbleY);
+    ctx.lineTo(bubbleX + bubbleW - radius, bubbleY);
+    ctx.arcTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + radius, radius);
+    ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - radius);
+    ctx.arcTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - radius, bubbleY + bubbleH, radius);
+    ctx.lineTo(bubbleX + radius, bubbleY + bubbleH);
+    ctx.arcTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - radius, radius);
+    ctx.lineTo(bubbleX, bubbleY + radius);
+    ctx.arcTo(bubbleX, bubbleY, bubbleX + radius, bubbleY, radius);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = '#222222';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, sx, bubbleY + bubbleH / 2);
     ctx.textBaseline = 'alphabetic';
   }
 

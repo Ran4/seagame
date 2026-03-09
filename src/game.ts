@@ -7,6 +7,7 @@ import { createInputHandler, updateCamera, handleClick, InputState } from './inp
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
 import { createWorldMap, updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing, SHIP_SPEED } from './worldmap';
+import { stopConversation } from './conversation';
 
 export class Game {
   private decks: Deck[];
@@ -286,6 +287,10 @@ export class Game {
           // "Stop" action
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
           if (member) {
+            // If talking, free the conversation partner
+            if (member.state === CrewState.TALKING) {
+              stopConversation(member, this.crew);
+            }
             // If has copulation partner (walking toward or actively copulating), free them
             if (member.copulationTarget?.type === 'crew') {
               const partnerTarget = member.copulationTarget;

@@ -20,6 +20,7 @@ src/
   types.ts         All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540)
   ship.ts          Ship layout — two decks defined as ASCII art, parsed to TileType[][]
   crew.ts          Crew AI — needs system (hunger/energy), A* pathfinding, autonomous behavior
+  conversation.ts  Crew conversations — snippets, proximity trigger, turn-based speech bubbles
   pathfinding.ts   A* on multi-deck tile grid — nodes are (x, y, deck), stairs connect decks
   renderer.ts      Canvas rendering — sprites with colored-rectangle fallback, UI overlays
   input.ts         Keyboard + mouse input state, camera scrolling, click/hover handling
@@ -68,6 +69,8 @@ Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a 
 - Copulation (crew-crew) → heart bubble.
 Sprites: `bubble_heart.png`, `bubble_broken_heart.png`. Fallback: circle with unicode symbol.
 Stored as `thoughtBubble: ThoughtBubble | null` + `thoughtBubbleTimer` on CrewMember.
+
+**Conversations** (`conversation.ts`): Idle crew within 2 tiles on the same deck may autonomously start talking (15% chance per idle decision). Conversations have 3-5 exchanges of ~3s each, with crew alternating speech bubbles containing procedural pirate-themed snippets. Snippet categories (generic, work, hungry, tired, friendly, unfriendly, night) are chosen by weighted random based on context (hunger, energy, friendship, brightness). At conversation end: +2 friendship (or -3 for the 15% "disagreement" conversations). 30-60s cooldown after each conversation. Player can stop via right-click "Stop talking". Rendered as canvas-drawn white rounded-rect speech bubbles with text (distinct from sprite-based thought bubbles).
 
 ### Pathfinding (`pathfinding.ts`)
 Standard A* with 4-directional movement. Stairs tiles connect decks (same x,y position).

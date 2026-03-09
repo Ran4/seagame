@@ -1,6 +1,7 @@
 import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION } from './types';
 import { findPath } from './pathfinding';
 import { createCutlass, createSemen } from './items';
+import { tryStartConversation, updateTalking, tickConversationCooldown } from './conversation';
 
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
@@ -102,6 +103,13 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       relations: [],
       thoughtBubble: null,
       thoughtBubbleTimer: 0,
+      conversationPartnerId: null,
+      conversationExchangesLeft: 0,
+      conversationPositive: true,
+      conversationCooldown: 0,
+      conversationMyTurn: false,
+      speechBubbleText: null,
+      speechBubbleTimer: 0,
     });
   }
 
@@ -129,6 +137,8 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
+
+    tickConversationCooldown(member, dt);
 
     // Tick down thought bubble
     if (member.thoughtBubble) {
@@ -294,6 +304,9 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
           member.copulationTarget = null;
         }
         break;
+      case CrewState.TALKING:
+        updateTalking(member, crew, dt, brightness);
+        break;
     }
   }
 }
@@ -379,6 +392,9 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
       }
     }
   }
+
+  // Try to start a conversation with nearby idle crew
+  if (tryStartConversation(member, crew, brightness)) return;
 
   // Otherwise wander
   const allWalkable: DeckPoint[] = [];
