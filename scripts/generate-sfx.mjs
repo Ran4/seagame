@@ -113,7 +113,7 @@ const SOUNDS = [
   {
     name: 'lantern_extinguish',
     type: 'elevenlabs',
-    text: 'A quick puff of breath extinguishing an oil lantern flame. Short hiss as the flame goes out.',
+    text: 'A tiny flame being snuffed by wet fingertips. Brief fizzle and pop. Dry recording, no tail.',
     duration_seconds: 0.5,
     prompt_influence: 0.8,
   },

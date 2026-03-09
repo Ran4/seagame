@@ -13,7 +13,7 @@ export class AudioManager {
     this.preload('stairs', '/audio/elevenlabs-generated/stairs.mp3');
     this.preload('deck_change', '/audio/elevenlabs-generated/deck_change.mp3');
     this.preload('lantern_light', '/audio/elevenlabs-generated/lantern_light.mp3');
-    this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3');
+    this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3', 0.3);
     this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3', 0.9);
     this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3', 0.9);
     this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3');
