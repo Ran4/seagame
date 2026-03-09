@@ -224,6 +224,7 @@ export interface CrewMember {
   speechBubbleTimer: number;
   takeTarget: { barrelKey: string; itemName: string } | null;
   consumingItem: Item | null;
+  lustSeekCooldown: number;
 }
 
 export interface Deck {

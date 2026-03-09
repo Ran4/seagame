@@ -820,6 +820,16 @@ export class Renderer {
       y += 20;
     }
 
+    // Lust bar (conditional)
+    const lustAmount = (member.statuses.get('lust') as { amount: number } | undefined)?.amount ?? 0;
+    if (lustAmount > 0) {
+      if (draw) {
+        ctx.fillText('Lust', px + 10, y + 10);
+        this.drawBar(px + 75, y, 115, 12, lustAmount / 255, '#e74c8b');
+      }
+      y += 20;
+    }
+
     // Conditions
     if (member.conditions.size > 0) {
       if (draw) {

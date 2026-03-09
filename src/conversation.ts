@@ -63,6 +63,10 @@ function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
     if (rel.attraction >= 160 && revRel && revRel.attraction >= 160) {
       w.push(['horny', 3]);
     }
+    // Extra horny weight if partner is lustful
+    if (partner.conditions.has('lustful')) {
+      w.push(['horny', 4]);
+    }
   }
   if (partner.conditions.has('tired') || partner.conditions.has('exhausted')) w.push(['tired', 2]);
   if (partner.conditions.has('hungry') || partner.conditions.has('starving')) w.push(['hungry', 2]);

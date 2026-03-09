@@ -16,6 +16,11 @@ const NAVIGATE_DURATION = 999999;
 const COPULATE_DURATION = 15;
 const KISS_DURATION = 3;
 const DRUNKEDNESS_RATE = 255 / 720;
+const LUST_RATE_MALE = 0.15;         // 0→255 in ~1700s (~2.4 days)
+const LUST_RATE_FEMALE = 0.05;       // +108 over 3-day growth phase
+const LUST_CYCLE_LENGTH = 6 * 720;   // 6 in-game days = 4320s
+const LUST_SEEK_COOLDOWN_MIN = 30;
+const LUST_SEEK_COOLDOWN_MAX = 60;
 export const DRINK_DURATION = 5;
 
 const PIRATE_NAMES = [
@@ -63,6 +68,9 @@ export function refreshConditions(member: CrewMember): void {
   } else if (drunkedness >= 64) {
     member.conditions.add('tipsy');
   }
+  // Derived: lust levels
+  const lustAmount = (member.statuses.get('lust') as { amount: number } | null)?.amount ?? 0;
+  if (lustAmount > 160) member.conditions.add('lustful');
   // Derived: needs
   if (member.profile.energy < 25) member.conditions.add('exhausted');
   else if (member.profile.energy < 60) member.conditions.add('tired');
@@ -133,7 +141,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
         inventory: [],
         hands: [],
       },
-      statuses: new Map(),
+      statuses: new Map<string, Record<string, any> | null>(),
       conditions: new Set(),
       pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
       pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
@@ -157,7 +165,17 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       speechBubbleTimer: 0,
       takeTarget: null,
       consumingItem: null,
+      lustSeekCooldown: 0,
     });
+  }
+
+  // Initialize lust statuses
+  for (const member of crew) {
+    if (member.profile.sex === 'M') {
+      member.statuses.set('lust', { amount: Math.floor(Math.random() * 129) });
+    } else {
+      member.statuses.set('lust', { amount: 64 + Math.floor(Math.random() * 65), cycleTimer: Math.floor(Math.random() * LUST_CYCLE_LENGTH) });
+    }
   }
 
   // Initialize relations between all crew members
@@ -197,6 +215,27 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
     if (drunkStatus) {
       drunkStatus.amount = Math.max(0, drunkStatus.amount - DRUNKEDNESS_RATE * dt);
       if (drunkStatus.amount <= 0) member.statuses.delete('drunkedness');
+    }
+
+    // Lust tick
+    const lustStatus = member.statuses.get('lust') as { amount: number; cycleTimer?: number } | undefined;
+    if (lustStatus) {
+      if (member.profile.sex === 'M') {
+        lustStatus.amount = Math.min(255, lustStatus.amount + LUST_RATE_MALE * dt);
+      } else {
+        // Women's cycle: 6-day period, first half grows, second half decays
+        lustStatus.cycleTimer = ((lustStatus.cycleTimer ?? 0) + dt) % LUST_CYCLE_LENGTH;
+        if (lustStatus.cycleTimer < LUST_CYCLE_LENGTH / 2) {
+          lustStatus.amount = Math.min(255, lustStatus.amount + LUST_RATE_FEMALE * dt);
+        } else {
+          lustStatus.amount = Math.max(0, lustStatus.amount - LUST_RATE_FEMALE * dt);
+        }
+      }
+    }
+
+    // Tick lust seek cooldown
+    if (member.lustSeekCooldown > 0) {
+      member.lustSeekCooldown = Math.max(0, member.lustSeekCooldown - dt);
     }
 
     refreshConditions(member);
@@ -321,6 +360,11 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
                   member.thoughtBubble = 'broken_heart';
                   member.thoughtBubbleTimer = 3;
                 }
+                // Kiss boosts lust for both
+                const myLust = member.statuses.get('lust') as { amount: number } | undefined;
+                if (myLust) myLust.amount = Math.min(255, myLust.amount + 20);
+                const partnerLust = partner.statuses.get('lust') as { amount: number } | undefined;
+                if (partnerLust) partnerLust.amount = Math.min(255, partnerLust.amount + 20);
               }
               if (partner.state === CrewState.KISSING) {
                 partner.state = CrewState.IDLE;
@@ -363,11 +407,16 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
             }
             barrelInventory.set(key, items);
           }
+          // Reduce lust after copulation
+          const copLust = member.statuses.get('lust') as { amount: number } | undefined;
+          if (copLust) copLust.amount = Math.max(0, copLust.amount - 128);
           // End partner's copulation
           if (member.copulationTarget?.type === 'crew') {
             const target = member.copulationTarget;
             const partner = crew.find(c => c.id === target.crewId);
             if (partner && partner.state === CrewState.COPULATING) {
+              const partnerCopLust = partner.statuses.get('lust') as { amount: number } | undefined;
+              if (partnerCopLust) partnerCopLust.amount = Math.max(0, partnerCopLust.amount - 128);
               partner.state = CrewState.IDLE;
               partner.idleTimer = 1 + Math.random() * 2;
               partner.copulationTarget = null;
@@ -404,6 +453,105 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   }
 }
 
+function trySeekLustPartner(member: CrewMember, crew: CrewMember[], decks: Deck[]): boolean {
+  // Find best partner on same deck by highest mutual attraction score
+  let bestPartner: CrewMember | null = null;
+  let bestScore = -1;
+  for (const other of crew) {
+    if (other.id === member.id) continue;
+    if (other.deck !== member.deck) continue;
+    if (other.copulationTarget) continue;
+    if (other.state === CrewState.COPULATING || other.state === CrewState.KISSING) continue;
+    const myRel = member.relations.find(r => r.crewId === other.id);
+    const theirRel = other.relations.find(r => r.crewId === member.id);
+    if (!myRel || !theirRel) continue;
+    const score = myRel.attraction + theirRel.attraction;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPartner = other;
+    }
+  }
+  if (!bestPartner) {
+    member.lustSeekCooldown = LUST_SEEK_COOLDOWN_MIN + Math.random() * (LUST_SEEK_COOLDOWN_MAX - LUST_SEEK_COOLDOWN_MIN);
+    return false;
+  }
+
+  const myRel = member.relations.find(r => r.crewId === bestPartner!.id)!;
+  const theirRel = bestPartner.relations.find(r => r.crewId === member.id)!;
+
+  // Threshold modifiers: lustful halves, drunk halves again
+  const memberDrunk = member.conditions.has('drunk');
+  const memberTipsy = memberDrunk || member.conditions.has('tipsy');
+  const partnerDrunk = bestPartner.conditions.has('drunk');
+  const bothDrunk = memberDrunk && partnerDrunk;
+  const eitherDrunk = memberDrunk || partnerDrunk;
+  const eitherTipsy = memberTipsy || partnerDrunk || bestPartner.conditions.has('tipsy');
+
+  // Base thresholds (same as game.ts menu)
+  let kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
+  let copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
+  // Lustful halves thresholds
+  kissThreshold = Math.floor(kissThreshold / 2);
+  copThreshold = Math.floor(copThreshold / 2);
+
+  // Determine interaction type
+  let targetState: CrewState;
+  const bothLustful = member.conditions.has('lustful') && bestPartner.conditions.has('lustful');
+  if (bothLustful && myRel.attraction >= copThreshold && theirRel.attraction >= copThreshold) {
+    targetState = CrewState.COPULATING;
+  } else if (myRel.friendship >= kissThreshold || myRel.attraction >= kissThreshold) {
+    targetState = CrewState.KISSING;
+  } else {
+    member.lustSeekCooldown = LUST_SEEK_COOLDOWN_MIN + Math.random() * (LUST_SEEK_COOLDOWN_MAX - LUST_SEEK_COOLDOWN_MIN);
+    return false;
+  }
+
+  // Interrupt busy target
+  if (bestPartner.state === CrewState.TALKING) {
+    // Reset conversation partner too
+    const convPartner = crew.find(c => c.id === bestPartner!.conversationPartnerId);
+    if (convPartner && convPartner.state === CrewState.TALKING) {
+      convPartner.state = CrewState.IDLE;
+      convPartner.idleTimer = 1 + Math.random() * 2;
+      convPartner.conversationPartnerId = null;
+      convPartner.speechBubbleText = null;
+      convPartner.speechBubbleTimer = 0;
+    }
+    bestPartner.conversationPartnerId = null;
+    bestPartner.speechBubbleText = null;
+    bestPartner.speechBubbleTimer = 0;
+  }
+  // Set target to idle and clear their path
+  bestPartner.state = CrewState.IDLE;
+  bestPartner.path = [];
+
+  // Set copulation targets on both
+  member.copulationTarget = { type: 'crew', crewId: bestPartner.id };
+  bestPartner.copulationTarget = { type: 'crew', crewId: member.id };
+  bestPartner.idleTimer = 999; // freeze target
+
+  // Pathfind initiator to target
+  const targetTile = { x: Math.floor(bestPartner.pixelX / TILE_SIZE), y: Math.floor(bestPartner.pixelY / TILE_SIZE), deck: bestPartner.deck };
+  let success: boolean;
+  if (targetState === CrewState.KISSING) {
+    success = orderCrewBesideTile(member, targetTile, decks, targetState);
+  } else {
+    success = orderCrewToAdjacentTile(member, targetTile, decks, targetState);
+  }
+
+  if (!success) {
+    // Clean up on pathfinding failure
+    member.copulationTarget = null;
+    bestPartner.copulationTarget = null;
+    bestPartner.idleTimer = 1 + Math.random() * 2;
+    member.lustSeekCooldown = 10; // short cooldown on failure
+    return false;
+  }
+
+  member.lustSeekCooldown = LUST_SEEK_COOLDOWN_MIN + Math.random() * (LUST_SEEK_COOLDOWN_MAX - LUST_SEEK_COOLDOWN_MIN);
+  return true;
+}
+
 function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMember[], lanternOil: Map<string, number>, brightness: number): void {
   // Waiting for copulation partner — don't wander
   if (member.copulationTarget) return;
@@ -426,6 +574,11 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
         return;
       }
     }
+  }
+
+  // Lustful? Seek a partner
+  if (member.conditions.has('lustful') && member.lustSeekCooldown <= 0) {
+    if (trySeekLustPartner(member, crew, decks)) return;
   }
 
   // Tired? Go sleep (daytime restriction: only if dark or exhausted)

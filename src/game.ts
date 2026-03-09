@@ -576,9 +576,14 @@ export class Game {
               const eitherDrunk = selected.conditions.has('drunk') || clickedCrew.conditions.has('drunk');
               const bothDrunk = selected.conditions.has('drunk') && clickedCrew.conditions.has('drunk');
               const eitherTipsy = eitherDrunk || selected.conditions.has('tipsy') || clickedCrew.conditions.has('tipsy');
-              const kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
+              let kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
+              let copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
+              // Lustful selected crew has lowered inhibitions
+              if (selected.conditions.has('lustful')) {
+                kissThreshold = Math.floor(kissThreshold / 2);
+                copThreshold = Math.floor(copThreshold / 2);
+              }
               const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
-              const copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
               const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
 
               const submenu: ContextMenuItem[] = [
