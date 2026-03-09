@@ -50,7 +50,7 @@ const SPRITES = [
   ['barrel', `${TILE_STYLE} Round wooden storage barrel seen from directly above. The circular top has visible wood grain in a radial pattern with two dark iron bands/hoops crossing it.`],
   ['table', `${TILE_STYLE} Rectangular wooden dining table, seen from directly above. Dark brown sturdy wood surface with visible grain. Simple ship's mess table.`],
   ['lantern', `${TILE_STYLE} A brass ship's lantern on the deck, seen from directly above. Round brass base with a glass dome on top containing a warm yellow flame. Golden metallic color with warm light glow.`],
-  ['raised_floor', `${TILE_STYLE} Wooden ship deck floor planks, nearly identical to regular deck planks. Warm golden-tan horizontal wood planks with thin dark gaps between them. The only difference is a very subtle darker tint — slightly more weathered brown compared to the main deck. Must look like regular floor planks, seamless and tileable.`],
+  ['raised_floor', `${TILE_STYLE} Dark wooden ship deck floor planks. Rich dark brown horizontal wood planks with thin dark gaps between them. Darker stained wood compared to a regular deck — like mahogany or dark oak. Well-worn but maintained. Seamless and tileable.`],
 
   // Crew
   ['crew_red', `${CREW_STYLE} Small pirate character seen from directly above. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
