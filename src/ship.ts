@@ -1,4 +1,4 @@
-import { TileType, Deck } from './types';
+import {TileType, Deck} from './types';
 
 const CHAR_TO_TILE: Record<string, TileType> = {
   '.': TileType.WATER,
@@ -75,21 +75,21 @@ const LOWER_DECK = `\
 ...#___#...
 ..#_RRR_#..
 .#__RRR__#.
-.#_______#.
-#_BBB_BBB_#
-#____L____#
-#_BBB_BBB_#
-#_________#
+.###_____#.
+#BBB#_____#
+#_L_______#
+#BBB#_____#
+####______#
 #_________#
 #___N_T___#
 #___TTT___#
 #L_______L#
 #_________#
 #_K_______#
-#____S____#
-#_________#
-.#_______#.
-.#_______#.
+#____S#####
+#___#_____#
+.#__#__L_#.
+.#__#____#.
 ..#######..`;
 
 export function createShip(): Deck[] {
