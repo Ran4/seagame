@@ -184,7 +184,6 @@ export interface CrewProfile {
   numberOfHands: number;
   hunger: number;   // 0-255
   energy: number;   // 0-255
-  drunkedness: number; // 0-255
   inventory: Item[];
   hands: Item[];    // length <= numberOfHands
 }
@@ -198,6 +197,8 @@ export interface CrewRelation {
 export interface CrewMember {
   id: number;
   profile: CrewProfile;
+  statuses: Map<string, Record<string, any> | null>;
+  conditions: Set<string>;
   pixelX: number;
   pixelY: number;
   deck: number;

@@ -572,8 +572,14 @@ export class Game {
               const selFriendship = selRelation?.friendship ?? 0;
               const selAttraction = selRelation?.attraction ?? 0;
               const targetAttraction = targetRelation?.attraction ?? 0;
-              const canKiss = selFriendship >= 64 || selAttraction >= 64;
-              const mutualAttraction = selAttraction >= 128 && targetAttraction >= 128;
+              // Lower inhibitions when drunk/tipsy
+              const eitherDrunk = selected.conditions.has('drunk') || clickedCrew.conditions.has('drunk');
+              const bothDrunk = selected.conditions.has('drunk') && clickedCrew.conditions.has('drunk');
+              const eitherTipsy = eitherDrunk || selected.conditions.has('tipsy') || clickedCrew.conditions.has('tipsy');
+              const kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
+              const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
+              const copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
+              const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
 
               const submenu: ContextMenuItem[] = [
                 { label: 'Converse', targetState: CrewState.TALKING, targetCrewId: clickedCrew.id },

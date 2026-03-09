@@ -30,6 +30,24 @@ const PIRATE_SEXES: Record<string, Sex> = {
   'Morgan': 'M', 'Pete': 'M', 'Jane': 'F', 'Bones': 'M',
 };
 
+export function refreshConditions(member: CrewMember): void {
+  member.conditions.clear();
+  // Copy raw status keys
+  for (const key of member.statuses.keys()) {
+    member.conditions.add(key);
+  }
+  // Derived: drunkedness levels
+  const drunkedness = (member.statuses.get('drunkedness') as { amount: number } | null)?.amount ?? 0;
+  if (drunkedness >= 128) {
+    member.conditions.add('drunk');
+  } else if (drunkedness >= 64) {
+    member.conditions.add('tipsy');
+  }
+  // Derived: needs
+  if (member.profile.energy < 60) member.conditions.add('tired');
+  if (member.profile.hunger < 40) member.conditions.add('starving');
+}
+
 function getWalkableTiles(deck: Deck, deckIndex: number): DeckPoint[] {
   const tiles: DeckPoint[] = [];
   for (let y = 0; y < deck.height; y++) {
@@ -90,10 +108,11 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
         numberOfHands,
         hunger: 200 + Math.random() * 55,
         energy: 200 + Math.random() * 55,
-        drunkedness: 0,
         inventory: [],
         hands: [],
       },
+      statuses: new Map(),
+      conditions: new Set(),
       pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
       pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
       deck: spawnDeck,
@@ -150,7 +169,15 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
-    member.profile.drunkedness = Math.max(0, member.profile.drunkedness - DRUNKEDNESS_RATE * dt);
+
+    // Drunkedness decay via statuses
+    const drunkStatus = member.statuses.get('drunkedness') as { amount: number } | undefined;
+    if (drunkStatus) {
+      drunkStatus.amount = Math.max(0, drunkStatus.amount - DRUNKEDNESS_RATE * dt);
+      if (drunkStatus.amount <= 0) member.statuses.delete('drunkedness');
+    }
+
+    refreshConditions(member);
 
     tickConversationCooldown(member, dt);
 
@@ -168,7 +195,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         updateIdle(member, decks, dt, crew, lanternOil, brightness);
         break;
       case CrewState.WALKING:
-        updateWalking(member, dt, crew, brightness, barrelInventory);
+        updateWalking(member, dt, crew, brightness, barrelInventory, decks);
         break;
       case CrewState.EATING:
         member.stateTimer -= dt;
@@ -336,7 +363,8 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         if (member.stateTimer <= 0) {
           if (member.consumingItem) {
             if (member.consumingItem.name === 'Grog ration') {
-              member.profile.drunkedness = Math.min(255, member.profile.drunkedness + 140);
+              const cur = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
+              member.statuses.set('drunkedness', { amount: Math.min(255, cur + 140) });
             }
             if (member.consumingItem.hungerRestore > 0) {
               member.profile.hunger = Math.min(255, member.profile.hunger + member.consumingItem.hungerRestore);
@@ -492,7 +520,7 @@ function performTakeItem(member: CrewMember, barrelInventory: Map<string, Item[]
   }
 }
 
-function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number, barrelInventory?: Map<string, Item[]>): void {
+function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number, barrelInventory?: Map<string, Item[]>, decks?: Deck[]): void {
   if (member.path.length === 0) {
     member.state = member.targetState;
     if (member.state === CrewState.EATING) {
@@ -553,6 +581,25 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brigh
     member.pixelX = targetX;
     member.pixelY = targetY;
     member.path.shift();
+
+    // Wobbly movement: drunk crew may deviate perpendicular
+    if (member.path.length > 0) {
+      const wobbleChance = member.conditions.has('drunk') ? 0.25 : member.conditions.has('tipsy') ? 0.08 : 0;
+      if (wobbleChance > 0 && Math.random() < wobbleChance) {
+        const next = member.path[0];
+        const ndx = next.x - target.x;
+        const ndy = next.y - target.y;
+        // Perpendicular offset: swap dx/dy and randomly negate
+        const sign = Math.random() < 0.5 ? -1 : 1;
+        const wobbleX = target.x + (-ndy * sign || sign);
+        const wobbleY = target.y + (ndx * sign || 0);
+        // Only wobble if the tile is walkable and on the same deck
+        const deck = decks?.[target.deck];
+        if (deck && wobbleY >= 0 && wobbleY < deck.height && wobbleX >= 0 && wobbleX < deck.width && WALKABLE.has(deck.tiles[wobbleY][wobbleX])) {
+          member.path.unshift({ x: wobbleX, y: wobbleY, deck: target.deck });
+        }
+      }
+    }
   } else {
     const move = CREW_SPEED * dt;
     member.pixelX += (dx / dist) * Math.min(move, dist);

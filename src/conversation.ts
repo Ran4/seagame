@@ -66,7 +66,7 @@ function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
   }
   if (partner.profile.energy < 80) w.push(['tired', 2]);
   if (partner.profile.hunger < 80) w.push(['hungry', 2]);
-  if (partner.profile.drunkedness >= 128) w.push(['drunken', 3]);
+  if (partner.conditions.has('drunk')) w.push(['drunken', 3]);
   return weightedPick(w);
 }
 

@@ -778,7 +778,7 @@ export class Renderer {
       const invRows = Math.ceil(p.inventory.length / invCols);
       extraH += sectionGap + invRows * (slotSize + slotGap);
     }
-    const ph = 157 + extraH + 8;
+    const ph = 165 + extraH + 8;
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -809,15 +809,23 @@ export class Renderer {
     ctx.fillText('Energy', px + 10, py + 92);
     this.drawBar(px + 75, py + 82, 115, 12, member.profile.energy / 255, '#3498db');
 
+    const drunkAmount = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
     ctx.fillText('Drunk', px + 10, py + 112);
-    this.drawBar(px + 75, py + 102, 115, 12, member.profile.drunkedness / 255, '#9b59b6');
+    this.drawBar(px + 75, py + 102, 115, 12, drunkAmount / 255, '#9b59b6');
+
+    // Active conditions
+    if (member.conditions.size > 0) {
+      ctx.fillStyle = '#ccaa44';
+      ctx.font = '10px monospace';
+      ctx.fillText([...member.conditions].join(', '), px + 10, py + 126);
+    }
 
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
-    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 132);
+    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 140);
 
-    this.drawCrewHandsAndInventory(member, px, py + 144, pw);
+    this.drawCrewHandsAndInventory(member, px, py + 152, pw);
   }
 
   private drawCrewHandsAndInventory(member: CrewMember, px: number, startY: number, pw: number): void {
