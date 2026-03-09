@@ -45,13 +45,19 @@ export class AudioManager {
     this.sounds.set(name, audio);
   }
 
-  play(name: string): void {
+  play(name: string, volumeMultiplier = 1): void {
     const sound = this.sounds.get(name);
     if (sound) {
       const clone = sound.cloneNode() as HTMLAudioElement;
-      clone.volume = sound.volume;
+      clone.volume = sound.volume * volumeMultiplier;
       clone.play().catch(() => {});
     }
+  }
+
+  /** Volume multiplier based on deck distance from viewer. 0.4 per deck away. */
+  deckVolume(soundDeck: number, viewerDeck: number): number {
+    const dist = Math.abs(soundDeck - viewerDeck);
+    return Math.pow(0.4, dist);
   }
 
   /** Start music on first user interaction (browsers require this) */

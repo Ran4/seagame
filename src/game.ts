@@ -327,7 +327,7 @@ export class Game {
                 member.state = CrewState.DRINKING;
                 member.stateTimer = DRINK_DURATION;
                 member.path = [];
-                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male');
+                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', this.audio.deckVolume(member.deck, this.activeDeck));
               }
             } else {
               // "Stop" action
@@ -667,13 +667,14 @@ export class Game {
     const prevStates = this.crew.map(c => c.state);
     updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
     for (let i = 0; i < this.crew.length; i++) {
+      const vol = this.audio.deckVolume(this.crew[i].deck, this.activeDeck);
       if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
-        this.audio.play('lantern_light');
+        this.audio.play('lantern_light', vol);
       } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
-        this.audio.play('lantern_extinguish');
+        this.audio.play('lantern_extinguish', vol);
       }
       if (prevStates[i] !== CrewState.KISSING && this.crew[i].state === CrewState.KISSING) {
-        this.audio.play('kiss');
+        this.audio.play('kiss', vol);
       }
     }
   }
