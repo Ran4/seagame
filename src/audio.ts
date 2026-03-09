@@ -14,8 +14,8 @@ export class AudioManager {
     this.preload('deck_change', '/audio/elevenlabs-generated/deck_change.mp3');
     this.preload('lantern_light', '/audio/elevenlabs-generated/lantern_light.mp3');
     this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3');
-    this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3');
-    this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3');
+    this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3', 0.9);
+    this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3', 0.9);
     this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3');
 
     this.music = new Audio('/audio/shanty.wav');
@@ -39,9 +39,9 @@ export class AudioManager {
     }
   }
 
-  private preload(name: string, src: string): void {
+  private preload(name: string, src: string, volume = 0.5): void {
     const audio = new Audio(src);
-    audio.volume = 0.5;
+    audio.volume = volume;
     this.sounds.set(name, audio);
   }
 
