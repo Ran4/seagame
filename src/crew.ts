@@ -44,7 +44,8 @@ const PIRATE_SEXES: Record<string, Sex> = {
  *                'tipsy'    — drunkedness.amount >= 64 (exclusive with drunk)
  *                'exhausted' — energy < 25 (sleeps even in daytime)
  *                'tired'    — energy < 60 (exclusive with exhausted)
- *                'starving' — hunger < 40
+ *                'starving' — hunger < 15
+ *                'hungry'   — hunger < 70 (exclusive with starving)
  *
  * Game code should read conditions (not statuses) for behaviour checks.
  * Write to statuses when changing state; conditions update next tick.
@@ -65,7 +66,8 @@ export function refreshConditions(member: CrewMember): void {
   // Derived: needs
   if (member.profile.energy < 25) member.conditions.add('exhausted');
   else if (member.profile.energy < 60) member.conditions.add('tired');
-  if (member.profile.hunger < 40) member.conditions.add('starving');
+  if (member.profile.hunger < 15) member.conditions.add('starving');
+  else if (member.profile.hunger < 70) member.conditions.add('hungry');
 }
 
 function getWalkableTiles(deck: Deck, deckIndex: number): DeckPoint[] {
@@ -412,7 +414,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   const from = currentTile(member);
 
   // Hungry? Go eat
-  if (member.profile.hunger < HUNGER_THRESHOLD) {
+  if (member.conditions.has('hungry') || member.conditions.has('starving')) {
     const stoves = findTilesOfType(decks, TileType.STOVE);
     const target = pickRandom(stoves);
     if (target) {

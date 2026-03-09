@@ -46,8 +46,8 @@ function weightedPick<T>(entries: [T, number][]): T {
 
 function pickContext(speaker: CrewMember, brightness: number): ContextTag {
   const w: [ContextTag, number][] = [['generic', 3], ['work', 2]];
-  if (speaker.profile.hunger < 80) w.push(['hungry', 3]);
-  if (speaker.profile.energy < 80) w.push(['tired', 3]);
+  if (speaker.conditions.has('hungry') || speaker.conditions.has('starving')) w.push(['hungry', 3]);
+  if (speaker.conditions.has('tired') || speaker.conditions.has('exhausted')) w.push(['tired', 3]);
   if (brightness < 0.5) w.push(['night', 3]);
   return weightedPick(w);
 }
@@ -64,8 +64,8 @@ function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
       w.push(['horny', 3]);
     }
   }
-  if (partner.profile.energy < 80) w.push(['tired', 2]);
-  if (partner.profile.hunger < 80) w.push(['hungry', 2]);
+  if (partner.conditions.has('tired') || partner.conditions.has('exhausted')) w.push(['tired', 2]);
+  if (partner.conditions.has('hungry') || partner.conditions.has('starving')) w.push(['hungry', 2]);
   if (partner.conditions.has('drunk')) w.push(['drunken', 3]);
   return weightedPick(w);
 }
