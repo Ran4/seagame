@@ -16,6 +16,7 @@ export class AudioManager {
     this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3');
     this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3');
     this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3');
+    this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3');
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;

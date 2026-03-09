@@ -76,6 +76,13 @@ const SOUNDS = [
     prompt_influence: 0.8,
   },
   {
+    name: 'kiss',
+    type: 'elevenlabs',
+    text: 'A quick cartoon kiss sound effect. A short wet smooch "mwah" lip smack, playful and exaggerated.',
+    duration_seconds: 1,
+    prompt_influence: 0.8,
+  },
+  {
     name: 'click',
     type: 'elevenlabs',
     text: 'A short cheerful UI click blip sound, retro 8-bit game style chirp.',

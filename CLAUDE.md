@@ -4,6 +4,8 @@
 
 **Time scale:** 1 in-game day = 12 minutes IRL (720 seconds). All time-based calculations use this ratio. Defined as `SECONDS_PER_DAY` in `src/worldmap.ts`.
 
+Note: during development, guy just means crew member (male or female).
+
 ## Quick start
 
 ```

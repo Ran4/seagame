@@ -663,14 +663,17 @@ export class Game {
     const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
     const brightness = getShipBrightness(timeOfDay);
 
-    // Crew AI — track lantern actions to play sounds on completion
-    const lanternStates = this.crew.map(c => c.state);
+    // Crew AI — track state transitions to play sounds
+    const prevStates = this.crew.map(c => c.state);
     updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
     for (let i = 0; i < this.crew.length; i++) {
-      if (lanternStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
+      if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
         this.audio.play('lantern_light');
-      } else if (lanternStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
+      } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
         this.audio.play('lantern_extinguish');
+      }
+      if (prevStates[i] !== CrewState.KISSING && this.crew[i].state === CrewState.KISSING) {
+        this.audio.play('kiss');
       }
     }
   }
