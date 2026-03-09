@@ -203,6 +203,7 @@ export interface CrewMember {
   conversationPartnerId: number | null;
   conversationExchangesLeft: number;
   conversationPositive: boolean;
+  conversationScript: string[];
   conversationCooldown: number;
   conversationMyTurn: boolean;
   speechBubbleText: string | null;

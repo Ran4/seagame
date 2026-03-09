@@ -106,6 +106,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       conversationPartnerId: null,
       conversationExchangesLeft: 0,
       conversationPositive: true,
+      conversationScript: [],
       conversationCooldown: 0,
       conversationMyTurn: false,
       speechBubbleText: null,
@@ -154,7 +155,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         updateIdle(member, decks, dt, crew, lanternOil, brightness);
         break;
       case CrewState.WALKING:
-        updateWalking(member, dt, crew);
+        updateWalking(member, dt, crew, brightness);
         break;
       case CrewState.EATING:
         member.stateTimer -= dt;
@@ -427,7 +428,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   }
 }
 
-function updateWalking(member: CrewMember, dt: number, crew: CrewMember[]): void {
+function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number): void {
   if (member.path.length === 0) {
     member.state = member.targetState;
     if (member.state === CrewState.EATING) {
@@ -457,7 +458,7 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[]): void
       member.copulationTarget = null;
       if (partner) {
         partner.copulationTarget = null;
-        beginConversation(member, partner);
+        beginConversation(member, partner, brightness);
       } else {
         member.state = CrewState.IDLE;
         member.idleTimer = 1 + Math.random() * 2;
@@ -492,7 +493,7 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[]): void
 
   // Wandering crew can stop and chat when passing someone
   if (member.state === CrewState.WALKING) {
-    tryStartConversationWhileWalking(member, crew);
+    tryStartConversationWhileWalking(member, crew, brightness);
   }
 }
 
@@ -521,12 +522,17 @@ export function orderCrewToAdjacentTile(member: CrewMember, target: DeckPoint, d
   return false;
 }
 
-/** Walk to a tile beside the target, preferring horizontal neighbors so both crew are visible side by side. */
+/** Walk to a tile beside the target, preferring the side closest to the member's current position. */
 export function orderCrewBesideTile(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
-  // Horizontal first, then vertical
+  const from = currentTile(member);
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  for (const [dx, dy] of DIRS) {
-    const adj: DeckPoint = { x: target.x + dx, y: target.y + dy, deck: target.deck };
+  const candidates = DIRS.map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy, deck: target.deck }));
+  candidates.sort((a, b) => {
+    const da = Math.abs(a.x - from.x) + Math.abs(a.y - from.y);
+    const db = Math.abs(b.x - from.x) + Math.abs(b.y - from.y);
+    return da - db;
+  });
+  for (const adj of candidates) {
     if (orderCrewTo(member, adj, decks, targetState)) return true;
   }
   // Fallback: stand on the same tile if no adjacent tile reachable
