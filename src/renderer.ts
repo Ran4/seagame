@@ -761,30 +761,130 @@ export class Renderer {
     ctx.textBaseline = 'alphabetic';
   }
 
-  private drawCrewPanel(member: CrewMember): void {
+  /** Measure or draw the crew panel. When draw=false, only returns height. */
+  private layoutCrewPanel(member: CrewMember, draw: boolean): number {
     const ctx = this.ctx;
     const px = CANVAS_WIDTH - 210;
     const py = 10;
     const pw = 200;
     const p = member.profile;
-    const slotSize = 28;
+    const slot = 28;
     const slotGap = 4;
-    const sectionGap = 14; // label height
-    // Hands row (always shown)
-    let extraH = sectionGap + slotSize + slotGap;
-    // Inventory rows
-    const invCols = 5;
-    if (p.inventory.length > 0) {
-      const invRows = Math.ceil(p.inventory.length / invCols);
-      extraH += sectionGap + invRows * (slotSize + slotGap);
+    let y = py + 8;
+
+    // Name row
+    if (draw) {
+      ctx.fillStyle = member.profile.color;
+      ctx.beginPath();
+      ctx.arc(px + 20, y + 17, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${p.name} (${p.sex})`, px + 35, y + 22);
     }
-    const drunkAmt = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
-    // Dynamic offset from py to start of hands/inventory (must match drawing code below)
-    let contentH = 102; // base: name + state + hunger + energy bars end at py+102
-    if (drunkAmt > 0) contentH += 20;
-    if (member.conditions.size > 0) contentH += 16;
-    contentH += 22; // deck line
-    const ph = contentH + extraH + 8;
+    y += 32;
+
+    // State
+    if (draw) {
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText(`State: ${STATE_NAMES[member.state]}`, px + 10, y + 10);
+    }
+    y += 18;
+
+    // Hunger bar
+    if (draw) {
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '11px monospace';
+      ctx.fillText('Hunger', px + 10, y + 10);
+      this.drawBar(px + 75, y, 115, 12, p.hunger / 255, '#e67e22');
+    }
+    y += 20;
+
+    // Energy bar
+    if (draw) {
+      ctx.fillText('Energy', px + 10, y + 10);
+      this.drawBar(px + 75, y, 115, 12, p.energy / 255, '#3498db');
+    }
+    y += 20;
+
+    // Drunk bar (conditional)
+    const drunkAmount = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
+    if (drunkAmount > 0) {
+      if (draw) {
+        ctx.fillText('Drunk', px + 10, y + 10);
+        this.drawBar(px + 75, y, 115, 12, drunkAmount / 255, '#9b59b6');
+      }
+      y += 20;
+    }
+
+    // Conditions
+    if (member.conditions.size > 0) {
+      if (draw) {
+        ctx.fillStyle = '#ccaa44';
+        ctx.font = '10px monospace';
+        ctx.fillText([...member.conditions].join(', '), px + 10, y + 10);
+      }
+      y += 16;
+    }
+
+    // Deck
+    if (draw) {
+      ctx.fillStyle = '#888888';
+      ctx.font = '10px monospace';
+      const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
+      ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, y + 10);
+    }
+    y += 18;
+
+    // Hands
+    if (draw) {
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = p.numberOfHands === 0 ? '#666666' : '#aaaaaa';
+      ctx.fillText(p.numberOfHands === 0 ? 'No hands' : 'Hands:', px + 10, y + 10);
+    }
+    y += 14;
+    if (draw) {
+      for (let i = 0; i < p.numberOfHands; i++) {
+        this.drawItemSlot(px + 10 + i * (slot + slotGap), y, slot, p.hands[i] ?? null);
+      }
+    }
+    if (p.numberOfHands > 0) y += slot + slotGap;
+    y += 4;
+
+    // Inventory
+    if (p.inventory.length > 0) {
+      if (draw) {
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Inventory:', px + 10, y + 10);
+      }
+      y += 14;
+      const cols = 5;
+      const rows = Math.ceil(p.inventory.length / cols);
+      if (draw) {
+        for (let i = 0; i < p.inventory.length; i++) {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          this.drawItemSlot(px + 10 + col * (slot + slotGap), y + row * (slot + slotGap), slot, p.inventory[i]);
+        }
+      }
+      y += rows * (slot + slotGap);
+    }
+
+    y += 6; // bottom padding
+    return y - py;
+  }
+
+  private drawCrewPanel(member: CrewMember): void {
+    const ctx = this.ctx;
+    const px = CANVAS_WIDTH - 210;
+    const py = 10;
+    const pw = 200;
+    const ph = this.layoutCrewPanel(member, false);
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -792,89 +892,7 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
 
-    // Color dot + name
-    ctx.fillStyle = member.profile.color;
-    ctx.beginPath();
-    ctx.arc(px + 20, py + 25, 8, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${member.profile.name} (${member.profile.sex})`, px + 35, py + 30);
-
-    ctx.font = '11px monospace';
-    ctx.fillStyle = '#aaaaaa';
-    ctx.fillText(`State: ${STATE_NAMES[member.state]}`, px + 10, py + 52);
-
-    ctx.fillStyle = '#cccccc';
-    ctx.font = '11px monospace';
-    ctx.fillText('Hunger', px + 10, py + 72);
-    this.drawBar(px + 75, py + 62, 115, 12, member.profile.hunger / 255, '#e67e22');
-
-    ctx.fillText('Energy', px + 10, py + 92);
-    this.drawBar(px + 75, py + 82, 115, 12, member.profile.energy / 255, '#3498db');
-
-    const drunkAmount = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
-    let nextY = py + 102;
-    if (drunkAmount > 0) {
-      ctx.fillText('Drunk', px + 10, nextY + 10);
-      this.drawBar(px + 75, nextY, 115, 12, drunkAmount / 255, '#9b59b6');
-      nextY += 20;
-    }
-
-    // Active conditions
-    if (member.conditions.size > 0) {
-      ctx.fillStyle = '#ccaa44';
-      ctx.font = '10px monospace';
-      ctx.fillText([...member.conditions].join(', '), px + 10, nextY + 12);
-      nextY += 16;
-    }
-
-    ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
-    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, nextY + 12);
-    nextY += 22;
-
-    this.drawCrewHandsAndInventory(member, px, nextY, pw);
-  }
-
-  private drawCrewHandsAndInventory(member: CrewMember, px: number, startY: number, pw: number): void {
-    const ctx = this.ctx;
-    const p = member.profile;
-    const s = 28;   // slot size
-    const gap = 4;
-    let cy = startY;
-
-    // Hands label + slots
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = p.numberOfHands === 0 ? '#666666' : '#aaaaaa';
-    ctx.fillText(p.numberOfHands === 0 ? 'No hands' : 'Hands:', px + 10, cy);
-    cy += 14;
-    for (let i = 0; i < p.numberOfHands; i++) {
-      const sx = px + 10 + i * (s + gap);
-      this.drawItemSlot(sx, cy, s, p.hands[i] ?? null);
-    }
-    if (p.numberOfHands > 0) cy += s + gap + 16;
-
-    // Inventory label + grid
-    if (p.inventory.length > 0) {
-      ctx.fillStyle = '#aaaaaa';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('Inventory:', px + 10, cy);
-      cy += 14;
-      const cols = 5;
-      for (let i = 0; i < p.inventory.length; i++) {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const sx = px + 10 + col * (s + gap);
-        const sy = cy + row * (s + gap);
-        this.drawItemSlot(sx, sy, s, p.inventory[i]);
-      }
-    }
+    this.layoutCrewPanel(member, true);
   }
 
   private drawItemSlot(x: number, y: number, size: number, item: Item | null): void {
