@@ -14,6 +14,7 @@ const CHAR_TO_TILE: Record<string, TileType> = {
   'T': TileType.TABLE,
   'N': TileType.MAP_TABLE,
   'L': TileType.LANTERN,
+  '-': TileType.RAISED_FLOOR,
 };
 
 function parseLayout(layout: string): TileType[][] {
@@ -50,7 +51,7 @@ const UPPER_DECK = `\
 .....#.....
 ....#_#....
 ...#___#...
-..#__W__#..
+..#_____#..
 .#_______#.
 .#___M___#.
 #_________#
@@ -64,9 +65,9 @@ const UPPER_DECK = `\
 #L_______L#
 #_________#
 #____S____#
-#_________#
-.#_______#.
-.#_______#.
+#----W----#
+.#-------#.
+.#-------#.
 ..#######..`;
 
 const LOWER_DECK = `\

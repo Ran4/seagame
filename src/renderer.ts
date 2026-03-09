@@ -21,6 +21,7 @@ const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.TABLE]: 'Table',
   [TileType.MAP_TABLE]: 'Map Table',
   [TileType.LANTERN]: 'Lantern',
+  [TileType.RAISED_FLOOR]: 'Quarterdeck',
 };
 
 export class Renderer {
