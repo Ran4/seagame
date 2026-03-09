@@ -28,13 +28,15 @@ src/
   audio.ts         AudioManager — preloads SFX, handles music loop (starts on first click)
 
 scripts/
-  generate-sprites.mjs   Generates tile + crew pixel art via OpenAI gpt-image-1.5 API
+  generate-sprites.mjs   Generates tile + crew pixel art via OpenAI gpt-image-1 API
   generate-music.mjs     Synthesizes sea shanty WAV (procedural, no external deps)
-  generate-sfx.mjs       Synthesizes click/stairs/deck_change WAV files
+  generate-sfx.mjs       Generates SFX — procedural, OpenAI TTS, or ElevenLabs
 
 public/
   sprites/               PNG sprites (32x32 pixel art at 1024x1024, scaled down in-game)
-  audio/                 WAV files — shanty.wav (music), click/stairs/deck_change (SFX)
+  audio/                 shanty.wav (music)
+    sfx/                 Procedural/OpenAI-generated SFX (WAV fallbacks)
+    elevenlabs-generated/  ElevenLabs-generated SFX (MP3, used by default)
 
 architecture/
   GDD.md                 Game Design Document — full vision including future features
@@ -139,13 +141,14 @@ To make it orderable via context menu, add entry to `TILE_ACTIONS` in `types.ts`
 
 ## Generating assets
 
-Sprites require `OPENAI_API_KEY` in `.env`. Scripts skip already-existing files.
+Sprites require `OPENAI_API_KEY` in `.env`. SFX supports three backends per sound (see `generate-sfx.mjs`).
+ElevenLabs sounds require `ELEVENLABS_API_KEY` in `.env`. Scripts skip already-existing files.
 ```
 node scripts/generate-sprites.mjs   # pixel art tiles + crew
 node scripts/generate-music.mjs     # shanty.wav
-node scripts/generate-sfx.mjs       # click, stairs, deck_change
+node scripts/generate-sfx.mjs       # SFX (procedural → sfx/, elevenlabs → elevenlabs-generated/)
 ```
-Delete a sprite file and rerun to regenerate just that one.
+Delete a file and rerun to regenerate just that one.
 
 ## Style guidelines
 

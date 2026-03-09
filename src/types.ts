@@ -159,6 +159,9 @@ export interface ContextMenu {
   deck: number;
   items: ContextMenuItem[];
   crewId?: number; // set when menu targets a crew member (e.g. "stop" actions)
+  barrelItems?: { items: Item[]; barrelKey: string }; // visual item grid for barrel contents
+  selectedBarrelSlot?: number; // which barrel item slot was clicked (shows "Take" flyout)
+  barrelSlotClickPos?: { x: number; y: number }; // where the slot was clicked
 }
 
 export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {

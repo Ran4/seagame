@@ -1,15 +1,27 @@
 #!/usr/bin/env node
 /**
- * generate-sfx.mjs - Generate sound effects as WAV files.
+ * generate-sfx.mjs - Generate sound effects.
  *
- * Supports two generation methods per sound:
- *   - 'procedural': raw PCM synthesis (square waves, noise, frequency sweeps)
- *   - 'openai':     OpenAI TTS API (gpt-4o-mini-tts) — requires OPENAI_API_KEY
+ * Three generation methods, each sound picks one:
+ *
+ *   - 'procedural':  Raw PCM synthesis (square waves, noise, frequency sweeps).
+ *                    No API key needed. Output: public/audio/sfx/*.wav
+ *
+ *   - 'openai':      OpenAI TTS API (gpt-4o-mini-tts). Generates voice-acted
+ *                    sounds via text-to-speech with instructions. Requires
+ *                    OPENAI_API_KEY in .env. Output: public/audio/sfx/*.wav
+ *
+ *   - 'elevenlabs':  ElevenLabs Sound Effects API (/v1/sound-generation).
+ *                    Generates realistic sound effects from text descriptions.
+ *                    Requires ELEVENLABS_API_KEY in .env.
+ *                    Output: public/audio/elevenlabs-generated/*.mp3
+ *                    Config: { text, duration_seconds?, prompt_influence? }
  *
  * Usage:  node scripts/generate-sfx.mjs
- * Output: public/audio/*.wav
  *
  * Existing files are skipped. Delete a file to regenerate it.
+ * The game (audio.ts) currently loads from elevenlabs-generated/.
+ * Old procedural sounds are kept in sfx/ as fallback.
  */
 
 import fs from 'fs';
@@ -17,8 +29,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT_DIR = path.join(__dirname, '..', 'public', 'audio');
-fs.mkdirSync(OUT_DIR, { recursive: true });
+const SFX_DIR = path.join(__dirname, '..', 'public', 'audio', 'sfx');
+const ELEVENLABS_DIR = path.join(__dirname, '..', 'public', 'audio', 'elevenlabs-generated');
+fs.mkdirSync(SFX_DIR, { recursive: true });
+fs.mkdirSync(ELEVENLABS_DIR, { recursive: true });
 
 // ── Load .env ─────────────────────────────────────────────────────────
 
@@ -36,8 +50,10 @@ try {
 
 // ── Sound definitions ─────────────────────────────────────────────────
 //
-// Each sound is either { type: 'procedural', generate: fn }
-// or { type: 'openai', voice, instructions, input }.
+// Each sound is one of:
+//   { type: 'procedural', generate: fn }
+//   { type: 'openai', voice, instructions, input }
+//   { type: 'elevenlabs', text, duration_seconds?, prompt_influence? }
 
 const SOUNDS = [
   { name: 'click',              type: 'procedural', generate: generateClick },
@@ -47,17 +63,52 @@ const SOUNDS = [
   { name: 'lantern_extinguish', type: 'procedural', generate: generateLanternExtinguish },
   {
     name: 'glug_male',
-    type: 'openai',
-    voice: 'onyx',
-    instructions: 'You are generating a short sound effect. Make a quick, satisfying gulping/drinking sound — a man taking a few swigs from a bottle of rum. Deep voice. 2-3 gulps, then a short exhale. Keep it under 3 seconds. No words, just the sounds.',
-    input: '*glug glug glug* *gulp* *ahh*',
+    type: 'elevenlabs',
+    text: 'A man taking a few deep swigs from a rum bottle. Three low-pitched gulps followed by a short satisfied exhale.',
+    duration_seconds: 3,
+    prompt_influence: 0.8,
   },
   {
     name: 'glug_female',
-    type: 'openai',
-    voice: 'shimmer',
-    instructions: 'You are generating a short sound effect. Make a quick, satisfying gulping/drinking sound — a woman taking a few swigs from a bottle of rum. Higher-pitched voice. 2-3 gulps, then a short exhale. Keep it under 3 seconds. No words, just the sounds.',
-    input: '*glug glug glug* *gulp* *ahh*',
+    type: 'elevenlabs',
+    text: 'A woman taking a few swigs from a rum bottle. Three gulps followed by a short satisfied exhale.',
+    duration_seconds: 3,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'click',
+    type: 'elevenlabs',
+    text: 'A short cheerful UI click blip sound, retro 8-bit game style chirp.',
+    duration_seconds: 0.5,
+    prompt_influence: 0.7,
+  },
+  {
+    name: 'stairs',
+    type: 'elevenlabs',
+    text: 'Quick wooden footsteps going up creaky ship stairs. Four rapid taps on old wood.',
+    duration_seconds: 1,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'deck_change',
+    type: 'elevenlabs',
+    text: 'A subtle short whoosh transition sound, like changing perspective or view. Soft and airy.',
+    duration_seconds: 0.5,
+    prompt_influence: 0.7,
+  },
+  {
+    name: 'lantern_light',
+    type: 'elevenlabs',
+    text: 'Striking a match and lighting an oil lantern. Match strike followed by a warm flame catching with a soft crackle.',
+    duration_seconds: 1.5,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'lantern_extinguish',
+    type: 'elevenlabs',
+    text: 'A quick puff of breath extinguishing an oil lantern flame. Short hiss as the flame goes out.',
+    duration_seconds: 0.5,
+    prompt_influence: 0.8,
   },
 ];
 
@@ -137,10 +188,10 @@ function adEnvelope(t, duration, attack, decay) {
 
 // ── OpenAI TTS generation ─────────────────────────────────────────────
 
-async function generateWithOpenAI(name, config) {
+async function generateWithOpenAI(outDir, name, config) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.error(`  ✗ ${name}.wav — OPENAI_API_KEY not set, skipping`);
+    console.error(`  x ${name}.wav — OPENAI_API_KEY not set, skipping`);
     return;
   }
 
@@ -162,12 +213,49 @@ async function generateWithOpenAI(name, config) {
 
   if (!res.ok) {
     const err = await res.text();
-    console.error(`  ✗ ${name}.wav — OpenAI API error ${res.status}: ${err}`);
+    console.error(`  x ${name}.wav — OpenAI API error ${res.status}: ${err}`);
     return;
   }
 
   const arrayBuf = await res.arrayBuffer();
-  const outPath = path.join(OUT_DIR, `${name}.wav`);
+  const outPath = path.join(outDir, `${name}.wav`);
+  fs.writeFileSync(outPath, Buffer.from(arrayBuf));
+  const kb = (arrayBuf.byteLength / 1024).toFixed(1);
+  console.log(`  wrote ${outPath}  (${kb} KB)`);
+}
+
+// ── ElevenLabs Sound Effects generation ───────────────────────────────
+
+async function generateWithElevenLabs(outDir, name, config) {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    console.error(`  x ${name}.wav — ELEVENLABS_API_KEY not set, skipping`);
+    return;
+  }
+
+  console.log(`  generating ${name}.wav via ElevenLabs Sound Effects...`);
+  const body = { text: config.text };
+  if (config.duration_seconds) body.duration_seconds = config.duration_seconds;
+  if (config.prompt_influence != null) body.prompt_influence = config.prompt_influence;
+
+  const res = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
+    method: 'POST',
+    headers: {
+      'xi-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`  x ${name}.wav — ElevenLabs API error ${res.status}: ${err}`);
+    return;
+  }
+
+  // Response body is the audio file (mp3 by default)
+  const arrayBuf = await res.arrayBuffer();
+  const outPath = path.join(outDir, `${name}.mp3`);
   fs.writeFileSync(outPath, Buffer.from(arrayBuf));
   const kb = (arrayBuf.byteLength / 1024).toFixed(1);
   console.log(`  wrote ${outPath}  (${kb} KB)`);
@@ -215,7 +303,7 @@ function generateClick() {
     samples[i] = sample * 0.7; // master volume
   }
 
-  writeWav(path.join(OUT_DIR, 'click.wav'), samples);
+  writeWav(path.join(SFX_DIR, 'click.wav'), samples);
 }
 
 /**
@@ -263,7 +351,7 @@ function generateStairs() {
     samples[i] = sample * 0.75;
   }
 
-  writeWav(path.join(OUT_DIR, 'stairs.wav'), samples);
+  writeWav(path.join(SFX_DIR, 'stairs.wav'), samples);
 }
 
 /**
@@ -307,7 +395,7 @@ function generateDeckChange() {
     samples[i] = sample * 0.8;
   }
 
-  writeWav(path.join(OUT_DIR, 'deck_change.wav'), samples);
+  writeWav(path.join(SFX_DIR, 'deck_change.wav'), samples);
 }
 
 /**
@@ -351,7 +439,7 @@ function generateLanternLight() {
     samples[i] = sample * 0.7;
   }
 
-  writeWav(path.join(OUT_DIR, 'lantern_light.wav'), samples);
+  writeWav(path.join(SFX_DIR, 'lantern_light.wav'), samples);
 }
 
 /**
@@ -385,7 +473,7 @@ function generateLanternExtinguish() {
     samples[i] = sample * 0.8;
   }
 
-  writeWav(path.join(OUT_DIR, 'lantern_extinguish.wav'), samples);
+  writeWav(path.join(SFX_DIR, 'lantern_extinguish.wav'), samples);
 }
 
 // ── Main ───────────────────────────────────────────────────────────────
@@ -394,16 +482,20 @@ async function main() {
   console.log('Generating sound effects...');
 
   for (const sound of SOUNDS) {
-    const outPath = path.join(OUT_DIR, `${sound.name}.wav`);
+    const outDir = sound.type === 'elevenlabs' ? ELEVENLABS_DIR : SFX_DIR;
+    const ext = sound.type === 'elevenlabs' ? 'mp3' : 'wav';
+    const outPath = path.join(outDir, `${sound.name}.${ext}`);
     if (fs.existsSync(outPath)) {
-      console.log(`  skip ${sound.name}.wav (exists)`);
+      console.log(`  skip ${sound.name}.${ext} (exists in ${path.basename(outDir)}/)`);
       continue;
     }
 
     if (sound.type === 'procedural') {
       sound.generate();
     } else if (sound.type === 'openai') {
-      await generateWithOpenAI(sound.name, sound);
+      await generateWithOpenAI(outDir, sound.name, sound);
+    } else if (sound.type === 'elevenlabs') {
+      await generateWithElevenLabs(outDir, sound.name, sound);
     }
   }
 

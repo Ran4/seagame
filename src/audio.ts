@@ -9,13 +9,13 @@ export class AudioManager {
   constructor() {
     this._muted = localStorage.getItem(STORAGE_KEY) === '1';
 
-    this.preload('click', '/audio/click.wav');
-    this.preload('stairs', '/audio/stairs.wav');
-    this.preload('deck_change', '/audio/deck_change.wav');
-    this.preload('lantern_light', '/audio/lantern_light.wav');
-    this.preload('lantern_extinguish', '/audio/lantern_extinguish.wav');
-    this.preload('glug_male', '/audio/glug_male.wav');
-    this.preload('glug_female', '/audio/glug_female.wav');
+    this.preload('click', '/audio/elevenlabs-generated/click.mp3');
+    this.preload('stairs', '/audio/elevenlabs-generated/stairs.mp3');
+    this.preload('deck_change', '/audio/elevenlabs-generated/deck_change.mp3');
+    this.preload('lantern_light', '/audio/elevenlabs-generated/lantern_light.mp3');
+    this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3');
+    this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3');
+    this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3');
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;

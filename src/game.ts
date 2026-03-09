@@ -403,6 +403,33 @@ export class Game {
       }
     }
 
+    // Right-click on barrel item slot in context menu → select it (show "Take" flyout)
+    if (this.input.rightClick && this.contextMenu?.barrelItems) {
+      const menuItem = this.handleMenuClick(this.input.rightClick);
+      if (menuItem) {
+        // "Take" clicked via right-click flyout — same dispatch as left-click
+        if (menuItem.action === 'take_item' && menuItem.itemData) {
+          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          if (member) {
+            member.takeTarget = menuItem.itemData;
+            orderCrewToAdjacentTile(
+              member,
+              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
+              this.decks,
+              CrewState.TAKING_ITEM,
+            );
+          }
+          this.audio.play('click');
+          this.contextMenu = null;
+        }
+        this.input.rightClick = null;
+      } else if (menuItem === undefined) {
+        // Barrel slot selected or flyout area — consume right-click, keep menu
+        this.input.rightClick = null;
+      }
+      // menuItem === null means outside menu — let right-click fall through to open new menu
+    }
+
     // Left-click on crew panel → close menus, consume click (don't deselect)
     if (this.input.mouseClick && this.selectedCrewId !== null) {
       const cpx = CANVAS_WIDTH - 210;
@@ -561,6 +588,7 @@ export class Game {
         }
 
         // Tile actions from the tile under the click (or under the crew member)
+        let pendingBarrelItems: { items: Item[]; barrelKey: string } | undefined;
         if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
           const tileType = deck.tiles[tileY][tileX];
           // Tile order actions only if a crew member is selected
@@ -582,27 +610,11 @@ export class Game {
               if (selected?.profile.sex !== 'M') {
                 tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
               }
-              // Build "Items ▶" submenu from barrel inventory
+              // Barrel inventory shown as visual item grid on context menu
               const barrelKey = `${this.activeDeck}-${tileX}-${tileY}`;
-              const barrelItems = this.barrelInventory.get(barrelKey);
-              if (barrelItems && barrelItems.length > 0) {
-                const itemSubmenus: ContextMenuItem[] = barrelItems.map(bi => {
-                  const qtyLabel = bi.stackable && bi.quantity > 1 ? ` (x${bi.quantity})` : '';
-                  return {
-                    label: `${bi.name}${qtyLabel} \u25B6`,
-                    targetState: CrewState.IDLE,
-                    submenu: [{
-                      label: 'Take',
-                      targetState: CrewState.IDLE,
-                      action: 'take_item',
-                      itemData: { barrelKey, itemName: bi.name },
-                    }],
-                  };
-                });
-                tileActions = [
-                  { label: 'Items \u25B6', targetState: CrewState.IDLE, submenu: itemSubmenus },
-                  ...(tileActions || []),
-                ];
+              const barrelItemsList = this.barrelInventory.get(barrelKey);
+              if (barrelItemsList && barrelItemsList.length > 0) {
+                pendingBarrelItems = { items: barrelItemsList, barrelKey };
               }
             }
             // Dynamic lantern actions based on oil state
@@ -623,7 +635,7 @@ export class Game {
           }
         }
 
-        if (items.length > 0) {
+        if (items.length > 0 || pendingBarrelItems) {
           this.contextMenu = {
             screenX: click.x + 16,
             screenY: click.y,
@@ -632,6 +644,7 @@ export class Game {
             deck: clickedCrew ? clickedCrew.deck : this.activeDeck,
             items,
             crewId: clickedCrew?.id,
+            barrelItems: pendingBarrelItems,
           };
           this.audio.play('click');
         }
@@ -669,7 +682,19 @@ export class Game {
     const itemW = 200;
     const itemH = 24;
     const pad = 4;
-    const totalH = this.contextMenu.items.length * itemH + pad * 2;
+
+    // Barrel item grid dimensions (must match renderer)
+    const bSlot = 28, bGap = 4, bCols = 5, bMargin = 10;
+    let barrelGridH = 0, barrelSepH = 0;
+    const bItems = this.contextMenu.barrelItems?.items;
+    if (bItems && bItems.length > 0) {
+      const bRows = Math.ceil(bItems.length / bCols);
+      barrelGridH = bRows * (bSlot + bGap);
+      barrelSepH = this.contextMenu.items.length > 0 ? 8 : 0;
+    }
+
+    const totalH = barrelGridH + barrelSepH + this.contextMenu.items.length * itemH + pad * 2;
+    const textY0 = barrelGridH + barrelSepH; // offset for text items
 
     // Must match the clamping logic in renderer.drawContextMenu
     let mx = this.contextMenu.screenX;
@@ -679,11 +704,56 @@ export class Game {
     if (mx < 0) mx = 4;
     if (my < 0) my = 4;
 
+    // Check barrel item "Take" flyout click (only when a slot is selected)
+    if (bItems && bItems.length > 0) {
+      const selSlot = this.contextMenu.selectedBarrelSlot;
+      const clickPos = this.contextMenu.barrelSlotClickPos;
+      if (selSlot !== undefined && selSlot >= 0 && selSlot < bItems.length && clickPos) {
+        const flyW = 80;
+        const flyH = itemH + pad * 2;
+        let flyX = clickPos.x + 16;
+        let flyY = clickPos.y;
+        if (flyX + flyW > CANVAS_WIDTH) flyX = clickPos.x - flyW - 4;
+        if (flyY + flyH > CANVAS_HEIGHT) flyY = CANVAS_HEIGHT - flyH - 2;
+        if (click.x >= flyX && click.x <= flyX + flyW &&
+            click.y >= flyY && click.y <= flyY + flyH) {
+          const takeY = flyY + pad;
+          if (click.y >= takeY && click.y <= takeY + itemH) {
+            return {
+              label: 'Take',
+              targetState: CrewState.TAKING_ITEM,
+              action: 'take_item',
+              itemData: { barrelKey: this.contextMenu.barrelItems!.barrelKey, itemName: bItems[selSlot].name },
+            };
+          }
+          return undefined;
+        }
+      }
+
+      // Check barrel item slot clicks → select that slot (toggle)
+      for (let i = 0; i < bItems.length; i++) {
+        const col = i % bCols;
+        const row = Math.floor(i / bCols);
+        const sx = mx + bMargin + col * (bSlot + bGap);
+        const sy = my + pad + row * (bSlot + bGap);
+        if (click.x >= sx && click.x <= sx + bSlot &&
+            click.y >= sy && click.y <= sy + bSlot) {
+          if (selSlot === i) {
+            this.contextMenu.selectedBarrelSlot = undefined;
+          } else {
+            this.contextMenu.selectedBarrelSlot = i;
+            this.contextMenu.barrelSlotClickPos = { x: click.x, y: click.y };
+          }
+          return undefined;
+        }
+      }
+    }
+
     // Check sub-submenu (level 3) clicks first (deepest first)
     for (let i = 0; i < this.contextMenu.items.length; i++) {
       const item = this.contextMenu.items[i];
       if (!item.submenu) continue;
-      const parentY = my + pad + i * itemH;
+      const parentY = my + pad + textY0 + i * itemH;
       const subX = mx + itemW;
       const subY = parentY;
 
@@ -694,7 +764,6 @@ export class Game {
         let sub2X = subX + itemW;
         const sub2Y = sjy;
         const sub2H = subItem.submenu.length * itemH + pad * 2;
-        // Edge-clamp: flip to left if overflowing
         if (sub2X + itemW > CANVAS_WIDTH) sub2X = subX - itemW;
 
         if (click.x >= sub2X && click.x <= sub2X + itemW &&
@@ -715,7 +784,7 @@ export class Game {
     for (let i = 0; i < this.contextMenu.items.length; i++) {
       const item = this.contextMenu.items[i];
       if (!item.submenu) continue;
-      const parentY = my + pad + i * itemH;
+      const parentY = my + pad + textY0 + i * itemH;
       const subX = mx + itemW;
       const subY = parentY;
       const subH = item.submenu.length * itemH + pad * 2;
@@ -726,7 +795,7 @@ export class Game {
           const sjy = subY + pad + j * itemH;
           if (click.y >= sjy && click.y <= sjy + itemH) {
             if (item.submenu[j].disabled) return undefined;
-            if (item.submenu[j].submenu) return undefined; // has sub-submenu, keep open
+            if (item.submenu[j].submenu) return undefined;
             return item.submenu[j];
           }
         }
@@ -735,7 +804,7 @@ export class Game {
     }
 
     for (let i = 0; i < this.contextMenu.items.length; i++) {
-      const iy = my + pad + i * itemH;
+      const iy = my + pad + textY0 + i * itemH;
       if (click.x >= mx && click.x <= mx + itemW &&
           click.y >= iy && click.y <= iy + itemH) {
         if (this.contextMenu.items[i].disabled) return undefined;

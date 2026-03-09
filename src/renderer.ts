@@ -50,6 +50,7 @@ export class Renderer {
     return this.hoveredItem?.item ?? null;
   }
 
+
   render(
     deck: Deck,
     deckIndex: number,
@@ -1076,7 +1077,19 @@ export class Renderer {
     const itemW = 200;
     const itemH = 24;
     const pad = 4;
-    const totalH = menu.items.length * itemH + pad * 2;
+
+    // Barrel item grid dimensions
+    const bSlot = 28, bGap = 4, bCols = 5, bMargin = 10;
+    let barrelGridH = 0, barrelSepH = 0;
+    const bItems = menu.barrelItems?.items;
+    if (bItems && bItems.length > 0) {
+      const bRows = Math.ceil(bItems.length / bCols);
+      barrelGridH = bRows * (bSlot + bGap);
+      barrelSepH = menu.items.length > 0 ? 8 : 0;
+    }
+
+    const totalH = barrelGridH + barrelSepH + menu.items.length * itemH + pad * 2;
+    const textY0 = barrelGridH + barrelSepH; // offset for text items
 
     // Position next to the tile, clamped to canvas
     let mx = menu.screenX;
@@ -1093,11 +1106,68 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.strokeRect(mx + 0.5, my + 0.5, itemW - 1, totalH - 1);
 
-    // Items
+    // Barrel item slots
+    if (bItems && bItems.length > 0) {
+      for (let i = 0; i < bItems.length; i++) {
+        const col = i % bCols;
+        const row = Math.floor(i / bCols);
+        const sx = mx + bMargin + col * (bSlot + bGap);
+        const sy = my + pad + row * (bSlot + bGap);
+        this.drawItemSlot(sx, sy, bSlot, bItems[i]);
+
+        // Highlight selected slot
+        if (menu.selectedBarrelSlot === i) {
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(sx + 0.5, sy + 0.5, bSlot - 1, bSlot - 1);
+        }
+      }
+
+      // Separator before text items
+      if (menu.items.length > 0) {
+        const sepY = my + pad + barrelGridH + barrelSepH / 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.moveTo(mx + 4, sepY);
+        ctx.lineTo(mx + itemW - 4, sepY);
+        ctx.stroke();
+      }
+
+      // "Take" popup for selected barrel item (positioned at click, like crew inventory)
+      const selSlot = menu.selectedBarrelSlot;
+      const clickPos = menu.barrelSlotClickPos;
+      if (selSlot !== undefined && selSlot >= 0 && selSlot < bItems.length && clickPos) {
+        const flyW = 80;
+        const flyH = itemH + pad * 2;
+        let flyX = clickPos.x + 16;
+        let flyY = clickPos.y;
+        if (flyX + flyW > CANVAS_WIDTH) flyX = clickPos.x - flyW - 4;
+        if (flyY + flyH > CANVAS_HEIGHT) flyY = CANVAS_HEIGHT - flyH - 2;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.9)';
+        ctx.fillRect(flyX, flyY, flyW, flyH);
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(flyX + 0.5, flyY + 0.5, flyW - 1, flyH - 1);
+
+        const takeY = flyY + pad;
+        if (mousePos.x >= flyX && mousePos.x <= flyX + flyW &&
+            mousePos.y >= takeY && mousePos.y <= takeY + itemH) {
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.fillRect(flyX + 1, takeY, flyW - 2, itemH);
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Take', flyX + 10, takeY + 16);
+      }
+    }
+
+    // Text items (offset below barrel grid)
     ctx.font = '12px monospace';
     ctx.textAlign = 'left';
     for (let i = 0; i < menu.items.length; i++) {
-      const iy = my + pad + i * itemH;
+      const iy = my + pad + textY0 + i * itemH;
 
       const item = menu.items[i];
 
@@ -1126,7 +1196,7 @@ export class Renderer {
       const item = menu.items[i];
       if (!item.submenu) continue;
 
-      const parentY = my + pad + i * itemH;
+      const parentY = my + pad + textY0 + i * itemH;
       const subX = mx + itemW;
       const subY = parentY;
       const subH = item.submenu.length * itemH + pad * 2;
