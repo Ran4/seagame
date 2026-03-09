@@ -8,6 +8,14 @@ export function createCutlass(gameTime: number = 0): Item {
   };
 }
 
+export function createGrogRation(gameTime: number = 0): Item {
+  return {
+    name: 'Grog ration', createdAt: gameTime, weight: 285,
+    description: 'A generous measure of watered-down rum.',
+    stackable: false, quantity: 1, spoilAfter: null,
+  };
+}
+
 export function createSemen(gameTime: number): Item {
   return {
     name: 'Semen', createdAt: gameTime, weight: 5,

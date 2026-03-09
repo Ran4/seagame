@@ -32,7 +32,7 @@ fetch('/CONVERSATION_SNIPPETS.json')
   .catch(err => console.warn('Failed to load conversation snippets:', err));
 
 type ContextTag = 'generic' | 'work' | 'night' | 'hungry' | 'tired';
-type MoodTag = 'friendly' | 'unfriendly' | 'tired' | 'hungry' | 'horny';
+type MoodTag = 'friendly' | 'unfriendly' | 'tired' | 'hungry' | 'horny' | 'drunken';
 
 function weightedPick<T>(entries: [T, number][]): T {
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -66,6 +66,7 @@ function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
   }
   if (partner.profile.energy < 80) w.push(['tired', 2]);
   if (partner.profile.hunger < 80) w.push(['hungry', 2]);
+  if (partner.profile.drunkedness >= 128) w.push(['drunken', 3]);
   return weightedPick(w);
 }
 

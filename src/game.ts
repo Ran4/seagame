@@ -1,7 +1,7 @@
 import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
-import { createSemen } from './items';
+import { createSemen, createGrogRation } from './items';
 import { createShip } from './ship';
-import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './crew';
+import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile, DRINK_DURATION } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
@@ -52,6 +52,21 @@ export class Game {
           }
         }
       }
+    }
+
+    // Seed first barrel on lower deck with grog rations
+    for (let y = 0; y < this.decks[2].height; y++) {
+      for (let x = 0; x < this.decks[2].width; x++) {
+        if (this.decks[2].tiles[y][x] === TileType.BARREL) {
+          const key = `2-${x}-${y}`;
+          const items = this.barrelInventory.get(key) || [];
+          for (let g = 0; g < 4; g++) items.push(createGrogRation());
+          this.barrelInventory.set(key, items);
+          break; // only seed first barrel
+        }
+      }
+      // Check if we already seeded one
+      if ([...this.barrelInventory.values()].some(items => items.some(i => i.name === 'Grog ration'))) break;
     }
 
     // Init lantern oil to 0 (crew will light them if it's night)
@@ -284,27 +299,38 @@ export class Game {
             }
           }
         } else if (this.contextMenu.crewId !== undefined) {
-          // "Stop" action
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
           if (member) {
-            // If talking, free the conversation partner
-            if (member.state === CrewState.TALKING) {
-              stopConversation(member, this.crew);
-            }
-            // If has copulation partner (walking toward or actively copulating), free them
-            if (member.copulationTarget?.type === 'crew') {
-              const partnerTarget = member.copulationTarget;
-              const partner = this.crew.find(c => c.id === partnerTarget.crewId);
-              if (partner) {
-                partner.state = CrewState.IDLE;
-                partner.idleTimer = 1 + Math.random() * 2;
-                partner.copulationTarget = null;
+            if (menuItem.targetState === CrewState.DRINKING) {
+              // Drink rum — consume grog from inventory immediately
+              const grogIdx = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
+              if (grogIdx !== -1) {
+                member.profile.inventory.splice(grogIdx, 1);
+                member.state = CrewState.DRINKING;
+                member.stateTimer = DRINK_DURATION;
+                member.path = [];
               }
+            } else {
+              // "Stop" action
+              // If talking, free the conversation partner
+              if (member.state === CrewState.TALKING) {
+                stopConversation(member, this.crew);
+              }
+              // If has copulation partner (walking toward or actively copulating), free them
+              if (member.copulationTarget?.type === 'crew') {
+                const partnerTarget = member.copulationTarget;
+                const partner = this.crew.find(c => c.id === partnerTarget.crewId);
+                if (partner) {
+                  partner.state = CrewState.IDLE;
+                  partner.idleTimer = 1 + Math.random() * 2;
+                  partner.copulationTarget = null;
+                }
+              }
+              member.copulationTarget = null;
+              member.state = menuItem.targetState;
+              member.path = [];
+              member.idleTimer = 1 + Math.random() * 2;
             }
-            member.copulationTarget = null;
-            member.state = menuItem.targetState;
-            member.path = [];
-            member.idleTimer = 1 + Math.random() * 2;
           }
         } else {
           // Tile-targeted menu (e.g. "sleep in this bed")
@@ -406,6 +432,33 @@ export class Game {
     if (this.input.rightClick) {
       this.audio.startMusicOnInteraction();
       const click = this.input.rightClick;
+
+      // Right-click in crew panel → show self-actions (e.g. Drink rum)
+      const panelX = CANVAS_WIDTH - 210;
+      if (this.selectedCrewId !== null && click.x >= panelX && click.x <= panelX + 200 && click.y >= 10) {
+        const member = this.crew.find(c => c.id === this.selectedCrewId);
+        if (member) {
+          const panelItems: ContextMenuItem[] = [];
+          const grogIndex = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
+          if (grogIndex !== -1) {
+            panelItems.push({ label: 'Drink rum', targetState: CrewState.DRINKING });
+          }
+          if (panelItems.length > 0) {
+            this.contextMenu = {
+              screenX: click.x + 16,
+              screenY: click.y,
+              tileX: 0, tileY: 0,
+              deck: member.deck,
+              items: panelItems,
+              crewId: member.id,
+            };
+            this.audio.play('click');
+            this.input.rightClick = null;
+            return;
+          }
+        }
+      }
+
       const worldX = click.x + this.camera.x;
       const worldY = click.y + this.camera.y;
 
@@ -435,6 +488,13 @@ export class Game {
           for (let d = 0; d < this.decks.length; d++) {
             if (d !== clickedCrew.deck) {
               items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
+            }
+          }
+          // Drink rum (self-action: right-click on selected crew)
+          if (clickedCrew.id === this.selectedCrewId) {
+            const grogIndex = clickedCrew.profile.inventory.findIndex(i => i.name === 'Grog ration');
+            if (grogIndex !== -1) {
+              items.push({ label: 'Drink rum', targetState: CrewState.DRINKING });
             }
           }
           // Interact submenu (requires a different crew selected)

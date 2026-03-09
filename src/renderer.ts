@@ -773,7 +773,7 @@ export class Renderer {
       const invRows = Math.ceil(p.inventory.length / invCols);
       extraH += sectionGap + invRows * (slotSize + slotGap);
     }
-    const ph = 126 + extraH + 8;
+    const ph = 157 + extraH + 8;
 
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(px, py, pw, ph);
@@ -804,12 +804,15 @@ export class Renderer {
     ctx.fillText('Energy', px + 10, py + 92);
     this.drawBar(px + 75, py + 82, 115, 12, member.profile.energy / 255, '#3498db');
 
+    ctx.fillText('Drunk', px + 10, py + 112);
+    this.drawBar(px + 75, py + 102, 115, 12, member.profile.drunkedness / 255, '#9b59b6');
+
     ctx.fillStyle = '#888888';
     ctx.font = '10px monospace';
     const deckNames = ["Crow's Nest", 'Upper', 'Lower'];
-    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 112);
+    ctx.fillText(`Deck: ${deckNames[member.deck] ?? `Deck ${member.deck}`}`, px + 10, py + 132);
 
-    this.drawCrewHandsAndInventory(member, px, py + 124, pw);
+    this.drawCrewHandsAndInventory(member, px, py + 144, pw);
   }
 
   private drawCrewHandsAndInventory(member: CrewMember, px: number, startY: number, pw: number): void {
@@ -829,7 +832,7 @@ export class Renderer {
       const sx = px + 10 + i * (s + gap);
       this.drawItemSlot(sx, cy, s, p.hands[i] ?? null);
     }
-    if (p.numberOfHands > 0) cy += s + gap;
+    if (p.numberOfHands > 0) cy += s + gap + 16;
 
     // Inventory label + grid
     if (p.inventory.length > 0) {

@@ -118,6 +118,7 @@ export enum CrewState {
   LIGHTING_LANTERN = 'lighting_lantern',
   EXTINGUISHING_LANTERN = 'extinguishing_lantern',
   TALKING = 'talking',
+  DRINKING = 'drinking',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -134,6 +135,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.LIGHTING_LANTERN]: 'Lighting lantern',
   [CrewState.EXTINGUISHING_LANTERN]: 'Extinguishing lantern',
   [CrewState.TALKING]: 'Talking',
+  [CrewState.DRINKING]: 'Drinking',
 };
 
 export interface ContextMenuItem {
@@ -175,6 +177,7 @@ export interface CrewProfile {
   numberOfHands: number;
   hunger: number;   // 0-255
   energy: number;   // 0-255
+  drunkedness: number; // 0-255
   inventory: Item[];
   hands: Item[];    // length <= numberOfHands
 }

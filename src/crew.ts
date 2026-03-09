@@ -1,6 +1,6 @@
 import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from './types';
 import { findPath } from './pathfinding';
-import { createCutlass, createSemen } from './items';
+import { createCutlass, createGrogRation, createSemen } from './items';
 import { tryStartConversation, tryStartConversationWhileWalking, updateTalking, tickConversationCooldown, beginConversation } from './conversation';
 
 const HUNGER_RATE = 0.7;
@@ -15,6 +15,8 @@ const LOOKOUT_DURATION = 30;
 const NAVIGATE_DURATION = 999999;
 const COPULATE_DURATION = 15;
 const KISS_DURATION = 3;
+const DRUNKEDNESS_RATE = 255 / 720;
+export const DRINK_DURATION = 5;
 
 const PIRATE_NAMES = [
   'Anne', 'Jack', 'Mary', 'Flint',
@@ -88,6 +90,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
         numberOfHands,
         hunger: 200 + Math.random() * 55,
         energy: 200 + Math.random() * 55,
+        drunkedness: 0,
         inventory: [],
         hands: [],
       },
@@ -131,6 +134,11 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
     jack.profile.hands.push(createCutlass());
   }
 
+  const mary = crew.find(c => c.profile.name === 'Mary');
+  if (mary) {
+    mary.profile.inventory.push(createGrogRation());
+  }
+
   return crew;
 }
 
@@ -138,6 +146,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
+    member.profile.drunkedness = Math.max(0, member.profile.drunkedness - DRUNKEDNESS_RATE * dt);
 
     tickConversationCooldown(member, dt);
 
@@ -316,6 +325,14 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
           member.copulationTarget = null;
+        }
+        break;
+      case CrewState.DRINKING:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.profile.drunkedness = Math.min(255, member.profile.drunkedness + 140);
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
         }
         break;
       case CrewState.TALKING:
