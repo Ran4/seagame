@@ -42,7 +42,8 @@ const PIRATE_SEXES: Record<string, Sex> = {
  *              Contains every raw status key PLUS derived conditions:
  *                'drunk'    — drunkedness.amount >= 128
  *                'tipsy'    — drunkedness.amount >= 64 (exclusive with drunk)
- *                'tired'    — energy < 60
+ *                'exhausted' — energy < 25 (sleeps even in daytime)
+ *                'tired'    — energy < 60 (exclusive with exhausted)
  *                'starving' — hunger < 40
  *
  * Game code should read conditions (not statuses) for behaviour checks.
@@ -62,7 +63,8 @@ export function refreshConditions(member: CrewMember): void {
     member.conditions.add('tipsy');
   }
   // Derived: needs
-  if (member.profile.energy < 60) member.conditions.add('tired');
+  if (member.profile.energy < 25) member.conditions.add('exhausted');
+  else if (member.profile.energy < 60) member.conditions.add('tired');
   if (member.profile.hunger < 40) member.conditions.add('starving');
 }
 
@@ -424,8 +426,8 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
     }
   }
 
-  // Tired? Go sleep (daytime restriction: only if brightness < 0.7 or energy < 30)
-  if (member.profile.energy < ENERGY_THRESHOLD && (brightness < 0.7 || member.profile.energy < 30)) {
+  // Tired? Go sleep (daytime restriction: only if dark or exhausted)
+  if ((member.conditions.has('tired') || member.conditions.has('exhausted')) && (brightness < 0.7 || member.conditions.has('exhausted'))) {
     const beds = findTilesOfType(decks, TileType.BED);
     const target = pickRandom(beds);
     if (target) {
