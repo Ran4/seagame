@@ -114,6 +114,7 @@ export class Game {
   }
 
   private update(dt: number): void {
+    this.audio.activeDeck = this.activeDeck;
     // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
     const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
     const anySteering = this.crew.some(c => c.state === CrewState.STEERING);
@@ -327,7 +328,7 @@ export class Game {
                 member.state = CrewState.DRINKING;
                 member.stateTimer = DRINK_DURATION;
                 member.path = [];
-                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', this.audio.deckVolume(member.deck, this.activeDeck));
+                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', member.deck);
               }
             } else {
               // "Stop" action
@@ -667,14 +668,14 @@ export class Game {
     const prevStates = this.crew.map(c => c.state);
     updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
     for (let i = 0; i < this.crew.length; i++) {
-      const vol = this.audio.deckVolume(this.crew[i].deck, this.activeDeck);
+      const deck = this.crew[i].deck;
       if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
-        this.audio.play('lantern_light', vol);
+        this.audio.play('lantern_light', deck);
       } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
-        this.audio.play('lantern_extinguish', vol);
+        this.audio.play('lantern_extinguish', deck);
       }
       if (prevStates[i] !== CrewState.KISSING && this.crew[i].state === CrewState.KISSING) {
-        this.audio.play('kiss', vol);
+        this.audio.play('kiss', deck);
       }
     }
   }

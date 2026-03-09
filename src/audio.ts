@@ -1,22 +1,28 @@
 const STORAGE_KEY = 'seagame_sound_muted';
 
+type SoundEntry = {
+  audio: HTMLAudioElement;
+  category: 'ui' | 'world';
+};
+
 export class AudioManager {
-  private sounds: Map<string, HTMLAudioElement> = new Map();
+  private sounds: Map<string, SoundEntry> = new Map();
   private music: HTMLAudioElement | null = null;
   private musicStarted = false;
   private _muted: boolean;
+  activeDeck = 0;
 
   constructor() {
     this._muted = localStorage.getItem(STORAGE_KEY) === '1';
 
-    this.preload('click', '/audio/elevenlabs-generated/click.mp3');
-    this.preload('stairs', '/audio/elevenlabs-generated/stairs.mp3');
-    this.preload('deck_change', '/audio/elevenlabs-generated/deck_change.mp3');
-    this.preload('lantern_light', '/audio/elevenlabs-generated/lantern_light.mp3');
-    this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3', 0.3);
-    this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3', 0.9);
-    this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3', 0.9);
-    this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3');
+    this.preload('click', '/audio/elevenlabs-generated/click.mp3', 'ui');
+    this.preload('stairs', '/audio/elevenlabs-generated/stairs.mp3', 'ui');
+    this.preload('deck_change', '/audio/elevenlabs-generated/deck_change.mp3', 'ui');
+    this.preload('lantern_light', '/audio/elevenlabs-generated/lantern_light.mp3', 'world');
+    this.preload('lantern_extinguish', '/audio/elevenlabs-generated/lantern_extinguish.mp3', 'world', 0.3);
+    this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3', 'world', 0.9);
+    this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3', 'world', 0.9);
+    this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3', 'world');
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
@@ -39,25 +45,24 @@ export class AudioManager {
     }
   }
 
-  private preload(name: string, src: string, volume = 0.5): void {
+  private preload(name: string, src: string, category: 'ui' | 'world', volume = 0.5): void {
     const audio = new Audio(src);
     audio.volume = volume;
-    this.sounds.set(name, audio);
+    this.sounds.set(name, { audio, category });
   }
 
-  play(name: string, volumeMultiplier = 1): void {
-    const sound = this.sounds.get(name);
-    if (sound) {
-      const clone = sound.cloneNode() as HTMLAudioElement;
-      clone.volume = sound.volume * volumeMultiplier;
-      clone.play().catch(() => {});
+  /** Play a sound. For 'world' sounds, pass soundDeck to attenuate by distance. */
+  play(name: string, soundDeck?: number): void {
+    const entry = this.sounds.get(name);
+    if (!entry) return;
+    const clone = entry.audio.cloneNode() as HTMLAudioElement;
+    let volume = entry.audio.volume;
+    if (entry.category === 'world' && soundDeck !== undefined) {
+      const dist = Math.abs(soundDeck - this.activeDeck);
+      volume *= Math.pow(0.4, dist);
     }
-  }
-
-  /** Volume multiplier based on deck distance from viewer. 0.4 per deck away. */
-  deckVolume(soundDeck: number, viewerDeck: number): number {
-    const dist = Math.abs(soundDeck - viewerDeck);
-    return Math.pow(0.4, dist);
+    clone.volume = volume;
+    clone.play().catch(() => {});
   }
 
   /** Start music on first user interaction (browsers require this) */
