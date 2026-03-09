@@ -115,6 +115,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       speechBubbleText: null,
       speechBubbleTimer: 0,
       takeTarget: null,
+      consumingItem: null,
     });
   }
 
@@ -333,7 +334,15 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
       case CrewState.DRINKING:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
-          member.profile.drunkedness = Math.min(255, member.profile.drunkedness + 140);
+          if (member.consumingItem) {
+            if (member.consumingItem.name === 'Grog ration') {
+              member.profile.drunkedness = Math.min(255, member.profile.drunkedness + 140);
+            }
+            if (member.consumingItem.hungerRestore > 0) {
+              member.profile.hunger = Math.min(255, member.profile.hunger + member.consumingItem.hungerRestore);
+            }
+            member.consumingItem = null;
+          }
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }

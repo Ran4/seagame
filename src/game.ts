@@ -324,9 +324,10 @@ export class Game {
               const drinkName = menuItem.itemData?.itemName ?? 'Grog ration';
               const grogIdx = member.profile.inventory.findIndex(i => i.name === drinkName);
               if (grogIdx !== -1) {
-                member.profile.inventory.splice(grogIdx, 1);
+                const item = member.profile.inventory.splice(grogIdx, 1)[0];
                 member.state = CrewState.DRINKING;
                 member.stateTimer = DRINK_DURATION;
+                member.consumingItem = item;
                 member.path = [];
                 this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', member.deck);
               }
@@ -676,6 +677,18 @@ export class Game {
       }
       if (prevStates[i] !== CrewState.KISSING && this.crew[i].state === CrewState.KISSING) {
         this.audio.play('kiss', deck);
+      }
+      // Refresh context menu items if the associated crew member's state changed (stale busy labels)
+      if (this.contextMenu?.crewId === this.crew[i].id && prevStates[i] !== this.crew[i].state) {
+        const member = this.crew[i];
+        const canDrink = member.state === CrewState.IDLE || member.state === CrewState.WALKING;
+        for (const item of this.contextMenu.items) {
+          if (item.targetState === CrewState.DRINKING && item.itemData) {
+            const drinkLabel = `Drink ${item.itemData.itemName.toLowerCase()}`;
+            item.label = canDrink ? drinkLabel : `${drinkLabel} (busy)`;
+            item.disabled = !canDrink;
+          }
+        }
       }
     }
   }

@@ -219,6 +219,7 @@ export interface CrewMember {
   speechBubbleText: string | null;
   speechBubbleTimer: number;
   takeTarget: { barrelKey: string; itemName: string } | null;
+  consumingItem: Item | null;
 }
 
 export interface Deck {
@@ -263,6 +264,7 @@ export interface Item {
   stackable: boolean;
   quantity: number;        // 1 for non-stackable items
   spoilAfter: number | null; // seconds until spoiled (null = never)
+  hungerRestore: number;     // hunger added when consumed (0-255 scale)
 }
 
 export type ThoughtBubble = 'heart' | 'broken_heart';
