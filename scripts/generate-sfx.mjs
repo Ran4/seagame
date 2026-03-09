@@ -106,7 +106,7 @@ const SOUNDS = [
   {
     name: 'lantern_light',
     type: 'elevenlabs',
-    text: 'Striking a match and lighting an oil lantern. Match strike followed by a warm flame catching with a soft crackle.',
+    text: 'Flint striking once, then a soft whoosh as an oil lantern wick catches fire. No echo or reverb.',
     duration_seconds: 1.5,
     prompt_influence: 0.8,
   },
