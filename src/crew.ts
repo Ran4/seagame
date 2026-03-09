@@ -137,6 +137,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
   const mary = crew.find(c => c.profile.name === 'Mary');
   if (mary) {
     mary.profile.inventory.push(createGrogRation());
+    mary.profile.inventory.push(createGrogRation());
   }
 
   return crew;

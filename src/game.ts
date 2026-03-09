@@ -384,6 +384,15 @@ export class Game {
       }
     }
 
+    // Left-click on crew panel → close menus, consume click (don't deselect)
+    if (this.input.mouseClick && this.selectedCrewId !== null) {
+      const cpx = CANVAS_WIDTH - 210;
+      if (this.input.mouseClick.x >= cpx && this.input.mouseClick.x <= cpx + 200 && this.input.mouseClick.y >= 10) {
+        this.contextMenu = null;
+        this.input.mouseClick = null;
+      }
+    }
+
     if (this.input.mouseClick) {
       const result = handleClick(
         this.input.mouseClick,
@@ -433,7 +442,7 @@ export class Game {
       this.audio.startMusicOnInteraction();
       const click = this.input.rightClick;
 
-      // Right-click in crew panel → show self-actions (e.g. Drink rum)
+      // Right-click in crew panel → show self-actions or close menu
       const panelX = CANVAS_WIDTH - 210;
       if (this.selectedCrewId !== null && click.x >= panelX && click.x <= panelX + 200 && click.y >= 10) {
         const member = this.crew.find(c => c.id === this.selectedCrewId);
@@ -453,10 +462,12 @@ export class Game {
               crewId: member.id,
             };
             this.audio.play('click');
-            this.input.rightClick = null;
-            return;
+          } else {
+            this.contextMenu = null;
           }
         }
+        this.input.rightClick = null;
+        return;
       }
 
       const worldX = click.x + this.camera.x;
