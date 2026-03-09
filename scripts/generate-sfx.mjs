@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * generate-sfx.mjs - Synthesize retro 8-bit sound effects as WAV files.
+ * generate-sfx.mjs - Generate sound effects as WAV files.
  *
- * Uses raw PCM synthesis (square waves, noise, frequency sweeps) with
- * simple amplitude envelopes.  No external audio libraries required.
+ * Supports two generation methods per sound:
+ *   - 'procedural': raw PCM synthesis (square waves, noise, frequency sweeps)
+ *   - 'openai':     OpenAI TTS API (gpt-4o-mini-tts) — requires OPENAI_API_KEY
  *
  * Usage:  node scripts/generate-sfx.mjs
- * Output: public/audio/{click,stairs,deck_change}.wav
+ * Output: public/audio/*.wav
+ *
+ * Existing files are skipped. Delete a file to regenerate it.
  */
 
 import fs from 'fs';
@@ -16,6 +19,47 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, '..', 'public', 'audio');
 fs.mkdirSync(OUT_DIR, { recursive: true });
+
+// ── Load .env ─────────────────────────────────────────────────────────
+
+try {
+  const envFile = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf-8');
+  for (const line of envFile.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0) {
+      const key = line.slice(0, eq).trim();
+      const val = line.slice(eq + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+} catch {}
+
+// ── Sound definitions ─────────────────────────────────────────────────
+//
+// Each sound is either { type: 'procedural', generate: fn }
+// or { type: 'openai', voice, instructions, input }.
+
+const SOUNDS = [
+  { name: 'click',              type: 'procedural', generate: generateClick },
+  { name: 'stairs',             type: 'procedural', generate: generateStairs },
+  { name: 'deck_change',        type: 'procedural', generate: generateDeckChange },
+  { name: 'lantern_light',      type: 'procedural', generate: generateLanternLight },
+  { name: 'lantern_extinguish', type: 'procedural', generate: generateLanternExtinguish },
+  {
+    name: 'glug_male',
+    type: 'openai',
+    voice: 'onyx',
+    instructions: 'You are generating a short sound effect. Make a quick, satisfying gulping/drinking sound — a man taking a few swigs from a bottle of rum. Deep voice. 2-3 gulps, then a short exhale. Keep it under 3 seconds. No words, just the sounds.',
+    input: '*glug glug glug* *gulp* *ahh*',
+  },
+  {
+    name: 'glug_female',
+    type: 'openai',
+    voice: 'shimmer',
+    instructions: 'You are generating a short sound effect. Make a quick, satisfying gulping/drinking sound — a woman taking a few swigs from a bottle of rum. Higher-pitched voice. 2-3 gulps, then a short exhale. Keep it under 3 seconds. No words, just the sounds.',
+    input: '*glug glug glug* *gulp* *ahh*',
+  },
+];
 
 // ── WAV helpers ────────────────────────────────────────────────────────
 
@@ -91,7 +135,45 @@ function adEnvelope(t, duration, attack, decay) {
   return 1;
 }
 
-// ── Sound definitions ──────────────────────────────────────────────────
+// ── OpenAI TTS generation ─────────────────────────────────────────────
+
+async function generateWithOpenAI(name, config) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error(`  ✗ ${name}.wav — OPENAI_API_KEY not set, skipping`);
+    return;
+  }
+
+  console.log(`  generating ${name}.wav via OpenAI TTS...`);
+  const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini-tts',
+      voice: config.voice || 'onyx',
+      instructions: config.instructions,
+      input: config.input,
+      response_format: 'wav',
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`  ✗ ${name}.wav — OpenAI API error ${res.status}: ${err}`);
+    return;
+  }
+
+  const arrayBuf = await res.arrayBuffer();
+  const outPath = path.join(OUT_DIR, `${name}.wav`);
+  fs.writeFileSync(outPath, Buffer.from(arrayBuf));
+  const kb = (arrayBuf.byteLength / 1024).toFixed(1);
+  console.log(`  wrote ${outPath}  (${kb} KB)`);
+}
+
+// ── Procedural sound definitions ──────────────────────────────────────
 
 /**
  * 1. click.wav - Cheerful chirp/blip when clicking a crew member.
@@ -308,10 +390,24 @@ function generateLanternExtinguish() {
 
 // ── Main ───────────────────────────────────────────────────────────────
 
-console.log('Generating sound effects...');
-generateClick();
-generateStairs();
-generateDeckChange();
-generateLanternLight();
-generateLanternExtinguish();
-console.log('Done!');
+async function main() {
+  console.log('Generating sound effects...');
+
+  for (const sound of SOUNDS) {
+    const outPath = path.join(OUT_DIR, `${sound.name}.wav`);
+    if (fs.existsSync(outPath)) {
+      console.log(`  skip ${sound.name}.wav (exists)`);
+      continue;
+    }
+
+    if (sound.type === 'procedural') {
+      sound.generate();
+    } else if (sound.type === 'openai') {
+      await generateWithOpenAI(sound.name, sound);
+    }
+  }
+
+  console.log('Done!');
+}
+
+main();

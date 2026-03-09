@@ -14,6 +14,8 @@ export class AudioManager {
     this.preload('deck_change', '/audio/deck_change.wav');
     this.preload('lantern_light', '/audio/lantern_light.wav');
     this.preload('lantern_extinguish', '/audio/lantern_extinguish.wav');
+    this.preload('glug_male', '/audio/glug_male.wav');
+    this.preload('glug_female', '/audio/glug_female.wav');
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
@@ -43,7 +45,6 @@ export class AudioManager {
   }
 
   play(name: string): void {
-    if (this._muted) return;
     const sound = this.sounds.get(name);
     if (sound) {
       const clone = sound.cloneNode() as HTMLAudioElement;

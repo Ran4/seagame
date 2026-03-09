@@ -255,6 +255,23 @@ export class Game {
     if (this.input.mouseClick && this.contextMenu) {
       const menuItem = this.handleMenuClick(this.input.mouseClick);
       if (menuItem) {
+        // "Take item" from barrel — walk to barrel, then take
+        if (menuItem.action === 'take_item' && menuItem.itemData) {
+          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          if (member) {
+            member.takeTarget = menuItem.itemData;
+            orderCrewToAdjacentTile(
+              member,
+              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
+              this.decks,
+              CrewState.TAKING_ITEM,
+            );
+          }
+          this.audio.play('click');
+          this.contextMenu = null;
+          this.input.mouseClick = null;
+          return;
+        }
         // "Open Map" action — open overlay, not a crew order
         if (menuItem.label === 'Open Map') {
           this.mapOverlayOpen = true;
@@ -302,13 +319,15 @@ export class Game {
           const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
           if (member) {
             if (menuItem.targetState === CrewState.DRINKING) {
-              // Drink rum — consume grog from inventory immediately
-              const grogIdx = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
+              // Drink item — consume from inventory immediately
+              const drinkName = menuItem.itemData?.itemName ?? 'Grog ration';
+              const grogIdx = member.profile.inventory.findIndex(i => i.name === drinkName);
               if (grogIdx !== -1) {
                 member.profile.inventory.splice(grogIdx, 1);
                 member.state = CrewState.DRINKING;
                 member.stateTimer = DRINK_DURATION;
                 member.path = [];
+                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male');
               }
             } else {
               // "Stop" action
@@ -448,10 +467,12 @@ export class Game {
         const member = this.crew.find(c => c.id === this.selectedCrewId);
         if (member) {
           const panelItems: ContextMenuItem[] = [];
-          const grogIndex = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
-          if (grogIndex !== -1) {
+          const hovered = this.renderer.getHoveredItem();
+          const clickedItem = hovered && member.profile.inventory.includes(hovered) ? hovered : null;
+          if (clickedItem) {
             const canDrink = member.state === CrewState.IDLE || member.state === CrewState.WALKING;
-            panelItems.push({ label: canDrink ? 'Drink rum' : 'Drink rum (busy)', targetState: CrewState.DRINKING, disabled: !canDrink });
+            const drinkLabel = `Drink ${clickedItem.name.toLowerCase()}`;
+            panelItems.push({ label: canDrink ? drinkLabel : `${drinkLabel} (busy)`, targetState: CrewState.DRINKING, disabled: !canDrink, itemData: { barrelKey: '', itemName: clickedItem.name } });
           }
           if (panelItems.length > 0) {
             this.contextMenu = {
@@ -502,12 +523,15 @@ export class Game {
               items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
             }
           }
-          // Drink rum (self-action: right-click on selected crew)
+          // Drink actions (self-action: right-click on selected crew)
           if (clickedCrew.id === this.selectedCrewId) {
-            const grogIndex = clickedCrew.profile.inventory.findIndex(i => i.name === 'Grog ration');
-            if (grogIndex !== -1) {
+            const seen = new Set<string>();
+            for (const inv of clickedCrew.profile.inventory) {
+              if (seen.has(inv.name)) continue;
+              seen.add(inv.name);
               const canDrink = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
-              items.push({ label: canDrink ? 'Drink rum' : 'Drink rum (busy)', targetState: CrewState.DRINKING, disabled: !canDrink });
+              const drinkLabel = `Drink ${inv.name.toLowerCase()}`;
+              items.push({ label: canDrink ? drinkLabel : `${drinkLabel} (busy)`, targetState: CrewState.DRINKING, disabled: !canDrink, itemData: { barrelKey: '', itemName: inv.name } });
             }
           }
           // Interact submenu (requires a different crew selected)
@@ -557,6 +581,28 @@ export class Game {
               const selected = this.crew.find(c => c.id === this.selectedCrewId);
               if (selected?.profile.sex !== 'M') {
                 tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
+              }
+              // Build "Items ▶" submenu from barrel inventory
+              const barrelKey = `${this.activeDeck}-${tileX}-${tileY}`;
+              const barrelItems = this.barrelInventory.get(barrelKey);
+              if (barrelItems && barrelItems.length > 0) {
+                const itemSubmenus: ContextMenuItem[] = barrelItems.map(bi => {
+                  const qtyLabel = bi.stackable && bi.quantity > 1 ? ` (x${bi.quantity})` : '';
+                  return {
+                    label: `${bi.name}${qtyLabel} \u25B6`,
+                    targetState: CrewState.IDLE,
+                    submenu: [{
+                      label: 'Take',
+                      targetState: CrewState.IDLE,
+                      action: 'take_item',
+                      itemData: { barrelKey, itemName: bi.name },
+                    }],
+                  };
+                });
+                tileActions = [
+                  { label: 'Items \u25B6', targetState: CrewState.IDLE, submenu: itemSubmenus },
+                  ...(tileActions || []),
+                ];
               }
             }
             // Dynamic lantern actions based on oil state
@@ -633,7 +679,39 @@ export class Game {
     if (mx < 0) mx = 4;
     if (my < 0) my = 4;
 
-    // Check submenu clicks first
+    // Check sub-submenu (level 3) clicks first (deepest first)
+    for (let i = 0; i < this.contextMenu.items.length; i++) {
+      const item = this.contextMenu.items[i];
+      if (!item.submenu) continue;
+      const parentY = my + pad + i * itemH;
+      const subX = mx + itemW;
+      const subY = parentY;
+
+      for (let j = 0; j < item.submenu.length; j++) {
+        const subItem = item.submenu[j];
+        if (!subItem.submenu) continue;
+        const sjy = subY + pad + j * itemH;
+        let sub2X = subX + itemW;
+        const sub2Y = sjy;
+        const sub2H = subItem.submenu.length * itemH + pad * 2;
+        // Edge-clamp: flip to left if overflowing
+        if (sub2X + itemW > CANVAS_WIDTH) sub2X = subX - itemW;
+
+        if (click.x >= sub2X && click.x <= sub2X + itemW &&
+            click.y >= sub2Y && click.y <= sub2Y + sub2H) {
+          for (let k = 0; k < subItem.submenu.length; k++) {
+            const sky = sub2Y + pad + k * itemH;
+            if (click.y >= sky && click.y <= sky + itemH) {
+              if (subItem.submenu[k].disabled) return undefined;
+              return subItem.submenu[k];
+            }
+          }
+          return undefined;
+        }
+      }
+    }
+
+    // Check submenu (level 2) clicks
     for (let i = 0; i < this.contextMenu.items.length; i++) {
       const item = this.contextMenu.items[i];
       if (!item.submenu) continue;
@@ -648,6 +726,7 @@ export class Game {
           const sjy = subY + pad + j * itemH;
           if (click.y >= sjy && click.y <= sjy + itemH) {
             if (item.submenu[j].disabled) return undefined;
+            if (item.submenu[j].submenu) return undefined; // has sub-submenu, keep open
             return item.submenu[j];
           }
         }

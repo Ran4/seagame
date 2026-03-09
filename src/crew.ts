@@ -114,6 +114,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
       conversationMyTurn: false,
       speechBubbleText: null,
       speechBubbleTimer: 0,
+      takeTarget: null,
     });
   }
 
@@ -138,6 +139,7 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
   if (mary) {
     mary.profile.inventory.push(createGrogRation());
     mary.profile.inventory.push(createGrogRation());
+    mary.profile.inventory.push(createSemen(0));
   }
 
   return crew;
@@ -165,7 +167,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         updateIdle(member, decks, dt, crew, lanternOil, brightness);
         break;
       case CrewState.WALKING:
-        updateWalking(member, dt, crew, brightness);
+        updateWalking(member, dt, crew, brightness, barrelInventory);
         break;
       case CrewState.EATING:
         member.stateTimer -= dt;
@@ -446,7 +448,42 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   }
 }
 
-function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number): void {
+function performTakeItem(member: CrewMember, barrelInventory: Map<string, Item[]>): void {
+  const target = member.takeTarget;
+  if (!target) return;
+  member.takeTarget = null;
+  const barrelItems = barrelInventory.get(target.barrelKey);
+  if (!barrelItems) return;
+  const idx = barrelItems.findIndex(i => i.name === target.itemName);
+  if (idx === -1) return;
+  const barrelItem = barrelItems[idx];
+  if (barrelItem.stackable && barrelItem.quantity > 1) {
+    const unitWeight = barrelItem.weight / barrelItem.quantity;
+    barrelItem.quantity--;
+    barrelItem.weight -= unitWeight;
+    const existing = member.profile.inventory.find(i => i.name === barrelItem.name && i.stackable);
+    if (existing) {
+      existing.quantity++;
+      existing.weight += unitWeight;
+    } else {
+      member.profile.inventory.push({ ...barrelItem, quantity: 1, weight: unitWeight });
+    }
+  } else {
+    const [taken] = barrelItems.splice(idx, 1);
+    const existing = member.profile.inventory.find(i => i.name === taken.name && i.stackable);
+    if (existing) {
+      existing.quantity += taken.quantity;
+      existing.weight += taken.weight;
+    } else {
+      member.profile.inventory.push(taken);
+    }
+  }
+  if (barrelItems.length === 0) {
+    barrelInventory.delete(target.barrelKey);
+  }
+}
+
+function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number, barrelInventory?: Map<string, Item[]>): void {
   if (member.path.length === 0) {
     member.state = member.targetState;
     if (member.state === CrewState.EATING) {
@@ -481,6 +518,10 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brigh
         member.state = CrewState.IDLE;
         member.idleTimer = 1 + Math.random() * 2;
       }
+    } else if (member.state === CrewState.TAKING_ITEM) {
+      if (barrelInventory) performTakeItem(member, barrelInventory);
+      member.state = CrewState.IDLE;
+      member.idleTimer = 1 + Math.random() * 2;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }

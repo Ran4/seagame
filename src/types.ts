@@ -119,6 +119,7 @@ export enum CrewState {
   EXTINGUISHING_LANTERN = 'extinguishing_lantern',
   TALKING = 'talking',
   DRINKING = 'drinking',
+  TAKING_ITEM = 'taking_item',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -136,6 +137,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.EXTINGUISHING_LANTERN]: 'Extinguishing lantern',
   [CrewState.TALKING]: 'Talking',
   [CrewState.DRINKING]: 'Drinking',
+  [CrewState.TAKING_ITEM]: 'Taking item',
 };
 
 export interface ContextMenuItem {
@@ -145,6 +147,8 @@ export interface ContextMenuItem {
   targetCrewId?: number; // for crew-crew interactions
   disabled?: boolean;
   submenu?: ContextMenuItem[];
+  action?: string;           // e.g. 'take_item'
+  itemData?: { barrelKey: string; itemName: string };
 }
 
 export interface ContextMenu {
@@ -211,6 +215,7 @@ export interface CrewMember {
   conversationMyTurn: boolean;
   speechBubbleText: string | null;
   speechBubbleTimer: number;
+  takeTarget: { barrelKey: string; itemName: string } | null;
 }
 
 export interface Deck {

@@ -46,6 +46,10 @@ export class Renderer {
     this.sprites = sprites;
   }
 
+  getHoveredItem(): Item | null {
+    return this.hoveredItem?.item ?? null;
+  }
+
   render(
     deck: Deck,
     deckIndex: number,
@@ -1144,8 +1148,21 @@ export class Renderer {
         const sjy = subY + pad + j * itemH;
         const subItem = item.submenu[j];
 
-        if (!subItem.disabled && mousePos.x >= subX && mousePos.x <= subX + itemW &&
-            mousePos.y >= sjy && mousePos.y <= sjy + itemH) {
+        const overSubItem = mousePos.x >= subX && mousePos.x <= subX + itemW &&
+            mousePos.y >= sjy && mousePos.y <= sjy + itemH;
+
+        // Check if mouse is over this item's sub-submenu panel
+        let overSub2 = false;
+        if (subItem.submenu) {
+          let s2x = subX + itemW;
+          if (s2x + itemW > CANVAS_WIDTH) s2x = subX - itemW;
+          const s2y = sjy;
+          const s2h = subItem.submenu.length * itemH + pad * 2;
+          overSub2 = mousePos.x >= s2x && mousePos.x <= s2x + itemW &&
+                     mousePos.y >= s2y && mousePos.y <= s2y + s2h;
+        }
+
+        if (!subItem.disabled && overSubItem) {
           ctx.fillStyle = 'rgba(255,255,255,0.12)';
           ctx.fillRect(subX + 1, sjy, itemW - 2, itemH);
         }
@@ -1159,6 +1176,42 @@ export class Renderer {
           ctx.moveTo(subX + 4, sjy + itemH);
           ctx.lineTo(subX + itemW - 4, sjy + itemH);
           ctx.stroke();
+        }
+
+        // Draw level-3 sub-submenu
+        if (subItem.submenu && (overSubItem || overSub2)) {
+          let sub2X = subX + itemW;
+          if (sub2X + itemW > CANVAS_WIDTH) sub2X = subX - itemW;
+          const sub2Y = sjy;
+          const sub2H = subItem.submenu.length * itemH + pad * 2;
+
+          ctx.fillStyle = 'rgba(0,0,0,0.85)';
+          ctx.fillRect(sub2X, sub2Y, itemW, sub2H);
+          ctx.strokeStyle = '#666';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sub2X + 0.5, sub2Y + 0.5, itemW - 1, sub2H - 1);
+
+          for (let k = 0; k < subItem.submenu.length; k++) {
+            const sky = sub2Y + pad + k * itemH;
+            const sub2Item = subItem.submenu[k];
+
+            if (!sub2Item.disabled && mousePos.x >= sub2X && mousePos.x <= sub2X + itemW &&
+                mousePos.y >= sky && mousePos.y <= sky + itemH) {
+              ctx.fillStyle = 'rgba(255,255,255,0.12)';
+              ctx.fillRect(sub2X + 1, sky, itemW - 2, itemH);
+            }
+
+            ctx.fillStyle = sub2Item.disabled ? '#666666' : '#ffffff';
+            ctx.fillText(sub2Item.label, sub2X + 10, sky + 16);
+
+            if (k < subItem.submenu.length - 1) {
+              ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+              ctx.beginPath();
+              ctx.moveTo(sub2X + 4, sky + itemH);
+              ctx.lineTo(sub2X + itemW - 4, sky + itemH);
+              ctx.stroke();
+            }
+          }
         }
       }
     }
