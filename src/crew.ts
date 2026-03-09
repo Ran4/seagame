@@ -1,4 +1,4 @@
-import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION } from './types';
+import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from './types';
 import { findPath } from './pathfinding';
 import { createCutlass, createSemen } from './items';
 import { tryStartConversation, tryStartConversationWhileWalking, updateTalking, tickConversationCooldown, beginConversation } from './conversation';
@@ -188,6 +188,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         }
         break;
       case CrewState.LIGHTING_LANTERN:
+      case CrewState.EXTINGUISHING_LANTERN:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           // Find the lantern tile adjacent to this crew member
@@ -199,8 +200,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
             if (ly >= 0 && ly < decks[ct.deck].height && lx >= 0 && lx < decks[ct.deck].width) {
               if (decks[ct.deck].tiles[ly][lx] === TileType.LANTERN) {
                 const key = `${ct.deck}-${lx}-${ly}`;
-                const oil = lanternOil.get(key) ?? 0;
-                lanternOil.set(key, oil <= 0 ? 100 : 0);
+                lanternOil.set(key, member.state === CrewState.LIGHTING_LANTERN ? 100 : 0);
                 break;
               }
             }
@@ -220,6 +220,19 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
             partner.stateTimer = member.stateTimer;
             partner.copulationTarget = { type: 'crew', crewId: member.id };
             partner.path = [];
+          }
+          // Slow lean-in: both drift toward each other until ~6px apart
+          if (partner && partner.state === CrewState.KISSING) {
+            const kdx = partner.pixelX - member.pixelX;
+            const kdy = partner.pixelY - member.pixelY;
+            const kdist = Math.sqrt(kdx * kdx + kdy * kdy);
+            if (kdist > 6) {
+              const lean = Math.min(20 * dt, (kdist - 6) / 2);
+              member.pixelX += (kdx / kdist) * lean;
+              member.pixelY += (kdy / kdist) * lean;
+              partner.pixelX -= (kdx / kdist) * lean;
+              partner.pixelY -= (kdy / kdist) * lean;
+            }
           }
         }
         if (member.stateTimer <= 0) {
@@ -379,7 +392,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
       const key = `${l.deck}-${l.x}-${l.y}`;
       const oil = lanternOil.get(key) ?? 0;
       if (oil <= 0) return false;
-      return !crew.some(c => c.id !== member.id && c.targetState === CrewState.LIGHTING_LANTERN && c.state === CrewState.WALKING && c.path.length > 0 && c.path[c.path.length - 1].x === l.x && c.path[c.path.length - 1].y === l.y && c.path[c.path.length - 1].deck === l.deck);
+      return !crew.some(c => c.id !== member.id && c.targetState === CrewState.EXTINGUISHING_LANTERN && c.state === CrewState.WALKING && c.path.length > 0 && c.path[c.path.length - 1].x === l.x && c.path[c.path.length - 1].y === l.y && c.path[c.path.length - 1].deck === l.deck);
     });
     const target = pickRandom(lit);
     if (target) {
@@ -387,7 +400,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
       if (path) {
         member.path = path;
         member.state = CrewState.WALKING;
-        member.targetState = CrewState.LIGHTING_LANTERN;
+        member.targetState = CrewState.EXTINGUISHING_LANTERN;
         return;
       }
     }
@@ -435,6 +448,8 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[]): void
       member.stateTimer = KISS_DURATION;
     } else if (member.state === CrewState.LIGHTING_LANTERN) {
       member.stateTimer = LIGHT_LANTERN_DURATION;
+    } else if (member.state === CrewState.EXTINGUISHING_LANTERN) {
+      member.stateTimer = EXTINGUISH_LANTERN_DURATION;
     } else if (member.state === CrewState.TALKING) {
       // Player-ordered conversation: initiator arrived at target
       const target = member.copulationTarget;
@@ -504,4 +519,16 @@ export function orderCrewToAdjacentTile(member: CrewMember, target: DeckPoint, d
     if (orderCrewTo(member, adj, decks, targetState)) return true;
   }
   return false;
+}
+
+/** Walk to a tile beside the target, preferring horizontal neighbors so both crew are visible side by side. */
+export function orderCrewBesideTile(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+  // Horizontal first, then vertical
+  const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (const [dx, dy] of DIRS) {
+    const adj: DeckPoint = { x: target.x + dx, y: target.y + dy, deck: target.deck };
+    if (orderCrewTo(member, adj, decks, targetState)) return true;
+  }
+  // Fallback: stand on the same tile if no adjacent tile reachable
+  return orderCrewTo(member, target, decks, targetState);
 }

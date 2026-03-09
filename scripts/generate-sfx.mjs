@@ -228,10 +228,90 @@ function generateDeckChange() {
   writeWav(path.join(OUT_DIR, 'deck_change.wav'), samples);
 }
 
+/**
+ * 4. lantern_light.wav - Warm flickering ignition sound.
+ *    A soft rising tone with crackle noise, like striking a match and a flame catching.
+ */
+function generateLanternLight() {
+  const duration = 0.5;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const progress = t / duration;
+    let sample = 0;
+
+    // Match strike: short noise burst at the start
+    if (t < 0.12) {
+      const strikeEnv = Math.exp(-t / 0.02) * 0.6;
+      sample += noise() * strikeEnv;
+    }
+
+    // Flame catching: warm rising tone
+    if (t > 0.05) {
+      const lt = t - 0.05;
+      const flameProgress = lt / (duration - 0.05);
+      const freq = lerp(200, 400, flameProgress ** 0.5);
+      const env = Math.sin(Math.PI * flameProgress) ** 0.4 * 0.4;
+      sample += squareWave(t, freq) * env;
+      // Gentle crackle throughout
+      sample += noise() * env * 0.15 * (1 + Math.sin(t * 80) * 0.5);
+    }
+
+    // Warm shimmer overtone
+    if (t > 0.15) {
+      const lt = t - 0.15;
+      const shimmerEnv = Math.sin(Math.PI * (lt / (duration - 0.15))) ** 1.5 * 0.15;
+      sample += Math.sin(2 * Math.PI * 600 * t) * shimmerEnv;
+    }
+
+    samples[i] = sample * 0.7;
+  }
+
+  writeWav(path.join(OUT_DIR, 'lantern_light.wav'), samples);
+}
+
+/**
+ * 5. lantern_extinguish.wav - Quick puff/hiss of a flame being snuffed out.
+ *    Short descending tone with a breathy noise burst.
+ */
+function generateLanternExtinguish() {
+  const duration = 0.25;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+
+  let prevNoise = 0;
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const progress = t / duration;
+    let sample = 0;
+
+    // Puff: quick breathy noise with fast decay
+    const puffEnv = Math.exp(-progress * 6) * 0.5;
+    const rawNoise = noise();
+    const lpAlpha = lerp(0.4, 0.1, progress); // filter closes as sound fades
+    prevNoise = prevNoise + lpAlpha * (rawNoise - prevNoise);
+    sample += prevNoise * puffEnv;
+
+    // Descending tone: flame dying out
+    const freq = lerp(350, 100, progress ** 0.7);
+    const toneEnv = Math.exp(-progress * 8) * 0.3;
+    sample += squareWave(t, freq) * toneEnv;
+
+    samples[i] = sample * 0.8;
+  }
+
+  writeWav(path.join(OUT_DIR, 'lantern_extinguish.wav'), samples);
+}
+
 // ── Main ───────────────────────────────────────────────────────────────
 
 console.log('Generating sound effects...');
 generateClick();
 generateStairs();
 generateDeckChange();
+generateLanternLight();
+generateLanternExtinguish();
 console.log('Done!');

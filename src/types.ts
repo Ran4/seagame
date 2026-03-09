@@ -27,6 +27,7 @@ export function getShipBrightness(timeOfDay: number): number {
 // Lantern constants
 export const LANTERN_BURNOUT_RATE = 0.4;
 export const LIGHT_LANTERN_DURATION = 3;
+export const EXTINGUISH_LANTERN_DURATION = 0.5;
 
 export enum TileType {
   WATER,
@@ -115,6 +116,7 @@ export enum CrewState {
   COPULATING = 'copulating',
   KISSING = 'kissing',
   LIGHTING_LANTERN = 'lighting_lantern',
+  EXTINGUISHING_LANTERN = 'extinguishing_lantern',
   TALKING = 'talking',
 }
 
@@ -130,6 +132,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.COPULATING]: 'Copulating',
   [CrewState.KISSING]: 'Kissing',
   [CrewState.LIGHTING_LANTERN]: 'Lighting lantern',
+  [CrewState.EXTINGUISHING_LANTERN]: 'Extinguishing lantern',
   [CrewState.TALKING]: 'Talking',
 };
 

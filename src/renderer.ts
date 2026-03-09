@@ -475,7 +475,7 @@ export class Renderer {
       ctx.fillText('\u2665', sx + 14, sy - 12);
     } else if (member.state === CrewState.KISSING) {
       ctx.fillText('\u2665', sx + 14, sy - 12);
-    } else if (member.state === CrewState.LIGHTING_LANTERN) {
+    } else if (member.state === CrewState.LIGHTING_LANTERN || member.state === CrewState.EXTINGUISHING_LANTERN) {
       ctx.fillText('L', sx + 14, sy - 12);
     } else if (member.state === CrewState.TALKING) {
       ctx.fillText('...', sx + 14, sy - 12);

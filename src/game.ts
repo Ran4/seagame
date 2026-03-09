@@ -1,7 +1,7 @@
 import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
 import { createSemen } from './items';
 import { createShip } from './ship';
-import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile } from './crew';
+import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
@@ -259,12 +259,12 @@ export class Game {
             target.state = CrewState.IDLE;
             target.path = [];
             target.idleTimer = 999;
-            orderCrewToAdjacentTile(
-              member,
-              { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck },
-              this.decks,
-              menuItem.targetState,
-            );
+            const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
+            if (menuItem.targetState === CrewState.TALKING || menuItem.targetState === CrewState.KISSING) {
+              orderCrewBesideTile(member, targetTile, this.decks, menuItem.targetState);
+            } else {
+              orderCrewToAdjacentTile(member, targetTile, this.decks, menuItem.targetState);
+            }
           }
         } else if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
           // "Go to deck" action
@@ -493,7 +493,7 @@ export class Game {
               if (oil <= 0) {
                 tileActions = [{ label: 'Light', targetState: CrewState.LIGHTING_LANTERN }];
               } else {
-                tileActions = [{ label: 'Extinguish', targetState: CrewState.LIGHTING_LANTERN }];
+                tileActions = [{ label: 'Extinguish', targetState: CrewState.EXTINGUISHING_LANTERN }];
               }
             }
             if (tileActions) items.push(...tileActions);
@@ -531,8 +531,16 @@ export class Game {
     const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
     const brightness = getShipBrightness(timeOfDay);
 
-    // Crew AI
+    // Crew AI — track lantern actions to play sounds on completion
+    const lanternStates = this.crew.map(c => c.state);
     updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
+    for (let i = 0; i < this.crew.length; i++) {
+      if (lanternStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
+        this.audio.play('lantern_light');
+      } else if (lanternStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
+        this.audio.play('lantern_extinguish');
+      }
+    }
   }
 
   // Returns the clicked menu item, or undefined to mean "click was on menu, don't close"

@@ -12,6 +12,8 @@ export class AudioManager {
     this.preload('click', '/audio/click.wav');
     this.preload('stairs', '/audio/stairs.wav');
     this.preload('deck_change', '/audio/deck_change.wav');
+    this.preload('lantern_light', '/audio/lantern_light.wav');
+    this.preload('lantern_extinguish', '/audio/lantern_extinguish.wav');
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
