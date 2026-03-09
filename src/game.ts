@@ -450,7 +450,8 @@ export class Game {
           const panelItems: ContextMenuItem[] = [];
           const grogIndex = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
           if (grogIndex !== -1) {
-            panelItems.push({ label: 'Drink rum', targetState: CrewState.DRINKING });
+            const canDrink = member.state === CrewState.IDLE || member.state === CrewState.WALKING;
+            panelItems.push({ label: canDrink ? 'Drink rum' : 'Drink rum (busy)', targetState: CrewState.DRINKING, disabled: !canDrink });
           }
           if (panelItems.length > 0) {
             this.contextMenu = {
@@ -505,7 +506,8 @@ export class Game {
           if (clickedCrew.id === this.selectedCrewId) {
             const grogIndex = clickedCrew.profile.inventory.findIndex(i => i.name === 'Grog ration');
             if (grogIndex !== -1) {
-              items.push({ label: 'Drink rum', targetState: CrewState.DRINKING });
+              const canDrink = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
+              items.push({ label: canDrink ? 'Drink rum' : 'Drink rum (busy)', targetState: CrewState.DRINKING, disabled: !canDrink });
             }
           }
           // Interact submenu (requires a different crew selected)
