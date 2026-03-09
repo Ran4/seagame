@@ -30,6 +30,24 @@ const PIRATE_SEXES: Record<string, Sex> = {
   'Morgan': 'M', 'Pete': 'M', 'Jane': 'F', 'Bones': 'M',
 };
 
+/**
+ * Status/Conditions system.
+ *
+ * Two layers on each CrewMember:
+ *   statuses  — Map<string, payload | null>.  Raw state, persisted.
+ *              Permanent traits: statuses.set('dickless', null)
+ *              Tracked values:  statuses.set('drunkedness', { amount: 180 })
+ *
+ *   conditions — Set<string>.  Rebuilt every tick by this function.
+ *              Contains every raw status key PLUS derived conditions:
+ *                'drunk'    — drunkedness.amount >= 128
+ *                'tipsy'    — drunkedness.amount >= 64 (exclusive with drunk)
+ *                'tired'    — energy < 60
+ *                'starving' — hunger < 40
+ *
+ * Game code should read conditions (not statuses) for behaviour checks.
+ * Write to statuses when changing state; conditions update next tick.
+ */
 export function refreshConditions(member: CrewMember): void {
   member.conditions.clear();
   // Copy raw status keys

@@ -60,6 +60,9 @@ When idle: if hungry → pathfind to stove, if tired → pathfind to bed, else w
 Player gives orders via right-click context menus (see below).
 Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a fixed timer (8s).
 
+**Statuses & Conditions** (`refreshConditions()` in `crew.ts`):
+Each crew member has `statuses: Map<string, payload | null>` (raw state) and `conditions: Set<string>` (rebuilt every tick). Statuses hold permanent traits (`'dickless'`, null payload) or tracked values (`'drunkedness'`, `{ amount }` payload). Conditions include every status key plus derived conditions: `'drunk'` (drunkedness >= 128), `'tipsy'` (>= 64), `'tired'` (energy < 60), `'starving'` (hunger < 40). Game code reads `conditions` for behaviour; writes go to `statuses`. Drunk effects: wobbly walking (25% per step), lowered kiss/copulate thresholds. Tipsy: 8% wobble, slightly lowered thresholds.
+
 **Relations:** Each crew member has `relations: CrewRelation[]` with entries for every other crew.
 - `friendship` (0-255): >=128 friend, <64 dislike. Initialized randomly 64-192.
 - `attraction` (0-255): >=128 both sides required for copulation. Initialized randomly 0-160.
