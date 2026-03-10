@@ -96,7 +96,7 @@ Water animates by alternating two sprite frames.
 
 ### Input (`input.ts`)
 - Arrow keys / WASD: camera scroll
-- Mouse wheel: scroll 3 tiles per click
+- Mouse wheel: scroll 4 tiles per click
 - Left-click crew: select. Left-click stairs: switch deck view.
 - Hover over furniture: tooltip with tile name
 

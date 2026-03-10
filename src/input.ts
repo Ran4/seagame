@@ -48,7 +48,7 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    state.scrollY += Math.sign(e.deltaY) * TILE_SIZE * 5;
+    state.scrollY += Math.sign(e.deltaY) * TILE_SIZE * 4;
   }, { passive: false });
 
   canvas.addEventListener('mousemove', (e) => {
