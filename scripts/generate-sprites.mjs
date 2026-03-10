@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, '..', 'public', 'sprites');
@@ -27,13 +28,27 @@ if (!API_KEY) {
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
-const TILE_STYLE = 'Pixel art game tile, exactly 32x32 pixel grid scaled up to fill the image. SNES 16-bit retro style like Harvest Moon. Top-down bird\'s-eye view. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing, no gradients. Vibrant but warm color palette.';
+// Downscale generated sprites to this size. Set to 0 to save at original 1024x1024.
+const SPRITE_SIZE = 64;
+const SPRITE_SIZE_STR = `${SPRITE_SIZE || 1024}x${SPRITE_SIZE || 1024}`;
 
-const CREW_STYLE = 'Pixel art game character sprite, exactly 32x32 pixel grid scaled up. SNES 16-bit retro style like Harvest Moon. Top-down bird\'s-eye view looking straight down at the character. Each pixel is a clearly visible square block. No anti-aliasing. Transparent background.';
+async function resizeBuffer(buf) {
+  if (!SPRITE_SIZE) return buf;
+  return sharp(buf)
+    .resize(SPRITE_SIZE, SPRITE_SIZE, { kernel: 'nearest' })
+    .png()
+    .toBuffer();
+}
 
-const ITEM_STYLE = 'Pixel art inventory icon, exactly 32x32 pixel grid scaled up. SNES 16-bit retro style like Harvest Moon. Centered on transparent background. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing.';
+const BASE_STYLE = `Pixel art, exactly ${SPRITE_SIZE_STR} pixel grid. SNES 16-bit retro style like Harvest Moon. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing.`;
 
-const BUBBLE_STYLE = 'Pixel art thought bubble icon, exactly 32x32 pixel grid scaled up. SNES 16-bit retro style like Harvest Moon. Transparent background. Each pixel is a clearly visible square block. No anti-aliasing, no smoothing. A small white round thought bubble with a symbol inside it and two small circles trailing below-left as the bubble tail.';
+const TILE_STYLE = `${BASE_STYLE} Scaled up to fill the entire image edge to edge. Game tile. Top-down bird's-eye view. No gradients. Vibrant but warm color palette.`;
+
+const CREW_STYLE = `${BASE_STYLE} Game character sprite. Top-down bird's-eye view looking straight down at the character.`;
+
+const ITEM_STYLE = `${BASE_STYLE} Inventory icon. Centered.`;
+
+const BUBBLE_STYLE = `${BASE_STYLE} Thought bubble icon. A small white round thought bubble with a symbol inside it and two small circles trailing below-left as the bubble tail.`;
 
 const SPRITES = [
   // Tiles
@@ -59,7 +74,7 @@ const SPRITES = [
   ['crew_yellow', `${CREW_STYLE} Small pirate character seen from directly above. Yellow/gold captain's hat, gold-trimmed dark coat. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
 
   // Animals
-  ['animal_dog', `${CREW_STYLE} Top-down bird's-eye view looking straight down at a small cream-colored Bichon Frise dog. Round fluffy cream/beige head from above, compact body, four tiny paws visible. The fur is solid light beige-cream color (not pure white). Dark outline around the body. Two tiny dark ears. Small curly tail at rear.`],
+  ['animal_dog', `${CREW_STYLE} A Bichon Frise dog facing south (downward), taking up about 3/5 of the image, centered. Bright white fluffy fur with a dark pixel outline. Round fluffy head at top with two small dark eyes and a tiny black nose. Compact oval body. Four small paws.`],
   ['animal_parrot', `${CREW_STYLE} A colorful tropical parrot seen from directly above on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak visible from above. Tail feathers trailing behind. Perched standing pose.`],
   ['animal_monkey', `${CREW_STYLE} A small cute capuchin monkey seen from directly above on a pirate ship deck. Light brown fur, dark face visible from above, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`],
 
@@ -72,6 +87,22 @@ const SPRITES = [
   ['bubble_heart', `${BUBBLE_STYLE} Inside the bubble is a bright red pixel-art heart symbol. The heart is solid red, classic valentine shape.`],
   ['bubble_broken_heart', `${BUBBLE_STYLE} Inside the bubble is a broken heart symbol — a red heart cracked/split down the middle with a jagged lightning-bolt crack, pieces slightly separated. Dark crack line through the center.`],
 ];
+
+/** Replace magenta-ish background pixels with transparent.
+ *  Detects the actual background color from the corner pixels, then removes
+ *  all pixels within `tolerance` distance of that color. */
+async function chromaKey(buf, tolerance = 40) {
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  // Sample corner pixel as the background color
+  const bgR = data[0], bgG = data[1], bgB = data[2];
+  for (let i = 0; i < data.length; i += 4) {
+    const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
+    if (dr * dr + dg * dg + db * db < tolerance * tolerance * 3) {
+      data[i + 3] = 0;
+    }
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
 
 async function generate(name, prompt) {
   const outPath = path.join(OUT_DIR, `${name}.png`);
@@ -90,11 +121,15 @@ async function generate(name, prompt) {
     quality: 'high',
   };
 
-  // Furniture and crew need transparent backgrounds (drawn on top of floor)
+  // Opaque sprites get no background treatment; everything else uses a magenta
+  // chroma-key background that we replace with transparency via sharp afterward.
   const opaqueSprites = new Set(['water', 'water2', 'hull', 'floor']);
-  if (!opaqueSprites.has(name)) {
-    body.background = 'transparent';
-  }
+  const useChromaKey = !opaqueSprites.has(name);
+
+  // Append chroma-key instruction to prompt if needed
+  const finalPrompt = useChromaKey
+    ? `${prompt} The background must be solid bright magenta (#FF00FF).`
+    : prompt;
 
   try {
     const res = await fetch('https://api.openai.com/v1/images/generations', {
@@ -103,7 +138,7 @@ async function generate(name, prompt) {
         'Authorization': `Bearer ${API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, prompt: finalPrompt }),
     });
 
     if (!res.ok) {
@@ -116,16 +151,22 @@ async function generate(name, prompt) {
     const b64 = data.data?.[0]?.b64_json;
 
     if (b64) {
-      fs.writeFileSync(outPath, Buffer.from(b64, 'base64'));
-      console.log(`  ✓ ${name}.png`);
+      let buf = Buffer.from(b64, 'base64');
+      if (useChromaKey) buf = await chromaKey(buf);
+      const resized = await resizeBuffer(buf);
+      fs.writeFileSync(outPath, resized);
+      console.log(`  ✓ ${name}.png (${SPRITE_SIZE || 1024}x${SPRITE_SIZE || 1024})`);
       return true;
     }
 
     const url = data.data?.[0]?.url;
     if (url) {
       const imgRes = await fetch(url);
-      fs.writeFileSync(outPath, Buffer.from(await imgRes.arrayBuffer()));
-      console.log(`  ✓ ${name}.png`);
+      let buf = Buffer.from(await imgRes.arrayBuffer());
+      if (useChromaKey) buf = await chromaKey(buf);
+      const resized = await resizeBuffer(buf);
+      fs.writeFileSync(outPath, resized);
+      console.log(`  ✓ ${name}.png (${SPRITE_SIZE || 1024}x${SPRITE_SIZE || 1024})`);
       return true;
     }
 
