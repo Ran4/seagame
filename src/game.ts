@@ -99,7 +99,8 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   if (anySteering) updateHelmsman(world.worldMap);
   updateSailing(world.worldMap, dt);
 
-  // Scroll water downward to visualize ship movement
+  // Scroll water downward (always Y-axis only — the ship sprite always faces up,
+  // so heading-based scrolling would look wrong and be disorienting)
   if (world.worldMap.currentSpeed > 0) {
     const WATER_SCROLL_SPEED = 32; // pixels/sec at full speed
     const speedRatio = world.worldMap.currentSpeed / SHIP_SPEED;
