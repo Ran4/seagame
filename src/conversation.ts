@@ -87,7 +87,7 @@ function pickAnimalLine(actorType: ActorType): string {
   return lines[Math.floor(Math.random() * lines.length)];
 }
 
-function pickConversationScript(speaker: Actor, partner: Actor, brightness: number): string[] {
+function pickConversationScript(speaker: Actor, partner: Actor, brightness: number): { script: string[], mood: MoodTag } {
   const eitherAnimal = speaker.actorType !== 'human' || partner.actorType !== 'human';
 
   if (eitherAnimal) {
@@ -104,7 +104,7 @@ function pickConversationScript(speaker: Actor, partner: Actor, brightness: numb
         script.push(pickAnimalLine(who.actorType));
       }
     }
-    return script;
+    return { script, mood: 'friendly' };
   }
 
   const context = pickContext(speaker, brightness);
@@ -114,9 +114,9 @@ function pickConversationScript(speaker: Actor, partner: Actor, brightness: numb
   // Try exact key, then fall back to generic_friendly
   let pool = CONVERSATION_SCRIPTS[key];
   if (!pool || pool.length === 0) pool = CONVERSATION_SCRIPTS['generic_friendly'];
-  if (!pool || pool.length === 0) return ['Arr...', 'Aye...'];
+  if (!pool || pool.length === 0) return { script: ['Arr...', 'Aye...'], mood };
 
-  return pool[Math.floor(Math.random() * pool.length)];
+  return { script: pool[Math.floor(Math.random() * pool.length)], mood };
 }
 
 function endConversation(member: Actor): void {
@@ -133,8 +133,8 @@ function endConversation(member: Actor): void {
 
 /** Start a conversation between two adjacent crew. */
 export function beginConversation(member: Actor, partner: Actor, brightness: number = 1.0): void {
-  const script = pickConversationScript(member, partner, brightness);
-  const isUnfriendly = pickPartnerMood(member, partner) === 'unfriendly';
+  const { script, mood } = pickConversationScript(member, partner, brightness);
+  const isUnfriendly = mood === 'unfriendly';
 
   member.state = CrewState.TALKING;
   member.conversationPartnerId = partner.id;
