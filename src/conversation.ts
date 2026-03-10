@@ -10,19 +10,20 @@
  * When a conversation starts, a full script is picked and played back line by
  * line, alternating between the two crew members.
  *
- * At the end: +2 friendship (or −3 for unfriendly conversations).
+ * At the end: 85% success (+2), 12% fail (−4), 3% extreme fail (−50).
  * Each crew gets a 30–60 s cooldown before the next conversation.
  */
 
 import { Actor, ActorType, CrewState, TILE_SIZE } from './types';
 
-const CONVERSATION_PROXIMITY = 2; // tiles
+const CONVERSATION_PROXIMITY = 1.5; // tiles
 const CONVERSATION_EXCHANGE_DURATION = 3; // seconds per exchange
 const CONVERSATION_COOLDOWN_MIN = 30;
 const CONVERSATION_COOLDOWN_MAX = 60;
 const CONVERSATION_CHANCE = 0.15;
 const CONVERSATION_FRIENDSHIP_GAIN = 2;
-const CONVERSATION_FRIENDSHIP_LOSS = 3;
+const CONVERSATION_FRIENDSHIP_LOSS = 4;
+const CONVERSATION_FRIENDSHIP_CATASTROPHE = 50;
 
 // Animal conversation lines — used when at least one participant is an animal
 const ANIMAL_LINES: Record<string, string[]> = {
@@ -166,16 +167,15 @@ function isAvailableForConversation(c: Actor): boolean {
 }
 
 function findNearbyPartner(member: Actor, crew: Actor[]): Actor | undefined {
-  const mx = Math.floor(member.pixelX / TILE_SIZE);
-  const my = Math.floor(member.pixelY / TILE_SIZE);
+  const maxDist = CONVERSATION_PROXIMITY * TILE_SIZE;
+  const maxDistSq = maxDist * maxDist;
 
-  const nearbyCrew = crew.filter(c =>
-    c.id !== member.id &&
-    c.deck === member.deck &&
-    isAvailableForConversation(c) &&
-    Math.abs(Math.floor(c.pixelX / TILE_SIZE) - mx) <= CONVERSATION_PROXIMITY &&
-    Math.abs(Math.floor(c.pixelY / TILE_SIZE) - my) <= CONVERSATION_PROXIMITY
-  );
+  const nearbyCrew = crew.filter(c => {
+    if (c.id === member.id || c.deck !== member.deck || !isAvailableForConversation(c)) return false;
+    const dx = c.pixelX - member.pixelX;
+    const dy = c.pixelY - member.pixelY;
+    return dx * dx + dy * dy <= maxDistSq;
+  });
 
   if (nearbyCrew.length === 0) return undefined;
   return nearbyCrew[Math.floor(Math.random() * nearbyCrew.length)];
@@ -235,9 +235,11 @@ export function updateTalking(member: Actor, crew: Actor[], dt: number, brightne
       const myRel = member.relations.find(r => r.actorId === partner.id);
       const theirRel = partner.relations.find(r => r.actorId === member.id);
       if (myRel && theirRel) {
-        const delta = member.conversationPositive
-          ? CONVERSATION_FRIENDSHIP_GAIN
-          : -CONVERSATION_FRIENDSHIP_LOSS;
+        const roll = Math.random();
+        // 85% success (+2), 12% fail (-4), 3% extreme fail (-50)
+        const delta = roll < 0.85 ? CONVERSATION_FRIENDSHIP_GAIN
+          : roll < 0.97 ? -CONVERSATION_FRIENDSHIP_LOSS
+          : -CONVERSATION_FRIENDSHIP_CATASTROPHE;
         myRel.friendship = Math.max(0, Math.min(255, myRel.friendship + delta));
         theirRel.friendship = Math.max(0, Math.min(255, theirRel.friendship + delta));
       }
