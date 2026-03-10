@@ -582,7 +582,7 @@ export class Game {
 
               // Pet — human petting an animal
               if (selectedIsHuman && clickedIsAnimal) {
-                const alreadyPetting = selected.state === CrewState.PETTING && selected.copulationTarget?.actorId === clickedCrew.id;
+                const alreadyPetting = selected.state === CrewState.PETTING && selected.copulationTarget?.type === 'crew' && selected.copulationTarget.actorId === clickedCrew.id;
                 submenu.push(alreadyPetting
                   ? { label: 'Pet (already petting)', targetState: CrewState.PETTING, targetActorId: clickedCrew.id, disabled: true }
                   : { label: 'Pet', targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
@@ -607,8 +607,8 @@ export class Game {
                 const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
                 const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
                 const alreadyTalking = selected.state === CrewState.TALKING && selected.conversationPartnerId === clickedCrew.id;
-                const alreadyKissing = selected.state === CrewState.KISSING && selected.copulationTarget?.actorId === clickedCrew.id;
-                const alreadyCopulating = selected.state === CrewState.COPULATING && selected.copulationTarget?.actorId === clickedCrew.id;
+                const alreadyKissing = selected.state === CrewState.KISSING && selected.copulationTarget?.type === 'crew' && selected.copulationTarget.actorId === clickedCrew.id;
+                const alreadyCopulating = selected.state === CrewState.COPULATING && selected.copulationTarget?.type === 'crew' && selected.copulationTarget.actorId === clickedCrew.id;
 
                 submenu.push(
                   alreadyTalking
