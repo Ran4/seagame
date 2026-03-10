@@ -1,4 +1,4 @@
-import { TileType } from './types';
+import { TileType, ActorType } from './types';
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -13,6 +13,7 @@ export interface SpriteSheet {
   tiles: Map<TileType, HTMLImageElement>;
   waterFrames: HTMLImageElement[];
   crew: HTMLImageElement[];
+  animals: Map<string, HTMLImageElement>;
   items: Map<string, HTMLImageElement>;
   bubbles: Map<string, HTMLImageElement>;
 }
@@ -57,6 +58,12 @@ export async function loadSprites(): Promise<SpriteSheet> {
     itemNames.map(name => loadImage(`/sprites/item_${name}.png`).catch(() => null)),
   );
 
+  // Animal sprites (optional)
+  const animalTypes = ['dog', 'parrot', 'monkey'];
+  const animalLoads = await Promise.all(
+    animalTypes.map(name => loadImage(`/sprites/animal_${name}.png`).catch(() => null)),
+  );
+
   // Bubble sprites (optional)
   const bubbleLoads = await Promise.all(
     bubbleNames.map(name => loadImage(`/sprites/bubble_${name}.png`).catch(() => null)),
@@ -82,6 +89,12 @@ export async function loadSprites(): Promise<SpriteSheet> {
   }
   console.log('Item sprites loaded:', [...items.keys()]);
 
+  const animals = new Map<string, HTMLImageElement>();
+  for (let i = 0; i < animalTypes.length; i++) {
+    const img = animalLoads[i];
+    if (img) animals.set(animalTypes[i], img);
+  }
+
   const bubbles = new Map<string, HTMLImageElement>();
   for (let i = 0; i < bubbleNames.length; i++) {
     const img = bubbleLoads[i];
@@ -92,6 +105,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
     tiles,
     waterFrames: [tiles.get(TileType.WATER)!, water2],
     crew: crewSprites,
+    animals,
     items,
     bubbles,
   };

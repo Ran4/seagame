@@ -429,27 +429,33 @@ export class Renderer {
     const sx = member.pixelX - camera.x;
     const sy = member.pixelY - camera.y;
 
-    const crewSprite = this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)];
+    // Pick sprite: animal sprite for non-humans, crew sprite for humans
+    const isAnimal = member.actorType !== 'human';
+    const animalSprite = isAnimal ? this.sprites?.animals.get(member.actorType) : null;
+    const crewSprite = !isAnimal ? this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)] : null;
+    const sprite = animalSprite ?? crewSprite;
+    // Animals are drawn slightly smaller (monkey even smaller)
+    const sizeScale = member.actorType === 'monkey' ? 0.7 : isAnimal ? 0.85 : 1.0;
+    const size = TILE_SIZE * sizeScale;
 
-    if (crewSprite) {
-      // Draw sprite centered on position
-      const size = TILE_SIZE;
-      ctx.drawImage(crewSprite, sx - size / 2, sy - size / 2, size, size);
+    if (sprite) {
+      ctx.drawImage(sprite, sx - size / 2, sy - size / 2, size, size);
     } else {
-      // Fallback: colored circle
+      // Fallback: colored circle (smaller for animals)
+      const radius = isAnimal ? (member.actorType === 'monkey' ? 6 : 7) : 10;
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(sx, sy + 10, 8, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy + radius, radius * 0.8, radius * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = member.profile.color;
       ctx.beginPath();
-      ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
       ctx.stroke();
     }
 
