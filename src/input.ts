@@ -1,4 +1,4 @@
-import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, CrewMember, Deck, WALKABLE, SELECTABLE_OBJECTS, DeckPoint } from './types';
+import { Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, Actor, Deck, WALKABLE, SELECTABLE_OBJECTS, DeckPoint } from './types';
 
 export interface InputState {
   keysDown: Set<string>;
@@ -85,10 +85,10 @@ export function updateCamera(camera: Camera, input: InputState, dt: number, ship
 export function handleClick(
   click: { x: number; y: number },
   camera: Camera,
-  crew: CrewMember[],
+  crew: Actor[],
   activeDeck: number,
   deck: Deck,
-): { type: 'selectCrew'; crewId: number }
+): { type: 'selectCrew'; actorId: number }
   | { type: 'moveTo'; target: DeckPoint }
   | { type: 'useStairs'; tileX: number; tileY: number }
   | { type: 'selectObject'; tileType: TileType; x: number; y: number; deck: number }
@@ -104,7 +104,7 @@ export function handleClick(
     const dx = worldX - member.pixelX;
     const dy = worldY - member.pixelY;
     if (dx * dx + dy * dy < 14 * 14) {
-      return { type: 'selectCrew', crewId: member.id };
+      return { type: 'selectCrew', actorId: member.id };
     }
   }
 

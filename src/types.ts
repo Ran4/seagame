@@ -123,6 +123,7 @@ export enum CrewState {
   TALKING = 'talking',
   DRINKING = 'drinking',
   TAKING_ITEM = 'taking_item',
+  PETTING = 'petting',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -141,13 +142,14 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.TALKING]: 'Talking',
   [CrewState.DRINKING]: 'Drinking',
   [CrewState.TAKING_ITEM]: 'Taking item',
+  [CrewState.PETTING]: 'Petting',
 };
 
 export interface ContextMenuItem {
   label: string;
   targetState: CrewState;
   deckTarget?: number; // send crew to this deck
-  targetCrewId?: number; // for crew-crew interactions
+  targetActorId?: number; // for actor-actor interactions
   disabled?: boolean;
   submenu?: ContextMenuItem[];
   action?: string;           // e.g. 'take_item'
@@ -161,7 +163,7 @@ export interface ContextMenu {
   tileY: number;
   deck: number;
   items: ContextMenuItem[];
-  crewId?: number; // set when menu targets a crew member (e.g. "stop" actions)
+  actorId?: number; // set when menu targets an actor (e.g. "stop" actions)
   barrelItems?: { items: Item[]; barrelKey: string }; // visual item grid for barrel contents
   selectedBarrelSlot?: number; // which barrel item slot was clicked (shows "Take" flyout)
   barrelSlotClickPos?: { x: number; y: number }; // where the slot was clicked
@@ -179,7 +181,9 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.LANTERN]: [],
 };
 
-export interface CrewProfile {
+export type ActorType = 'human' | 'dog' | 'parrot' | 'monkey';
+
+export interface ActorProfile {
   name: string;
   sex: Sex;
   color: string;
@@ -191,15 +195,16 @@ export interface CrewProfile {
   hands: Item[];    // length <= numberOfHands
 }
 
-export interface CrewRelation {
-  crewId: number;
+export interface ActorRelation {
+  actorId: number;
   friendship: number;  // 0-255, >=128 friend, <64 dislike
   attraction: number;  // 0-255, >=128 both = willing to copulate
 }
 
-export interface CrewMember {
+export interface Actor {
   id: number;
-  profile: CrewProfile;
+  actorType: ActorType;
+  profile: ActorProfile;
   statuses: Map<string, Record<string, any> | null>;
   conditions: Set<string>;
   pixelX: number;
@@ -211,7 +216,7 @@ export interface CrewMember {
   stateTimer: number;
   idleTimer: number;
   copulationTarget: CopulationTarget | null;
-  relations: CrewRelation[];
+  relations: ActorRelation[];
   thoughtBubble: ThoughtBubble | null;
   thoughtBubbleTimer: number;
   conversationPartnerId: number | null;
@@ -276,4 +281,4 @@ export type ThoughtBubble = 'heart' | 'broken_heart';
 
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
-  | { type: 'crew'; crewId: number };
+  | { type: 'crew'; actorId: number };

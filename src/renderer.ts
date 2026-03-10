@@ -1,6 +1,6 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
-  TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, CrewMember, Camera, CrewState,
+  TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, Actor, Camera, CrewState,
   ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
 } from './types';
 import { SpriteSheet } from './sprites';
@@ -55,9 +55,9 @@ export class Renderer {
   render(
     deck: Deck,
     deckIndex: number,
-    crew: CrewMember[],
+    crew: Actor[],
     camera: Camera,
-    selectedCrewId: number | null,
+    selectedActorId: number | null,
     selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
     time: number,
     mousePos: { x: number; y: number },
@@ -93,7 +93,7 @@ export class Renderer {
       this.drawDeck(decks[1], camera, time);
       for (const member of crew) {
         if (member.deck === 1) {
-          this.drawCrewMember(member, camera, member.id === selectedCrewId);
+          this.drawActor(member, camera, member.id === selectedActorId);
         }
       }
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -157,11 +157,11 @@ export class Renderer {
 
     for (const member of crew) {
       if (member.deck === deckIndex) {
-        this.drawCrewMember(member, camera, member.id === selectedCrewId);
+        this.drawActor(member, camera, member.id === selectedActorId);
       }
     }
 
-    this.drawUI(deck, deckIndex, crew, selectedCrewId, selectedObject, decks, barrelInventory, time);
+    this.drawUI(deck, deckIndex, crew, selectedActorId, selectedObject, decks, barrelInventory, time);
     if (worldMap) {
       this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }
@@ -424,7 +424,7 @@ export class Renderer {
     return `${this.renderDeckIndex}-${tileX}-${tileY}`;
   }
 
-  private drawCrewMember(member: CrewMember, camera: Camera, selected: boolean): void {
+  private drawActor(member: Actor, camera: Camera, selected: boolean): void {
     const ctx = this.ctx;
     const sx = member.pixelX - camera.x;
     const sy = member.pixelY - camera.y;
@@ -586,8 +586,8 @@ export class Renderer {
   }
 
   private drawUI(
-    deck: Deck, deckIndex: number, crew: CrewMember[],
-    selectedCrewId: number | null,
+    deck: Deck, deckIndex: number, crew: Actor[],
+    selectedActorId: number | null,
     selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
     decks: Deck[] = [],
     barrelInventory: Map<string, Item[]> = new Map(),
@@ -617,8 +617,8 @@ export class Renderer {
     }
 
     // Selected crew info
-    if (selectedCrewId !== null) {
-      const member = crew.find(c => c.id === selectedCrewId);
+    if (selectedActorId !== null) {
+      const member = crew.find(c => c.id === selectedActorId);
       if (member) {
         this.drawCrewPanel(member);
       }
@@ -792,7 +792,7 @@ export class Renderer {
   }
 
   /** Measure or draw the crew panel. When draw=false, only returns height. */
-  private layoutCrewPanel(member: CrewMember, draw: boolean): number {
+  private layoutCrewPanel(member: Actor, draw: boolean): number {
     const ctx = this.ctx;
     const px = CANVAS_WIDTH - 210;
     const py = 10;
@@ -811,7 +811,8 @@ export class Renderer {
       ctx.fillStyle = '#ffffff';
       ctx.font = '14px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(`${p.name} (${p.sex})`, px + 35, y + 22);
+      const typeLabel = member.actorType === 'human' ? p.sex : `${member.actorType} ${p.sex}`;
+      ctx.fillText(`${p.name} (${typeLabel})`, px + 35, y + 22);
     }
     y += 32;
 
@@ -878,48 +879,50 @@ export class Renderer {
     }
     y += 18;
 
-    // Hands
-    if (draw) {
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = p.numberOfHands === 0 ? '#666666' : '#aaaaaa';
-      ctx.fillText(p.numberOfHands === 0 ? 'No hands' : 'Hands:', px + 10, y + 10);
-    }
-    y += 14;
-    if (draw) {
-      for (let i = 0; i < p.numberOfHands; i++) {
-        this.drawItemSlot(px + 10 + i * (slot + slotGap), y, slot, p.hands[i] ?? null);
-      }
-    }
-    if (p.numberOfHands > 0) y += slot + slotGap;
-    y += 4;
-
-    // Inventory
-    if (p.inventory.length > 0) {
+    // Hands & Inventory (humans only)
+    if (member.actorType === 'human') {
       if (draw) {
-        ctx.fillStyle = '#aaaaaa';
         ctx.font = '10px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('Inventory:', px + 10, y + 10);
+        ctx.fillStyle = p.numberOfHands === 0 ? '#666666' : '#aaaaaa';
+        ctx.fillText(p.numberOfHands === 0 ? 'No hands' : 'Hands:', px + 10, y + 10);
       }
       y += 14;
-      const cols = 5;
-      const rows = Math.ceil(p.inventory.length / cols);
       if (draw) {
-        for (let i = 0; i < p.inventory.length; i++) {
-          const col = i % cols;
-          const row = Math.floor(i / cols);
-          this.drawItemSlot(px + 10 + col * (slot + slotGap), y + row * (slot + slotGap), slot, p.inventory[i]);
+        for (let i = 0; i < p.numberOfHands; i++) {
+          this.drawItemSlot(px + 10 + i * (slot + slotGap), y, slot, p.hands[i] ?? null);
         }
       }
-      y += rows * (slot + slotGap);
+      if (p.numberOfHands > 0) y += slot + slotGap;
+      y += 4;
+
+      // Inventory
+      if (p.inventory.length > 0) {
+        if (draw) {
+          ctx.fillStyle = '#aaaaaa';
+          ctx.font = '10px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText('Inventory:', px + 10, y + 10);
+        }
+        y += 14;
+        const cols = 5;
+        const rows = Math.ceil(p.inventory.length / cols);
+        if (draw) {
+          for (let i = 0; i < p.inventory.length; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            this.drawItemSlot(px + 10 + col * (slot + slotGap), y + row * (slot + slotGap), slot, p.inventory[i]);
+          }
+        }
+        y += rows * (slot + slotGap);
+      }
     }
 
     y += 6; // bottom padding
     return y - py;
   }
 
-  private drawCrewPanel(member: CrewMember): void {
+  private drawCrewPanel(member: Actor): void {
     const ctx = this.ctx;
     const px = CANVAS_WIDTH - 210;
     const py = 10;

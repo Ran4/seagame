@@ -14,7 +14,7 @@
  * Each crew gets a 30–60 s cooldown before the next conversation.
  */
 
-import { CrewMember, CrewState, TILE_SIZE } from './types';
+import { Actor, ActorType, CrewState, TILE_SIZE } from './types';
 
 const CONVERSATION_PROXIMITY = 2; // tiles
 const CONVERSATION_EXCHANGE_DURATION = 3; // seconds per exchange
@@ -23,6 +23,13 @@ const CONVERSATION_COOLDOWN_MAX = 60;
 const CONVERSATION_CHANCE = 0.15;
 const CONVERSATION_FRIENDSHIP_GAIN = 2;
 const CONVERSATION_FRIENDSHIP_LOSS = 3;
+
+// Animal conversation lines — used when at least one participant is an animal
+const ANIMAL_LINES: Record<string, string[]> = {
+  dog: ['Woof!', 'Woof woof!', 'Woof...?', '*panting*', '*tail wagging*', 'Bark!', 'Arf!', '*sniff sniff*', 'Ruff!'],
+  parrot: ['BRAWWK!', 'Pieces of eight!', 'Polly wants a cracker!', 'Dead men tell no tales!', 'Land ho!', 'Walk the plank!', 'Shiver me timbers!', 'SQUAWK!', 'Pretty bird!'],
+  monkey: ['Ooh ooh!', 'Eee eee!', '*chattering*', '*screech*', '*picking fleas*', 'Ooh ah ah!', '*jumps excitedly*', '*scratches head*'],
+};
 
 let CONVERSATION_SCRIPTS: Record<string, string[][]> = {};
 
@@ -44,7 +51,7 @@ function weightedPick<T>(entries: [T, number][]): T {
   return entries[entries.length - 1][0];
 }
 
-function pickContext(speaker: CrewMember, brightness: number): ContextTag {
+function pickContext(speaker: Actor, brightness: number): ContextTag {
   const w: [ContextTag, number][] = [['generic', 3], ['work', 2]];
   if (speaker.conditions.has('hungry') || speaker.conditions.has('starving')) w.push(['hungry', 3]);
   if (speaker.conditions.has('tired') || speaker.conditions.has('exhausted')) w.push(['tired', 3]);
@@ -52,10 +59,10 @@ function pickContext(speaker: CrewMember, brightness: number): ContextTag {
   return weightedPick(w);
 }
 
-function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
+function pickPartnerMood(speaker: Actor, partner: Actor): MoodTag {
   const w: [MoodTag, number][] = [['friendly', 1]]; // base fallback
-  const rel = speaker.relations.find(r => r.crewId === partner.id);
-  const revRel = partner.relations.find(r => r.crewId === speaker.id);
+  const rel = speaker.relations.find(r => r.actorId === partner.id);
+  const revRel = partner.relations.find(r => r.actorId === speaker.id);
   if (rel) {
     if (rel.friendship >= 128) w.push(['friendly', 2]);
     if (rel.friendship < 64) w.push(['unfriendly', 3]);
@@ -74,7 +81,31 @@ function pickPartnerMood(speaker: CrewMember, partner: CrewMember): MoodTag {
   return weightedPick(w);
 }
 
-function pickConversationScript(speaker: CrewMember, partner: CrewMember, brightness: number): string[] {
+function pickAnimalLine(actorType: ActorType): string {
+  const lines = ANIMAL_LINES[actorType] ?? ['...'];
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+function pickConversationScript(speaker: Actor, partner: Actor, brightness: number): string[] {
+  const eitherAnimal = speaker.actorType !== 'human' || partner.actorType !== 'human';
+
+  if (eitherAnimal) {
+    // Animal conversations are shorter (2-3 exchanges)
+    const length = 2 + Math.floor(Math.random() * 2);
+    const script: string[] = [];
+    for (let i = 0; i < length; i++) {
+      const who = i % 2 === 0 ? speaker : partner;
+      if (who.actorType === 'human') {
+        // Human responding to animal — use simple phrases
+        const humanToAnimal = ['Hey there!', 'Good boy!', 'Good girl!', 'Who\'s a good one?', 'Heh...', 'Easy there...', 'Arr, hello!', 'Come here!'];
+        script.push(humanToAnimal[Math.floor(Math.random() * humanToAnimal.length)]);
+      } else {
+        script.push(pickAnimalLine(who.actorType));
+      }
+    }
+    return script;
+  }
+
   const context = pickContext(speaker, brightness);
   const mood = pickPartnerMood(speaker, partner);
   const key = `${context}_${mood}`;
@@ -87,7 +118,7 @@ function pickConversationScript(speaker: CrewMember, partner: CrewMember, bright
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function endConversation(member: CrewMember): void {
+function endConversation(member: Actor): void {
   member.state = CrewState.IDLE;
   member.idleTimer = 1 + Math.random() * 2;
   member.conversationPartnerId = null;
@@ -100,7 +131,7 @@ function endConversation(member: CrewMember): void {
 }
 
 /** Start a conversation between two adjacent crew. */
-export function beginConversation(member: CrewMember, partner: CrewMember, brightness: number = 1.0): void {
+export function beginConversation(member: Actor, partner: Actor, brightness: number = 1.0): void {
   const script = pickConversationScript(member, partner, brightness);
   const isUnfriendly = pickPartnerMood(member, partner) === 'unfriendly';
 
@@ -126,7 +157,7 @@ export function beginConversation(member: CrewMember, partner: CrewMember, brigh
 }
 
 /** True if crew member is available for conversation (idle or wandering aimlessly). */
-function isAvailableForConversation(c: CrewMember): boolean {
+function isAvailableForConversation(c: Actor): boolean {
   if (c.conversationCooldown > 0 || c.conversationPartnerId !== null || c.copulationTarget) return false;
   if (c.state === CrewState.IDLE) return true;
   // Wandering = walking with no real destination
@@ -134,7 +165,7 @@ function isAvailableForConversation(c: CrewMember): boolean {
   return false;
 }
 
-function findNearbyPartner(member: CrewMember, crew: CrewMember[]): CrewMember | undefined {
+function findNearbyPartner(member: Actor, crew: Actor[]): Actor | undefined {
   const mx = Math.floor(member.pixelX / TILE_SIZE);
   const my = Math.floor(member.pixelY / TILE_SIZE);
 
@@ -151,7 +182,7 @@ function findNearbyPartner(member: CrewMember, crew: CrewMember[]): CrewMember |
 }
 
 /** Called from updateIdle — try to start a conversation with a nearby idle/wandering crew. */
-export function tryStartConversation(member: CrewMember, crew: CrewMember[], brightness: number): boolean {
+export function tryStartConversation(member: Actor, crew: Actor[], brightness: number): boolean {
   if (member.conversationCooldown > 0) return false;
 
   const partner = findNearbyPartner(member, crew);
@@ -162,7 +193,7 @@ export function tryStartConversation(member: CrewMember, crew: CrewMember[], bri
 }
 
 /** Called from updateWalking for wandering crew — stop and chat if passing someone. */
-export function tryStartConversationWhileWalking(member: CrewMember, crew: CrewMember[], brightness: number): boolean {
+export function tryStartConversationWhileWalking(member: Actor, crew: Actor[], brightness: number): boolean {
   if (member.conversationCooldown > 0) return false;
   if (member.targetState !== CrewState.IDLE) return false; // only wandering, not walking to a task
 
@@ -173,7 +204,7 @@ export function tryStartConversationWhileWalking(member: CrewMember, crew: CrewM
   return true;
 }
 
-export function updateTalking(member: CrewMember, crew: CrewMember[], dt: number, brightness: number): void {
+export function updateTalking(member: Actor, crew: Actor[], dt: number, brightness: number): void {
   // Tick speech bubble timer
   if (member.speechBubbleTimer > 0) {
     member.speechBubbleTimer -= dt;
@@ -201,8 +232,8 @@ export function updateTalking(member: CrewMember, crew: CrewMember[], dt: number
 
     if (member.conversationExchangesLeft <= 0) {
       // Conversation over — apply friendship
-      const myRel = member.relations.find(r => r.crewId === partner.id);
-      const theirRel = partner.relations.find(r => r.crewId === member.id);
+      const myRel = member.relations.find(r => r.actorId === partner.id);
+      const theirRel = partner.relations.find(r => r.actorId === member.id);
       if (myRel && theirRel) {
         const delta = member.conversationPositive
           ? CONVERSATION_FRIENDSHIP_GAIN
@@ -228,7 +259,7 @@ export function updateTalking(member: CrewMember, crew: CrewMember[], dt: number
   }
 }
 
-export function stopConversation(member: CrewMember, crew: CrewMember[]): void {
+export function stopConversation(member: Actor, crew: Actor[]): void {
   if (member.conversationPartnerId !== null) {
     const partner = crew.find(c => c.id === member.conversationPartnerId);
     if (partner && partner.state === CrewState.TALKING) {
@@ -242,7 +273,7 @@ export function stopConversation(member: CrewMember, crew: CrewMember[]): void {
   member.conversationMyTurn = false;
 }
 
-export function tickConversationCooldown(member: CrewMember, dt: number): void {
+export function tickConversationCooldown(member: Actor, dt: number): void {
   if (member.conversationCooldown > 0) {
     member.conversationCooldown -= dt;
   }

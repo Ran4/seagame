@@ -1,7 +1,7 @@
-import { Deck, CrewMember, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
+import { Deck, Actor, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
 import { createSemen, createGrogRation } from './items';
 import { createShip } from './ship';
-import { createCrew, updateCrew, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile, DRINK_DURATION } from './crew';
+import { createActors, updateActors, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile, DRINK_DURATION } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
@@ -11,10 +11,10 @@ import { stopConversation } from './conversation';
 
 export class Game {
   private decks: Deck[];
-  private crew: CrewMember[];
+  private actors: Actor[];
   private camera: Camera;
   private activeDeck = 1;
-  private selectedCrewId: number | null = null;
+  private selectedActorId: number | null = null;
   private selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null = null;
   private contextMenu: ContextMenu | null = null;
   private renderer: Renderer;
@@ -33,7 +33,7 @@ export class Game {
 
   constructor(canvas: HTMLCanvasElement) {
     this.decks = createShip();
-    this.crew = createCrew(4, this.decks);
+    this.actors = createActors(4, this.decks);
     this.renderer = new Renderer(canvas);
     this.input = createInputHandler(canvas);
     this.audio = new AudioManager();
@@ -116,8 +116,8 @@ export class Game {
   private update(dt: number): void {
     this.audio.activeDeck = this.activeDeck;
     // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
-    const anyNavigating = this.crew.some(c => c.state === CrewState.NAVIGATING);
-    const anySteering = this.crew.some(c => c.state === CrewState.STEERING);
+    const anyNavigating = this.actors.some(c => c.state === CrewState.NAVIGATING);
+    const anySteering = this.actors.some(c => c.state === CrewState.STEERING);
     this.navTimer += dt;
     if (anyNavigating && this.navTimer >= 0.5) {
       updateNavigator(this.worldMap);
@@ -264,7 +264,7 @@ export class Game {
       if (menuItem) {
         // "Take item" from barrel — walk to barrel, then take
         if (menuItem.action === 'take_item' && menuItem.itemData) {
-          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          const member = this.actors.find(c => c.id === this.selectedActorId);
           if (member) {
             member.takeTarget = menuItem.itemData;
             orderCrewToAdjacentTile(
@@ -287,27 +287,27 @@ export class Game {
           this.input.mouseClick = null;
           return;
         }
-        if (menuItem.targetCrewId !== undefined) {
+        if (menuItem.targetActorId !== undefined) {
           // Crew-crew interaction (kiss or copulate)
-          const member = this.crew.find(c => c.id === this.selectedCrewId);
-          const target = this.crew.find(c => c.id === menuItem.targetCrewId);
+          const member = this.actors.find(c => c.id === this.selectedActorId);
+          const target = this.actors.find(c => c.id === menuItem.targetActorId);
           if (member && target) {
-            member.copulationTarget = { type: 'crew', crewId: target.id };
+            member.copulationTarget = { type: 'crew', actorId: target.id };
             // Stop target and make them wait
-            target.copulationTarget = { type: 'crew', crewId: member.id };
+            target.copulationTarget = { type: 'crew', actorId: member.id };
             target.state = CrewState.IDLE;
             target.path = [];
             target.idleTimer = 999;
             const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
-            if (menuItem.targetState === CrewState.TALKING || menuItem.targetState === CrewState.KISSING) {
+            if (menuItem.targetState === CrewState.TALKING || menuItem.targetState === CrewState.KISSING || menuItem.targetState === CrewState.PETTING) {
               orderCrewBesideTile(member, targetTile, this.decks, menuItem.targetState);
             } else {
               orderCrewToAdjacentTile(member, targetTile, this.decks, menuItem.targetState);
             }
           }
-        } else if (this.contextMenu.crewId !== undefined && menuItem.deckTarget !== undefined) {
+        } else if (this.contextMenu.actorId !== undefined && menuItem.deckTarget !== undefined) {
           // "Go to deck" action
-          const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
+          const member = this.actors.find(c => c.id === this.contextMenu!.actorId);
           if (member) {
             const targetDeck = this.decks[menuItem.deckTarget];
             // Find a walkable tile on the target deck
@@ -322,8 +322,8 @@ export class Game {
               if (member.state === CrewState.WALKING) break;
             }
           }
-        } else if (this.contextMenu.crewId !== undefined) {
-          const member = this.crew.find(c => c.id === this.contextMenu!.crewId);
+        } else if (this.contextMenu.actorId !== undefined) {
+          const member = this.actors.find(c => c.id === this.contextMenu!.actorId);
           if (member) {
             if (menuItem.targetState === CrewState.DRINKING) {
               // Drink item — consume from inventory immediately
@@ -341,12 +341,12 @@ export class Game {
               // "Stop" action
               // If talking, free the conversation partner
               if (member.state === CrewState.TALKING) {
-                stopConversation(member, this.crew);
+                stopConversation(member, this.actors);
               }
               // If has copulation partner (walking toward or actively copulating), free them
               if (member.copulationTarget?.type === 'crew') {
                 const partnerTarget = member.copulationTarget;
-                const partner = this.crew.find(c => c.id === partnerTarget.crewId);
+                const partner = this.actors.find(c => c.id === partnerTarget.actorId);
                 if (partner) {
                   partner.state = CrewState.IDLE;
                   partner.idleTimer = 1 + Math.random() * 2;
@@ -361,7 +361,7 @@ export class Game {
           }
         } else {
           // Tile-targeted menu (e.g. "sleep in this bed")
-          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          const member = this.actors.find(c => c.id === this.selectedActorId);
           if (member) {
             let targetDeck = this.contextMenu.deck;
             // Mast actions: send crew to the connected deck
@@ -417,7 +417,7 @@ export class Game {
       if (menuItem) {
         // "Take" clicked via right-click flyout — same dispatch as left-click
         if (menuItem.action === 'take_item' && menuItem.itemData) {
-          const member = this.crew.find(c => c.id === this.selectedCrewId);
+          const member = this.actors.find(c => c.id === this.selectedActorId);
           if (member) {
             member.takeTarget = menuItem.itemData;
             orderCrewToAdjacentTile(
@@ -439,7 +439,7 @@ export class Game {
     }
 
     // Left-click on crew panel → close menus, consume click (don't deselect)
-    if (this.input.mouseClick && this.selectedCrewId !== null) {
+    if (this.input.mouseClick && this.selectedActorId !== null) {
       const cpx = CANVAS_WIDTH - 210;
       if (this.input.mouseClick.x >= cpx && this.input.mouseClick.x <= cpx + 200 && this.input.mouseClick.y >= 10) {
         this.contextMenu = null;
@@ -451,7 +451,7 @@ export class Game {
       const result = handleClick(
         this.input.mouseClick,
         this.camera,
-        this.crew,
+        this.actors,
         this.activeDeck,
         this.decks[this.activeDeck],
       );
@@ -460,12 +460,12 @@ export class Game {
 
       if (result) {
         if (result.type === 'selectCrew') {
-          this.selectedCrewId = result.crewId;
+          this.selectedActorId = result.actorId;
           this.selectedObject = null;
           this.audio.play('click', this.activeDeck);
         } else if (result.type === 'selectObject') {
           this.selectedObject = result;
-          this.selectedCrewId = null;
+          this.selectedActorId = null;
           this.contextMenu = null;
           this.audio.play('click', this.activeDeck);
         } else if (result.type === 'useStairs') {
@@ -484,7 +484,7 @@ export class Game {
           this.audio.play('stairs', this.activeDeck);
         }
       } else {
-        this.selectedCrewId = null;
+        this.selectedActorId = null;
         this.selectedObject = null;
         this.contextMenu = null;
       }
@@ -498,8 +498,8 @@ export class Game {
 
       // Right-click in crew panel → show self-actions or close menu
       const panelX = CANVAS_WIDTH - 210;
-      if (this.selectedCrewId !== null && click.x >= panelX && click.x <= panelX + 200 && click.y >= 10) {
-        const member = this.crew.find(c => c.id === this.selectedCrewId);
+      if (this.selectedActorId !== null && click.x >= panelX && click.x <= panelX + 200 && click.y >= 10) {
+        const member = this.actors.find(c => c.id === this.selectedActorId);
         if (member) {
           const panelItems: ContextMenuItem[] = [];
           const hovered = this.renderer.getHoveredItem();
@@ -516,7 +516,7 @@ export class Game {
               tileX: 0, tileY: 0,
               deck: member.deck,
               items: panelItems,
-              crewId: member.id,
+              actorId: member.id,
             };
             this.audio.play('click', this.activeDeck);
           } else {
@@ -531,8 +531,8 @@ export class Game {
       const worldY = click.y + this.camera.y;
 
       // Check if right-clicked a crew member
-      let clickedCrew: CrewMember | null = null;
-      for (const member of this.crew) {
+      let clickedCrew: Actor | null = null;
+      for (const member of this.actors) {
         if (member.deck !== this.activeDeck) continue;
         const dx = worldX - member.pixelX;
         const dy = worldY - member.pixelY;
@@ -548,60 +548,76 @@ export class Game {
         const deck = this.decks[this.activeDeck];
         const items: ContextMenuItem[] = [];
 
-        // Crew member actions
+        // Actor actions
         if (clickedCrew) {
-          if (clickedCrew.state !== CrewState.IDLE) {
-            items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
-          }
-          for (let d = 0; d < this.decks.length; d++) {
-            if (d !== clickedCrew.deck) {
-              items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
+          // Human-only actions: stop, go to deck, drink
+          if (clickedCrew.actorType === 'human') {
+            if (clickedCrew.state !== CrewState.IDLE) {
+              items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
             }
-          }
-          // Drink actions (self-action: right-click on selected crew)
-          if (clickedCrew.id === this.selectedCrewId) {
-            const seen = new Set<string>();
-            for (const inv of clickedCrew.profile.inventory) {
-              if (seen.has(inv.name)) continue;
-              seen.add(inv.name);
-              const canDrink = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
-              const drinkLabel = `Drink ${inv.name.toLowerCase()}`;
-              items.push({ label: canDrink ? drinkLabel : `${drinkLabel} (busy)`, targetState: CrewState.DRINKING, disabled: !canDrink, itemData: { barrelKey: '', itemName: inv.name } });
-            }
-          }
-          // Interact submenu (requires a different crew selected)
-          if (this.selectedCrewId !== null && this.selectedCrewId !== clickedCrew.id) {
-            const selected = this.crew.find(c => c.id === this.selectedCrewId);
-            if (selected) {
-              const selRelation = selected.relations.find(r => r.crewId === clickedCrew!.id);
-              const targetRelation = clickedCrew.relations.find(r => r.crewId === selected.id);
-              const selFriendship = selRelation?.friendship ?? 0;
-              const selAttraction = selRelation?.attraction ?? 0;
-              const targetAttraction = targetRelation?.attraction ?? 0;
-              // Lower inhibitions when drunk/tipsy
-              const eitherDrunk = selected.conditions.has('drunk') || clickedCrew.conditions.has('drunk');
-              const bothDrunk = selected.conditions.has('drunk') && clickedCrew.conditions.has('drunk');
-              const eitherTipsy = eitherDrunk || selected.conditions.has('tipsy') || clickedCrew.conditions.has('tipsy');
-              let kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
-              let copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
-              // Lustful selected crew has lowered inhibitions
-              if (selected.conditions.has('lustful')) {
-                kissThreshold = Math.floor(kissThreshold / 2);
-                copThreshold = Math.floor(copThreshold / 2);
+            for (let d = 0; d < this.decks.length; d++) {
+              if (d !== clickedCrew.deck) {
+                items.push({ label: `Go to ${this.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
               }
-              const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
-              const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
+            }
+            // Drink actions (self-action: right-click on selected crew)
+            if (clickedCrew.id === this.selectedActorId) {
+              const seen = new Set<string>();
+              for (const inv of clickedCrew.profile.inventory) {
+                if (seen.has(inv.name)) continue;
+                seen.add(inv.name);
+                const canDrink = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
+                const drinkLabel = `Drink ${inv.name.toLowerCase()}`;
+                items.push({ label: canDrink ? drinkLabel : `${drinkLabel} (busy)`, targetState: CrewState.DRINKING, disabled: !canDrink, itemData: { barrelKey: '', itemName: inv.name } });
+              }
+            }
+          }
+          // Interact submenu (requires a different actor selected)
+          if (this.selectedActorId !== null && this.selectedActorId !== clickedCrew.id) {
+            const selected = this.actors.find(c => c.id === this.selectedActorId);
+            if (selected) {
+              const submenu: ContextMenuItem[] = [];
+              const clickedIsAnimal = clickedCrew.actorType !== 'human';
+              const selectedIsHuman = selected.actorType === 'human';
 
-              const submenu: ContextMenuItem[] = [
-                { label: 'Converse', targetState: CrewState.TALKING, targetCrewId: clickedCrew.id },
-                canKiss
-                  ? { label: 'Kiss', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id }
-                  : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetCrewId: clickedCrew.id, disabled: true },
-                mutualAttraction
-                  ? { label: 'Copulate', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id }
-                  : { label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetCrewId: clickedCrew.id, disabled: true },
-              ];
-              items.push({ label: 'Interact \u25B6', targetState: CrewState.IDLE, submenu });
+              // Pet — human petting an animal
+              if (selectedIsHuman && clickedIsAnimal) {
+                submenu.push({ label: 'Pet', targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
+              }
+
+              // Human-human (or same-species) interactions
+              if (!clickedIsAnimal && selectedIsHuman) {
+                const selRelation = selected.relations.find(r => r.actorId === clickedCrew!.id);
+                const targetRelation = clickedCrew.relations.find(r => r.actorId === selected.id);
+                const selFriendship = selRelation?.friendship ?? 0;
+                const selAttraction = selRelation?.attraction ?? 0;
+                const targetAttraction = targetRelation?.attraction ?? 0;
+                const eitherDrunk = selected.conditions.has('drunk') || clickedCrew.conditions.has('drunk');
+                const bothDrunk = selected.conditions.has('drunk') && clickedCrew.conditions.has('drunk');
+                const eitherTipsy = eitherDrunk || selected.conditions.has('tipsy') || clickedCrew.conditions.has('tipsy');
+                let kissThreshold = eitherDrunk ? 32 : eitherTipsy ? 48 : 64;
+                let copThreshold = bothDrunk ? 64 : eitherDrunk ? 80 : 128;
+                if (selected.conditions.has('lustful')) {
+                  kissThreshold = Math.floor(kissThreshold / 2);
+                  copThreshold = Math.floor(copThreshold / 2);
+                }
+                const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
+                const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
+
+                submenu.push(
+                  { label: 'Converse', targetState: CrewState.TALKING, targetActorId: clickedCrew.id },
+                  canKiss
+                    ? { label: 'Kiss', targetState: CrewState.KISSING, targetActorId: clickedCrew.id }
+                    : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetActorId: clickedCrew.id, disabled: true },
+                  mutualAttraction
+                    ? { label: 'Copulate', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id }
+                    : { label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id, disabled: true },
+                );
+              }
+
+              if (submenu.length > 0) {
+                items.push({ label: 'Interact \u25B6', targetState: CrewState.IDLE, submenu });
+              }
             }
           }
         }
@@ -610,8 +626,9 @@ export class Game {
         let pendingBarrelItems: { items: Item[]; barrelKey: string } | undefined;
         if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
           const tileType = deck.tiles[tileY][tileX];
-          // Tile order actions only if a crew member is selected
-          if (this.selectedCrewId !== null && !clickedCrew) {
+          // Tile order actions only if a human crew member is selected
+          const selectedActor = this.selectedActorId !== null ? this.actors.find(c => c.id === this.selectedActorId) : null;
+          if (selectedActor && selectedActor.actorType === 'human' && !clickedCrew) {
             let tileActions = TILE_ACTIONS[tileType] ? [...TILE_ACTIONS[tileType]!] : undefined;
             if (tileType === TileType.MAST) {
               const hasConnection = this.decks.some((d, i) =>
@@ -625,7 +642,7 @@ export class Game {
             }
             // Only male crew can copulate with barrels
             if (tileActions && tileType === TileType.BARREL) {
-              const selected = this.crew.find(c => c.id === this.selectedCrewId);
+              const selected = this.actors.find(c => c.id === this.selectedActorId);
               if (selected?.profile.sex !== 'M') {
                 tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
               }
@@ -662,7 +679,7 @@ export class Game {
             tileY,
             deck: clickedCrew ? clickedCrew.deck : this.activeDeck,
             items,
-            crewId: clickedCrew?.id,
+            actorId: clickedCrew?.id,
             barrelItems: pendingBarrelItems,
           };
           this.audio.play('click', this.activeDeck);
@@ -683,21 +700,21 @@ export class Game {
     const brightness = getShipBrightness(timeOfDay);
 
     // Crew AI — track state transitions to play sounds
-    const prevStates = this.crew.map(c => c.state);
-    updateCrew(this.crew, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
-    for (let i = 0; i < this.crew.length; i++) {
-      const deck = this.crew[i].deck;
-      if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.crew[i].state !== CrewState.LIGHTING_LANTERN) {
+    const prevStates = this.actors.map(c => c.state);
+    updateActors(this.actors, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
+    for (let i = 0; i < this.actors.length; i++) {
+      const deck = this.actors[i].deck;
+      if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.actors[i].state !== CrewState.LIGHTING_LANTERN) {
         this.audio.play('lantern_light', deck);
-      } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && this.crew[i].state !== CrewState.EXTINGUISHING_LANTERN) {
+      } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && this.actors[i].state !== CrewState.EXTINGUISHING_LANTERN) {
         this.audio.play('lantern_extinguish', deck);
       }
-      if (prevStates[i] !== CrewState.KISSING && this.crew[i].state === CrewState.KISSING) {
+      if (prevStates[i] !== CrewState.KISSING && this.actors[i].state === CrewState.KISSING) {
         this.audio.play('kiss', deck);
       }
       // Refresh context menu items if the associated crew member's state changed (stale busy labels)
-      if (this.contextMenu?.crewId === this.crew[i].id && prevStates[i] !== this.crew[i].state) {
-        const member = this.crew[i];
+      if (this.contextMenu?.actorId === this.actors[i].id && prevStates[i] !== this.actors[i].state) {
+        const member = this.actors[i];
         const canDrink = member.state === CrewState.IDLE || member.state === CrewState.WALKING;
         for (const item of this.contextMenu.items) {
           if (item.targetState === CrewState.DRINKING && item.itemData) {
@@ -851,16 +868,16 @@ export class Game {
   }
 
   private render(): void {
-    const hasNavigator = this.crew.some(c => c.state === CrewState.NAVIGATING);
-    const hasHelmsman = this.crew.some(c => c.state === CrewState.STEERING);
+    const hasNavigator = this.actors.some(c => c.state === CrewState.NAVIGATING);
+    const hasHelmsman = this.actors.some(c => c.state === CrewState.STEERING);
     const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
     const brightness = getShipBrightness(timeOfDay);
     this.renderer.render(
       this.decks[this.activeDeck],
       this.activeDeck,
-      this.crew,
+      this.actors,
       this.camera,
-      this.selectedCrewId,
+      this.selectedActorId,
       this.selectedObject,
       this.time,
       this.input.mousePos,

@@ -1,10 +1,30 @@
-import { CrewMember, CrewRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from './types';
-import { findPath } from './pathfinding';
+import { Actor, ActorType, ActorRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from './types';
+import { findPath, findPathFlying } from './pathfinding';
 import { createCutlass, createGrogRation, createSemen } from './items';
 import { tryStartConversation, tryStartConversationWhileWalking, updateTalking, tickConversationCooldown, beginConversation } from './conversation';
 
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
+const PET_DURATION = 3;
+const PET_FRIENDSHIP_GAIN = 2;
+
+// Actor types that have lust mechanics
+const LUST_ACTOR_TYPES: Set<ActorType> = new Set(['human', 'dog', 'monkey']);
+
+// Actor types that can do human work (steer, man cannons, navigate, etc.)
+const WORK_ACTOR_TYPES: Set<ActorType> = new Set(['human']);
+
+const ANIMAL_NAMES: Record<string, string[]> = {
+  dog: ['Biscuit', 'Salty', 'Barnacle', 'Patches'],
+  parrot: ['Polly', 'Squawk', 'Captain', 'Feathers'],
+  monkey: ['Chips', 'Bananas', 'Rascal', 'Noodle'],
+};
+
+const ANIMAL_COLORS: Record<string, string> = {
+  dog: '#f5f5dc',    // bichon frise white/cream
+  parrot: '#2ecc71', // green
+  monkey: '#c68c53',  // brown
+};
 const HUNGER_THRESHOLD = 80;
 const ENERGY_THRESHOLD = 60;
 const EAT_DURATION = 8;
@@ -38,7 +58,7 @@ const PIRATE_SEXES: Record<string, Sex> = {
 /**
  * Status/Conditions system.
  *
- * Two layers on each CrewMember:
+ * Two layers on each Actor:
  *   statuses  — Map<string, payload | null>.  Raw state, persisted.
  *              Permanent traits: statuses.set('dickless', null)
  *              Tracked values:  statuses.set('drunkedness', { amount: 180 })
@@ -55,7 +75,7 @@ const PIRATE_SEXES: Record<string, Sex> = {
  * Game code should read conditions (not statuses) for behaviour checks.
  * Write to statuses when changing state; conditions update next tick.
  */
-export function refreshConditions(member: CrewMember): void {
+export function refreshConditions(member: Actor): void {
   member.conditions.clear();
   // Copy raw status keys
   for (const key of member.statuses.keys()) {
@@ -110,7 +130,7 @@ function pickRandom<T>(arr: T[]): T | undefined {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function currentTile(member: CrewMember): DeckPoint {
+function currentTile(member: Actor): DeckPoint {
   return {
     x: Math.floor(member.pixelX / TILE_SIZE),
     y: Math.floor(member.pixelY / TILE_SIZE),
@@ -118,59 +138,88 @@ function currentTile(member: CrewMember): DeckPoint {
   };
 }
 
-export function createCrew(count: number, decks: Deck[]): CrewMember[] {
-  const crew: CrewMember[] = [];
-  for (let i = 0; i < count; i++) {
-    const spawnDeck = 1 + Math.floor(Math.random() * Math.min(2, decks.length - 1));
-    const walkable = getWalkableTiles(decks[spawnDeck], spawnDeck);
-    const spawn = walkable[Math.floor(Math.random() * walkable.length)];
-    // Weighted random for numberOfHands: 99.5% → 2, 0.4% → 1, 0.1% → 0
-    const handRoll = Math.random();
-    const numberOfHands = handRoll < 0.001 ? 0 : handRoll < 0.005 ? 1 : 2;
+function createActor(id: number, actorType: ActorType, name: string, sex: Sex, color: string, spriteIndex: number, decks: Deck[]): Actor {
+  const spawnDeck = 1 + Math.floor(Math.random() * Math.min(2, decks.length - 1));
+  const walkable = getWalkableTiles(decks[spawnDeck], spawnDeck);
+  const spawn = walkable[Math.floor(Math.random() * walkable.length)];
+  const numberOfHands = actorType === 'human'
+    ? (Math.random() < 0.001 ? 0 : Math.random() < 0.005 ? 1 : 2)
+    : 0;
 
-    crew.push({
-      id: i,
-      profile: {
-        name: PIRATE_NAMES[i % PIRATE_NAMES.length],
-        sex: PIRATE_SEXES[PIRATE_NAMES[i % PIRATE_NAMES.length]] ?? (Math.random() < 0.5 ? 'M' : 'F'),
-        color: CREW_COLORS[i % CREW_COLORS.length],
-        spriteIndex: i,
-        numberOfHands,
-        hunger: 200 + Math.random() * 55,
-        energy: 200 + Math.random() * 55,
-        inventory: [],
-        hands: [],
-      },
-      statuses: new Map<string, Record<string, any> | null>(),
-      conditions: new Set(),
-      pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
-      pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
-      deck: spawnDeck,
-      state: CrewState.IDLE,
-      targetState: CrewState.IDLE,
-      path: [],
-      stateTimer: 0,
-      idleTimer: Math.random() * 3,
-      copulationTarget: null,
-      relations: [],
-      thoughtBubble: null,
-      thoughtBubbleTimer: 0,
-      conversationPartnerId: null,
-      conversationExchangesLeft: 0,
-      conversationPositive: true,
-      conversationScript: [],
-      conversationCooldown: 0,
-      conversationMyTurn: false,
-      speechBubbleText: null,
-      speechBubbleTimer: 0,
-      takeTarget: null,
-      consumingItem: null,
-      lustSeekCooldown: 0,
-    });
+  return {
+    id,
+    actorType,
+    profile: {
+      name, sex, color, spriteIndex, numberOfHands,
+      hunger: 200 + Math.random() * 55,
+      energy: 200 + Math.random() * 55,
+      inventory: [],
+      hands: [],
+    },
+    statuses: new Map<string, Record<string, any> | null>(),
+    conditions: new Set(),
+    pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
+    pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
+    deck: spawnDeck,
+    state: CrewState.IDLE,
+    targetState: CrewState.IDLE,
+    path: [],
+    stateTimer: 0,
+    idleTimer: Math.random() * 3,
+    copulationTarget: null,
+    relations: [],
+    thoughtBubble: null,
+    thoughtBubbleTimer: 0,
+    conversationPartnerId: null,
+    conversationExchangesLeft: 0,
+    conversationPositive: true,
+    conversationScript: [],
+    conversationCooldown: 0,
+    conversationMyTurn: false,
+    speechBubbleText: null,
+    speechBubbleTimer: 0,
+    takeTarget: null,
+    consumingItem: null,
+    lustSeekCooldown: 0,
+  };
+}
+
+export function createActors(humanCount: number, decks: Deck[]): Actor[] {
+  const actors: Actor[] = [];
+  let nextId = 0;
+
+  // Create humans
+  for (let i = 0; i < humanCount; i++) {
+    const name = PIRATE_NAMES[i % PIRATE_NAMES.length];
+    const sex = PIRATE_SEXES[name] ?? (Math.random() < 0.5 ? 'M' : 'F');
+    actors.push(createActor(nextId++, 'human', name, sex, CREW_COLORS[i % CREW_COLORS.length], i, decks));
   }
 
-  // Initialize lust statuses
-  for (const member of crew) {
+  // Create animals: 2 dogs (1M, 1F), 1 parrot, 1 monkey
+  const animalSpecs: { type: ActorType; sex: Sex }[] = [
+    { type: 'dog', sex: 'M' },
+    { type: 'dog', sex: 'F' },
+    { type: 'parrot', sex: Math.random() < 0.5 ? 'M' : 'F' },
+    { type: 'monkey', sex: Math.random() < 0.5 ? 'M' : 'F' },
+  ];
+  const usedNames: Record<string, number> = {};
+  for (const spec of animalSpecs) {
+    const nameIdx = usedNames[spec.type] ?? 0;
+    usedNames[spec.type] = nameIdx + 1;
+    const name = ANIMAL_NAMES[spec.type][nameIdx % ANIMAL_NAMES[spec.type].length];
+    actors.push(createActor(nextId++, spec.type, name, spec.sex, ANIMAL_COLORS[spec.type], nextId - 1, decks));
+  }
+
+  // Initialize climber status — everyone except dogs
+  for (const member of actors) {
+    if (member.actorType !== 'dog') {
+      member.statuses.set('climber', { skill: 128 });
+    }
+  }
+
+  // Initialize lust for actors that have it
+  for (const member of actors) {
+    if (!LUST_ACTOR_TYPES.has(member.actorType)) continue;
     if (member.profile.sex === 'M') {
       member.statuses.set('lust', { amount: Math.floor(Math.random() * 129) });
     } else {
@@ -178,34 +227,36 @@ export function createCrew(count: number, decks: Deck[]): CrewMember[] {
     }
   }
 
-  // Initialize relations between all crew members
-  for (const member of crew) {
-    for (const other of crew) {
+  // Initialize relations between all actors
+  for (const member of actors) {
+    for (const other of actors) {
       if (other.id === member.id) continue;
+      // Animals have lower starting attraction to other species
+      const sameSpecies = member.actorType === other.actorType;
       member.relations.push({
-        crewId: other.id,
+        actorId: other.id,
         friendship: 64 + Math.floor(Math.random() * 129), // 64-192
-        attraction: Math.floor(Math.random() * 161),       // 0-160
+        attraction: sameSpecies ? Math.floor(Math.random() * 161) : 0,
       });
     }
   }
 
-  const jack = crew.find(c => c.profile.name === 'Jack');
+  const jack = actors.find(c => c.profile.name === 'Jack');
   if (jack) {
     jack.profile.hands.push(createCutlass());
   }
 
-  const mary = crew.find(c => c.profile.name === 'Mary');
+  const mary = actors.find(c => c.profile.name === 'Mary');
   if (mary) {
     mary.profile.inventory.push(createGrogRation());
     mary.profile.inventory.push(createGrogRation());
     mary.profile.inventory.push(createSemen(0));
   }
 
-  return crew;
+  return actors;
 }
 
-export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0): void {
+export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0): void {
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
@@ -316,11 +367,11 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         // Pull in crew partner on first frame
         if (member.copulationTarget?.type === 'crew') {
           const target = member.copulationTarget;
-          const partner = crew.find(c => c.id === target.crewId);
+          const partner = crew.find(c => c.id === target.actorId);
           if (partner && partner.state !== CrewState.KISSING) {
             partner.state = CrewState.KISSING;
             partner.stateTimer = member.stateTimer;
-            partner.copulationTarget = { type: 'crew', crewId: member.id };
+            partner.copulationTarget = { type: 'crew', actorId: member.id };
             partner.path = [];
           }
           // Slow lean-in: both drift toward each other until ~6px apart
@@ -340,10 +391,10 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         if (member.stateTimer <= 0) {
           if (member.copulationTarget?.type === 'crew') {
             const target = member.copulationTarget;
-            const partner = crew.find(c => c.id === target.crewId);
+            const partner = crew.find(c => c.id === target.actorId);
             if (partner) {
-              const myRelation = member.relations.find(r => r.crewId === partner.id);
-              const theirRelation = partner.relations.find(r => r.crewId === member.id);
+              const myRelation = member.relations.find(r => r.actorId === partner.id);
+              const theirRelation = partner.relations.find(r => r.actorId === member.id);
               if (myRelation && theirRelation) {
                 if ((myRelation.attraction >= 64) && (theirRelation.attraction >= 64)) {
                   // Both attracted — positive kiss
@@ -384,11 +435,11 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
         // Pull in crew partner on first frame
         if (member.copulationTarget?.type === 'crew') {
           const target = member.copulationTarget;
-          const partner = crew.find(c => c.id === target.crewId);
+          const partner = crew.find(c => c.id === target.actorId);
           if (partner && partner.state !== CrewState.COPULATING) {
             partner.state = CrewState.COPULATING;
             partner.stateTimer = member.stateTimer;
-            partner.copulationTarget = { type: 'crew', crewId: member.id };
+            partner.copulationTarget = { type: 'crew', actorId: member.id };
             partner.path = [];
           }
         }
@@ -413,7 +464,7 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
           // End partner's copulation
           if (member.copulationTarget?.type === 'crew') {
             const target = member.copulationTarget;
-            const partner = crew.find(c => c.id === target.crewId);
+            const partner = crew.find(c => c.id === target.actorId);
             if (partner && partner.state === CrewState.COPULATING) {
               const partnerCopLust = partner.statuses.get('lust') as { amount: number } | undefined;
               if (partnerCopLust) partnerCopLust.amount = Math.max(0, partnerCopLust.amount - 128);
@@ -449,21 +500,45 @@ export function updateCrew(crew: CrewMember[], decks: Deck[], dt: number, barrel
       case CrewState.TALKING:
         updateTalking(member, crew, dt, brightness);
         break;
+      case CrewState.PETTING:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          // Apply friendship gains to both petter and pet
+          if (member.copulationTarget?.type === 'crew') {
+            const target = member.copulationTarget;
+            const pet = crew.find(c => c.id === target.actorId);
+            if (pet) {
+              const myRel = member.relations.find(r => r.actorId === pet.id);
+              const theirRel = pet.relations.find(r => r.actorId === member.id);
+              if (myRel) myRel.friendship = Math.min(255, myRel.friendship + PET_FRIENDSHIP_GAIN);
+              if (theirRel) theirRel.friendship = Math.min(255, theirRel.friendship + PET_FRIENDSHIP_GAIN);
+              pet.thoughtBubble = 'heart';
+              pet.thoughtBubbleTimer = 3;
+            }
+          }
+          member.thoughtBubble = 'heart';
+          member.thoughtBubbleTimer = 3;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+          member.copulationTarget = null;
+        }
+        break;
     }
   }
 }
 
-function trySeekLustPartner(member: CrewMember, crew: CrewMember[], decks: Deck[]): boolean {
+function trySeekLustPartner(member: Actor, crew: Actor[], decks: Deck[]): boolean {
   // Find best partner on same deck by highest mutual attraction score
-  let bestPartner: CrewMember | null = null;
+  let bestPartner: Actor | null = null;
   let bestScore = -1;
   for (const other of crew) {
     if (other.id === member.id) continue;
     if (other.deck !== member.deck) continue;
+    if (other.actorType !== member.actorType) continue; // same species only
     if (other.copulationTarget) continue;
     if (other.state === CrewState.COPULATING || other.state === CrewState.KISSING) continue;
-    const myRel = member.relations.find(r => r.crewId === other.id);
-    const theirRel = other.relations.find(r => r.crewId === member.id);
+    const myRel = member.relations.find(r => r.actorId === other.id);
+    const theirRel = other.relations.find(r => r.actorId === member.id);
     if (!myRel || !theirRel) continue;
     const score = myRel.attraction + theirRel.attraction;
     if (score > bestScore) {
@@ -476,8 +551,8 @@ function trySeekLustPartner(member: CrewMember, crew: CrewMember[], decks: Deck[
     return false;
   }
 
-  const myRel = member.relations.find(r => r.crewId === bestPartner!.id)!;
-  const theirRel = bestPartner.relations.find(r => r.crewId === member.id)!;
+  const myRel = member.relations.find(r => r.actorId === bestPartner!.id)!;
+  const theirRel = bestPartner.relations.find(r => r.actorId === member.id)!;
 
   // Threshold modifiers: lustful halves, drunk halves again
   const memberDrunk = member.conditions.has('drunk');
@@ -526,8 +601,8 @@ function trySeekLustPartner(member: CrewMember, crew: CrewMember[], decks: Deck[
   bestPartner.path = [];
 
   // Set copulation targets on both
-  member.copulationTarget = { type: 'crew', crewId: bestPartner.id };
-  bestPartner.copulationTarget = { type: 'crew', crewId: member.id };
+  member.copulationTarget = { type: 'crew', actorId: bestPartner.id };
+  bestPartner.copulationTarget = { type: 'crew', actorId: member.id };
   bestPartner.idleTimer = 999; // freeze target
 
   // Pathfind initiator to target
@@ -552,13 +627,21 @@ function trySeekLustPartner(member: CrewMember, crew: CrewMember[], decks: Deck[
   return true;
 }
 
-function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMember[], lanternOil: Map<string, number>, brightness: number): void {
+function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number): void {
   // Waiting for copulation partner — don't wander
   if (member.copulationTarget) return;
 
   member.idleTimer -= dt;
   if (member.idleTimer > 0) return;
 
+  if (member.actorType === 'human') {
+    updateIdleHuman(member, decks, dt, crew, lanternOil, brightness);
+  } else {
+    updateIdleAnimal(member, decks, dt, crew, brightness);
+  }
+}
+
+function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number): void {
   const from = currentTile(member);
 
   // Hungry? Go eat
@@ -603,7 +686,6 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
       const key = `${l.deck}-${l.x}-${l.y}`;
       const oil = lanternOil.get(key) ?? 0;
       if (oil > 0) return false;
-      // Deconflict: skip if another crew is already heading there
       return !crew.some(c => c.id !== member.id && c.targetState === CrewState.LIGHTING_LANTERN && c.state === CrewState.WALKING && c.path.length > 0 && c.path[c.path.length - 1].x === l.x && c.path[c.path.length - 1].y === l.y && c.path[c.path.length - 1].deck === l.deck);
     });
     const target = pickRandom(unlit);
@@ -643,13 +725,116 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   if (tryStartConversation(member, crew, brightness)) return;
 
   // Otherwise wander
+  wanderRandomly(member, decks);
+}
+
+function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: Actor[], brightness: number): void {
+  const from = currentTile(member);
+
+  // Hungry? Go eat at stove
+  if (member.conditions.has('hungry') || member.conditions.has('starving')) {
+    const stoves = findTilesOfType(decks, TileType.STOVE);
+    const target = pickRandom(stoves);
+    if (target) {
+      const path = findPath(decks, from, target);
+      if (path) {
+        member.path = path;
+        member.state = CrewState.WALKING;
+        member.targetState = CrewState.EATING;
+        return;
+      }
+    }
+  }
+
+  // Lustful? Seek same-species partner (dogs and monkeys only)
+  if (LUST_ACTOR_TYPES.has(member.actorType) && member.conditions.has('lustful') && member.lustSeekCooldown <= 0) {
+    if (trySeekLustPartner(member, allActors, decks)) return;
+  }
+
+  // Tired? Try nearby bed, otherwise sleep in place
+  if ((member.conditions.has('tired') || member.conditions.has('exhausted')) && (brightness < 0.7 || member.conditions.has('exhausted'))) {
+    const beds = findTilesOfType(decks, TileType.BED);
+    // Try beds on same deck first, pick closest
+    const sameDeckBeds = beds.filter(b => b.deck === member.deck);
+    let foundBed = false;
+    if (sameDeckBeds.length > 0) {
+      const target = pickRandom(sameDeckBeds);
+      if (target) {
+        const path = findPath(decks, from, target);
+        if (path && path.length <= 8) { // only use bed if nearby
+          member.path = path;
+          member.state = CrewState.WALKING;
+          member.targetState = CrewState.SLEEPING;
+          foundBed = true;
+        }
+      }
+    }
+    if (!foundBed) {
+      // Sleep in place
+      member.state = CrewState.SLEEPING;
+      return;
+    }
+    return;
+  }
+
+  // Dog: follow liked entity
+  if (member.actorType === 'dog') {
+    if (tryFollowLikedEntity(member, allActors, decks)) return;
+  }
+
+  // Rare conversations (1/20th of human chance)
+  if (Math.random() < 0.05) { // 5% chance to even attempt (vs always for humans)
+    if (tryStartConversation(member, allActors, brightness)) return;
+  }
+
+  // Otherwise wander
+  wanderRandomly(member, decks);
+}
+
+/** Can this actor access the given deck? Crow's nest (deck 0) requires climber status. */
+function canAccessDeck(member: Actor, deckIndex: number): boolean {
+  if (deckIndex === 0 && !member.statuses.has('climber')) return false;
+  return true;
+}
+
+/** Dog behavior: follow the entity it likes most, across decks if needed. */
+function tryFollowLikedEntity(member: Actor, allActors: Actor[], decks: Deck[]): boolean {
+  let bestFriend: Actor | null = null;
+  let bestFriendship = 0;
+  for (const rel of member.relations) {
+    if (rel.friendship > bestFriendship) {
+      const other = allActors.find(a => a.id === rel.actorId);
+      if (other && other.state !== CrewState.SLEEPING && canAccessDeck(member, other.deck)) {
+        bestFriendship = rel.friendship;
+        bestFriend = other;
+      }
+    }
+  }
+  if (!bestFriend || bestFriendship < 100) return false;
+
+  // On same deck: only follow if far enough away
+  if (bestFriend.deck === member.deck) {
+    const dx = bestFriend.pixelX - member.pixelX;
+    const dy = bestFriend.pixelY - member.pixelY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < TILE_SIZE * 2.5) return false;
+  }
+
+  const friendTile = { x: Math.floor(bestFriend.pixelX / TILE_SIZE), y: Math.floor(bestFriend.pixelY / TILE_SIZE), deck: bestFriend.deck };
+  return orderCrewBesideTile(member, friendTile, decks, CrewState.IDLE);
+}
+
+function wanderRandomly(member: Actor, decks: Deck[]): void {
+  const from = currentTile(member);
   const allWalkable: DeckPoint[] = [];
   for (let d = 0; d < decks.length; d++) {
+    if (!canAccessDeck(member, d)) continue;
     allWalkable.push(...getWalkableTiles(decks[d], d));
   }
   const target = pickRandom(allWalkable);
   if (target) {
-    const path = findPath(decks, from, target);
+    const pathFn = member.actorType === 'parrot' ? findPathFlying : findPath;
+    const path = pathFn(decks, from, target);
     if (path && path.length > 0) {
       member.path = path;
       member.state = CrewState.WALKING;
@@ -660,7 +845,7 @@ function updateIdle(member: CrewMember, decks: Deck[], dt: number, crew: CrewMem
   }
 }
 
-function performTakeItem(member: CrewMember, barrelInventory: Map<string, Item[]>): void {
+function performTakeItem(member: Actor, barrelInventory: Map<string, Item[]>): void {
   const target = member.takeTarget;
   if (!target) return;
   member.takeTarget = null;
@@ -695,7 +880,7 @@ function performTakeItem(member: CrewMember, barrelInventory: Map<string, Item[]
   }
 }
 
-function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brightness: number, barrelInventory?: Map<string, Item[]>, decks?: Deck[]): void {
+function updateWalking(member: Actor, dt: number, crew: Actor[], brightness: number, barrelInventory?: Map<string, Item[]>, decks?: Deck[]): void {
   if (member.path.length === 0) {
     member.state = member.targetState;
     if (member.state === CrewState.EATING) {
@@ -721,7 +906,7 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brigh
     } else if (member.state === CrewState.TALKING) {
       // Player-ordered conversation: initiator arrived at target
       const target = member.copulationTarget;
-      const partner = target?.type === 'crew' ? crew.find(c => c.id === target.crewId) : undefined;
+      const partner = target?.type === 'crew' ? crew.find(c => c.id === target.actorId) : undefined;
       member.copulationTarget = null;
       if (partner) {
         partner.copulationTarget = null;
@@ -734,6 +919,8 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brigh
       if (barrelInventory) performTakeItem(member, barrelInventory);
       member.state = CrewState.IDLE;
       member.idleTimer = 1 + Math.random() * 2;
+    } else if (member.state === CrewState.PETTING) {
+      member.stateTimer = PET_DURATION;
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }
@@ -787,7 +974,7 @@ function updateWalking(member: CrewMember, dt: number, crew: CrewMember[], brigh
   }
 }
 
-export function orderCrewTo(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE): boolean {
+export function orderCrewTo(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE): boolean {
   const from = currentTile(member);
   const path = findPath(decks, from, target);
   if (path && path.length > 0) {
@@ -799,7 +986,7 @@ export function orderCrewTo(member: CrewMember, target: DeckPoint, decks: Deck[]
   return false;
 }
 
-export function orderCrewToAdjacentTile(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+export function orderCrewToAdjacentTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
   // Try direct path first (works for walkable tiles like BED, STOVE, HELM)
   if (orderCrewTo(member, target, decks, targetState)) return true;
 
@@ -813,7 +1000,7 @@ export function orderCrewToAdjacentTile(member: CrewMember, target: DeckPoint, d
 }
 
 /** Walk to a tile beside the target, preferring the side closest to the member's current position. */
-export function orderCrewBesideTile(member: CrewMember, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+export function orderCrewBesideTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
   const from = currentTile(member);
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   const candidates = DIRS.map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy, deck: target.deck }));
