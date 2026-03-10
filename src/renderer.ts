@@ -540,16 +540,18 @@ export class Renderer {
       }
     }
 
-    // Name label
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2.5;
-    ctx.strokeText(member.profile.name, sx, sy - 22);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(member.profile.name, sx, sy - 22);
-    ctx.textBaseline = 'alphabetic';
+    // Name label (always show for humans, only when selected for animals)
+    if (member.actorType === 'human' || selected) {
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2.5;
+      ctx.strokeText(member.profile.name, sx, sy - 22);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(member.profile.name, sx, sy - 22);
+      ctx.textBaseline = 'alphabetic';
+    }
   }
 
   private drawSpeechBubble(text: string, sx: number, sy: number): void {
