@@ -1,13 +1,12 @@
 import { Deck, Actor, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, ActivityLogEntry } from './types';
 import { createSemen, createGrogRation } from './items';
 import { createShip } from './ship';
-import { createActors, updateActors, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile, DRINK_DURATION } from './crew';
+import { createActors, updateActors, issueCommand } from './crew';
 import { Renderer } from './renderer';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { loadSprites } from './sprites';
 import { AudioManager } from './audio';
 import { createWorldMap, updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing, SHIP_SPEED } from './worldmap';
-import { stopConversation } from './conversation';
 
 export class Game {
   private decks: Deck[];
@@ -264,24 +263,7 @@ export class Game {
     if (this.input.mouseClick && this.contextMenu) {
       const menuItem = this.handleMenuClick(this.input.mouseClick);
       if (menuItem) {
-        // "Take item" from barrel — walk to barrel, then take
-        if (menuItem.action === 'take_item' && menuItem.itemData) {
-          const member = this.actors.find(c => c.id === this.selectedActorId);
-          if (member) {
-            member.takeTarget = menuItem.itemData;
-            orderCrewToAdjacentTile(
-              member,
-              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
-              this.decks,
-              CrewState.TAKING_ITEM,
-            );
-          }
-          this.audio.play('click', this.activeDeck);
-          this.contextMenu = null;
-          this.input.mouseClick = null;
-          return;
-        }
-        // "Open Map" action — open overlay, not a crew order
+        // "Open Map" action — UI-only, not a crew command
         if (menuItem.label === 'Open Map') {
           this.mapOverlayOpen = true;
           this.audio.play('click', this.activeDeck);
@@ -289,118 +271,19 @@ export class Game {
           this.input.mouseClick = null;
           return;
         }
-        if (menuItem.targetActorId !== undefined) {
-          // Crew-crew interaction (kiss or copulate)
-          const member = this.actors.find(c => c.id === this.selectedActorId);
-          const target = this.actors.find(c => c.id === menuItem.targetActorId);
-          if (member && target) {
-            member.copulationTarget = { type: 'crew', actorId: target.id };
-            // Stop target and make them wait
-            target.copulationTarget = { type: 'crew', actorId: member.id };
-            target.state = CrewState.IDLE;
-            target.path = [];
-            target.idleTimer = 999;
-            const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
-            if (menuItem.targetState === CrewState.TALKING || menuItem.targetState === CrewState.KISSING || menuItem.targetState === CrewState.PETTING) {
-              orderCrewBesideTile(member, targetTile, this.decks, menuItem.targetState);
-            } else {
-              orderCrewToAdjacentTile(member, targetTile, this.decks, menuItem.targetState);
-            }
-          }
-        } else if (this.contextMenu.actorId !== undefined && menuItem.deckTarget !== undefined) {
-          // "Go to deck" action
-          const member = this.actors.find(c => c.id === this.contextMenu!.actorId);
+
+        // All other menu items dispatch as commands
+        const command = this.menuItemToCommand(menuItem);
+        if (command) {
+          const actorId = menuItem.targetActorId !== undefined
+            ? this.selectedActorId
+            : (this.contextMenu.actorId ?? this.selectedActorId);
+          const member = actorId !== null ? this.actors.find(c => c.id === actorId) : null;
           if (member) {
-            const targetDeck = this.decks[menuItem.deckTarget];
-            // Find a walkable tile on the target deck
-            for (let y = 0; y < targetDeck.height; y++) {
-              for (let x = 0; x < targetDeck.width; x++) {
-                if (WALKABLE.has(targetDeck.tiles[y][x])) {
-                  if (orderCrewTo(member, { x, y, deck: menuItem.deckTarget }, this.decks)) {
-                    break;
-                  }
-                }
-              }
-              if (member.state === CrewState.WALKING) break;
-            }
-          }
-        } else if (this.contextMenu.actorId !== undefined) {
-          const member = this.actors.find(c => c.id === this.contextMenu!.actorId);
-          if (member) {
-            if (menuItem.targetState === CrewState.DRINKING) {
-              // Drink item — consume from inventory immediately
-              const drinkName = menuItem.itemData?.itemName ?? 'Grog ration';
-              const grogIdx = member.profile.inventory.findIndex(i => i.name === drinkName);
-              if (grogIdx !== -1) {
-                const item = member.profile.inventory.splice(grogIdx, 1)[0];
-                member.state = CrewState.DRINKING;
-                member.stateTimer = DRINK_DURATION;
-                member.consumingItem = item;
-                member.path = [];
-                this.audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', member.deck);
-              }
-            } else {
-              // "Stop" action
-              // If talking, free the conversation partner
-              if (member.state === CrewState.TALKING) {
-                stopConversation(member, this.actors);
-              }
-              // If has copulation partner (walking toward or actively copulating), free them
-              if (member.copulationTarget?.type === 'crew') {
-                const partnerTarget = member.copulationTarget;
-                const partner = this.actors.find(c => c.id === partnerTarget.actorId);
-                if (partner) {
-                  partner.state = CrewState.IDLE;
-                  partner.idleTimer = 1 + Math.random() * 2;
-                  partner.copulationTarget = null;
-                }
-              }
-              member.copulationTarget = null;
-              member.state = menuItem.targetState;
-              member.path = [];
-              member.idleTimer = 1 + Math.random() * 2;
-            }
-          }
-        } else {
-          // Tile-targeted menu (e.g. "sleep in this bed")
-          const member = this.actors.find(c => c.id === this.selectedActorId);
-          if (member) {
-            let targetDeck = this.contextMenu.deck;
-            // Mast actions: send crew to the connected deck
-            const clickedTile = this.decks[this.contextMenu.deck].tiles[this.contextMenu.tileY]?.[this.contextMenu.tileX];
-            if (clickedTile === TileType.MAST || clickedTile === TileType.STAIRS) {
-              for (let d = 0; d < this.decks.length; d++) {
-                if (d === this.contextMenu.deck) continue;
-                const other = this.decks[d];
-                if (this.contextMenu.tileY < other.height && this.contextMenu.tileX < other.width &&
-                    (clickedTile === TileType.STAIRS
-                      ? WALKABLE.has(other.tiles[this.contextMenu.tileY][this.contextMenu.tileX])
-                      : other.tiles[this.contextMenu.tileY][this.contextMenu.tileX] === TileType.MAST)) {
-                  targetDeck = d;
-                  break;
-                }
-              }
-            }
-            if (menuItem.targetState === CrewState.LOOKOUT) {
-              // Go to a tile next to the mast, not onto it
-              const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-              for (const [dx, dy] of DIRS) {
-                if (orderCrewTo(member, { x: this.contextMenu.tileX + dx, y: this.contextMenu.tileY + dy, deck: targetDeck }, this.decks, menuItem.targetState)) break;
-              }
-            } else {
-              orderCrewToAdjacentTile(
-                member,
-                { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: targetDeck },
-                this.decks,
-                menuItem.targetState,
-              );
-            }
-            // Set copulation target for barrel
-            if (menuItem.targetState === CrewState.COPULATING) {
-              member.copulationTarget = { type: 'barrel', x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck };
-            }
+            issueCommand(member, command, this.actors);
           }
         }
+
         this.audio.play('click', this.activeDeck);
         this.contextMenu = null;
         this.input.mouseClick = null;
@@ -417,17 +300,12 @@ export class Game {
     if (this.input.rightClick && this.contextMenu?.barrelItems) {
       const menuItem = this.handleMenuClick(this.input.rightClick);
       if (menuItem) {
-        // "Take" clicked via right-click flyout — same dispatch as left-click
-        if (menuItem.action === 'take_item' && menuItem.itemData) {
+        // "Take" clicked via right-click flyout — dispatch as command
+        const command = this.menuItemToCommand(menuItem);
+        if (command) {
           const member = this.actors.find(c => c.id === this.selectedActorId);
           if (member) {
-            member.takeTarget = menuItem.itemData;
-            orderCrewToAdjacentTile(
-              member,
-              { x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck },
-              this.decks,
-              CrewState.TAKING_ITEM,
-            );
+            issueCommand(member, command, this.actors);
           }
           this.audio.play('click', this.activeDeck);
           this.contextMenu = null;
@@ -738,6 +616,9 @@ export class Game {
       if (prevStates[i] !== CrewState.KISSING && this.actors[i].state === CrewState.KISSING) {
         this.audio.play('kiss', deck);
       }
+      if (prevStates[i] !== CrewState.DRINKING && this.actors[i].state === CrewState.DRINKING) {
+        this.audio.play(this.actors[i].profile.sex === 'F' ? 'glug_female' : 'glug_male', deck);
+      }
       // Refresh context menu items if the associated crew member's state changed (stale busy labels)
       if (this.contextMenu?.actorId === this.actors[i].id && prevStates[i] !== this.actors[i].state) {
         const member = this.actors[i];
@@ -785,6 +666,84 @@ export class Game {
     } catch {
       // Server not available or no orders — silent
     }
+  }
+
+  // Convert a menu item + context menu state into a Command
+  private menuItemToCommand(menuItem: ContextMenuItem): Command | null {
+    if (!this.contextMenu) return null;
+
+    // Take item from barrel
+    if (menuItem.action === 'take_item' && menuItem.itemData) {
+      return { name: 'TakeItem', barrelKey: menuItem.itemData.barrelKey, itemName: menuItem.itemData.itemName };
+    }
+
+    // Crew-crew interactions (Kiss, Copulate, Converse, Pet)
+    if (menuItem.targetActorId !== undefined) {
+      const cmdName: Record<string, string> = {
+        [CrewState.KISSING]: 'Kiss',
+        [CrewState.COPULATING]: 'Copulate',
+        [CrewState.TALKING]: 'Converse',
+        [CrewState.PETTING]: 'Pet',
+      };
+      return { name: cmdName[menuItem.targetState] ?? menuItem.targetState, actorId: menuItem.targetActorId };
+    }
+
+    // Actor self-actions (Stop, Drink, GoToDeck)
+    if (this.contextMenu.actorId !== undefined) {
+      if (menuItem.deckTarget !== undefined) {
+        return { name: 'GoToDeck', deck: menuItem.deckTarget };
+      }
+      if (menuItem.targetState === CrewState.DRINKING) {
+        return { name: 'Drink', itemName: menuItem.itemData?.itemName ?? 'Grog ration' };
+      }
+      // Stop action
+      return { name: 'Stop' };
+    }
+
+    // Tile-targeted actions
+    let targetDeck = this.contextMenu.deck;
+    const clickedTile = this.decks[this.contextMenu.deck].tiles[this.contextMenu.tileY]?.[this.contextMenu.tileX];
+    // Mast/stairs: resolve connected deck
+    if (clickedTile === TileType.MAST || clickedTile === TileType.STAIRS) {
+      for (let d = 0; d < this.decks.length; d++) {
+        if (d === this.contextMenu.deck) continue;
+        const other = this.decks[d];
+        if (this.contextMenu.tileY < other.height && this.contextMenu.tileX < other.width &&
+            (clickedTile === TileType.STAIRS
+              ? WALKABLE.has(other.tiles[this.contextMenu.tileY][this.contextMenu.tileX])
+              : other.tiles[this.contextMenu.tileY][this.contextMenu.tileX] === TileType.MAST)) {
+          targetDeck = d;
+          break;
+        }
+      }
+    }
+
+    const tileCmd: Record<string, string> = {
+      [CrewState.SLEEPING]: 'Sleep',
+      [CrewState.EATING]: 'Eat',
+      [CrewState.STEERING]: 'Steer',
+      [CrewState.MANNING_CANNON]: 'ManCannon',
+      [CrewState.NAVIGATING]: 'Navigate',
+      [CrewState.LOOKOUT]: 'Lookout',
+      [CrewState.LIGHTING_LANTERN]: 'LightLantern',
+      [CrewState.EXTINGUISHING_LANTERN]: 'ExtinguishLantern',
+    };
+
+    if (menuItem.targetState === CrewState.COPULATING) {
+      return { name: 'CopulateBarrel', x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck };
+    }
+
+    const cmdName = tileCmd[menuItem.targetState];
+    if (cmdName) {
+      return { name: cmdName, x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: targetDeck };
+    }
+
+    // Stairs/mast "go to" — GoTo on the connected deck
+    if (menuItem.targetState === CrewState.IDLE && (clickedTile === TileType.STAIRS || clickedTile === TileType.MAST)) {
+      return { name: 'GoTo', x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: targetDeck };
+    }
+
+    return null;
   }
 
   // Returns the clicked menu item, or undefined to mean "click was on menu, don't close"

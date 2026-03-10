@@ -132,6 +132,8 @@ Right-click opens a context menu with actions. Two targets:
 Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
 Escape or clicking outside closes the menu.
 
+**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `Game.menuItemToCommand()` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/COMMAND_SYSTEM.md` for the full command reference.
+
 ## Adding new tile types
 
 1. Add to `TileType` enum in `types.ts`

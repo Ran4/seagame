@@ -294,9 +294,11 @@ export interface Command {
   actorId?: number;        // target actor (for Kiss, Tell, Order, etc.)
   text?: string;           // for Tell
   order?: Command;         // for Order (recursive)
-  x?: number;              // for GoTo
+  deck?: number;           // for GoTo, or specific tile (Sleep at this bed, etc.)
+  x?: number;
   y?: number;
-  deck?: number;
+  barrelKey?: string;      // for TakeItem
+  itemName?: string;       // for TakeItem, Drink
 }
 
 export interface ActivityLogEntry {
