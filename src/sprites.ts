@@ -80,32 +80,32 @@ export async function loadSprites(): Promise<SpriteSheet> {
 
   // Tile sprites (individually fault-tolerant so missing ones don't break everything)
   const tileLoads = await Promise.all(
-    tileNames.map(([, name]) => loadImage(`/sprites/${name}.png`).catch(() => null)),
+    tileNames.map(([, name]) => loadImage(`/sprites/tiles/tiles__${name}.png`).catch(() => null)),
   );
 
   // Water frame 2
-  const water2Load = loadImage('/sprites/water2.png');
+  const water2Load = loadImage('/sprites/tiles/tiles__water2.png');
 
   // Crew sprites (directional)
   const crewNames = ['crew_red', 'crew_blue', 'crew_green', 'crew_yellow'];
   const crewLoads = Promise.all(
-    crewNames.map(name => loadDirectionalSprite(`/sprites/${name}`)),
+    crewNames.map(name => loadDirectionalSprite(`/sprites/actors/actor__${name}`)),
   );
 
   // Animal sprites (directional)
   const animalTypes = ['dog', 'parrot', 'monkey'];
   const animalLoads = Promise.all(
-    animalTypes.map(name => loadDirectionalSprite(`/sprites/animal_${name}`)),
+    animalTypes.map(name => loadDirectionalSprite(`/sprites/actors/actor__animal_${name}`)),
   );
 
   // Item sprites loaded separately (optional, may not exist)
   const itemLoads = Promise.all(
-    itemNames.map(name => loadImage(`/sprites/item_${name}.png`).catch(() => null)),
+    itemNames.map(name => loadImage(`/sprites/items/item__${name}.png`).catch(() => null)),
   );
 
   // Bubble sprites (optional)
   const bubbleLoads = Promise.all(
-    bubbleNames.map(name => loadImage(`/sprites/bubble_${name}.png`).catch(() => null)),
+    bubbleNames.map(name => loadImage(`/sprites/bubbles/bubble__${name}.png`).catch(() => null)),
   );
 
   const [water2, crewResults, animalResults, itemResults, bubbleResults] = await Promise.all([
