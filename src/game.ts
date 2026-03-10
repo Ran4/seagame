@@ -582,7 +582,10 @@ export class Game {
 
               // Pet — human petting an animal
               if (selectedIsHuman && clickedIsAnimal) {
-                submenu.push({ label: 'Pet', targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
+                const alreadyPetting = selected.state === CrewState.PETTING && selected.copulationTarget?.actorId === clickedCrew.id;
+                submenu.push(alreadyPetting
+                  ? { label: 'Pet (already petting)', targetState: CrewState.PETTING, targetActorId: clickedCrew.id, disabled: true }
+                  : { label: 'Pet', targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
               }
 
               // Human-human (or same-species) interactions
@@ -603,15 +606,24 @@ export class Game {
                 }
                 const canKiss = selFriendship >= kissThreshold || selAttraction >= kissThreshold;
                 const mutualAttraction = selAttraction >= copThreshold && targetAttraction >= copThreshold;
+                const alreadyTalking = selected.state === CrewState.TALKING && selected.conversationPartnerId === clickedCrew.id;
+                const alreadyKissing = selected.state === CrewState.KISSING && selected.copulationTarget?.actorId === clickedCrew.id;
+                const alreadyCopulating = selected.state === CrewState.COPULATING && selected.copulationTarget?.actorId === clickedCrew.id;
 
                 submenu.push(
-                  { label: 'Converse', targetState: CrewState.TALKING, targetActorId: clickedCrew.id },
-                  canKiss
-                    ? { label: 'Kiss', targetState: CrewState.KISSING, targetActorId: clickedCrew.id }
-                    : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetActorId: clickedCrew.id, disabled: true },
-                  mutualAttraction
-                    ? { label: 'Copulate', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id }
-                    : { label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id, disabled: true },
+                  alreadyTalking
+                    ? { label: 'Converse (already talking)', targetState: CrewState.TALKING, targetActorId: clickedCrew.id, disabled: true }
+                    : { label: 'Converse', targetState: CrewState.TALKING, targetActorId: clickedCrew.id },
+                  alreadyKissing
+                    ? { label: 'Kiss (already kissing)', targetState: CrewState.KISSING, targetActorId: clickedCrew.id, disabled: true }
+                    : canKiss
+                      ? { label: 'Kiss', targetState: CrewState.KISSING, targetActorId: clickedCrew.id }
+                      : { label: 'Kiss (not friendly)', targetState: CrewState.KISSING, targetActorId: clickedCrew.id, disabled: true },
+                  alreadyCopulating
+                    ? { label: 'Copulate (already copulating)', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id, disabled: true }
+                    : mutualAttraction
+                      ? { label: 'Copulate', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id }
+                      : { label: 'Copulate (low attraction)', targetState: CrewState.COPULATING, targetActorId: clickedCrew.id, disabled: true },
                 );
               }
 
