@@ -234,6 +234,7 @@ export interface Actor {
   takeTarget: { barrelKey: string; itemName: string } | null;
   consumingItem: Item | null;
   lustSeekCooldown: number;
+  commandQueue: Command[];
 }
 
 export interface Deck {
@@ -286,3 +287,19 @@ export type ThoughtBubble = 'heart' | 'broken_heart';
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
   | { type: 'crew'; actorId: number };
+
+// Command system — serializable actions for actors
+export interface Command {
+  name: string;
+  actorId?: number;        // target actor (for Kiss, Tell, Order, etc.)
+  text?: string;           // for Tell
+  order?: Command;         // for Order (recursive)
+  x?: number;              // for GoTo
+  y?: number;
+  deck?: number;
+}
+
+export interface ActivityLogEntry {
+  text: string;
+  time: number;  // game time when logged
+}

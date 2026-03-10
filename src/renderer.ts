@@ -2,6 +2,7 @@ import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, Actor, Camera, CrewState,
   ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
+  ActivityLogEntry,
 } from './types';
 import { SpriteSheet, DirectionalSprite } from './sprites';
 import { SHIP_SPEED } from './worldmap';
@@ -75,6 +76,7 @@ export class Renderer {
     brightness: number = 1.0,
     lanternOil: Map<string, number> = new Map(),
     timeOfDay: number = 0,
+    activityLog: ActivityLogEntry[] = [],
   ): void {
     const ctx = this.ctx;
     this.hoveredItem = null as typeof this.hoveredItem;
@@ -167,6 +169,9 @@ export class Renderer {
       this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }
     this.drawSoundButton(soundMuted, sfxMuted);
+    if (activityLog.length > 0) {
+      this.drawActivityLog(activityLog, time);
+    }
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
       this.drawContextMenu(contextMenu, mousePos);
@@ -737,6 +742,30 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(scx + 3, scy, 7, -Math.PI / 4, Math.PI / 4);
       ctx.stroke();
+    }
+  }
+
+  private drawActivityLog(log: ActivityLogEntry[], currentTime: number): void {
+    const ctx = this.ctx;
+    const lineH = 13;
+    const maxLines = 8;
+    const entries = log.slice(-maxLines);
+    const pad = 6;
+    const logW = 320;
+    const logH = entries.length * lineH + pad * 2;
+    const lx = CANVAS_WIDTH - logW - 8;
+    const ly = CANVAS_HEIGHT - logH - 8;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(lx, ly, logW, logH);
+
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    for (let i = 0; i < entries.length; i++) {
+      const age = currentTime - entries[i].time;
+      const alpha = age < 10 ? 1.0 : Math.max(0.3, 1.0 - (age - 10) / 20);
+      ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
+      ctx.fillText(entries[i].text, lx + pad, ly + pad + (i + 1) * lineH - 2, logW - pad * 2);
     }
   }
 

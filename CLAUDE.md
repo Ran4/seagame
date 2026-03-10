@@ -44,6 +44,12 @@ public/
 
 architecture/
   GDD.md                 Game Design Document — full vision including future features
+
+features/
+  COMMAND_SYSTEM.md      Command system — serializable action queues, external order files
+
+orders/
+  orders_for_*.jsonl     External order files (one per actor, polled once/sec by Vite plugin)
 ```
 
 ## Key concepts
@@ -61,7 +67,7 @@ Each actor has hunger/energy (0-255, high = satisfied). Needs tick down over tim
 States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING.
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.
-Player gives orders to humans via right-click context menus (see below). Animals cannot be commanded.
+Player gives orders to humans via right-click context menus (see below) or the command system (see `features/COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
 Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a fixed timer (8s).
 
 **Statuses & Conditions** (`refreshConditions()` in `crew.ts`):

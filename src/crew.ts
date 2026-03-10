@@ -1,4 +1,4 @@
-import { Actor, ActorType, ActorRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from './types';
+import { Actor, ActorType, ActorRelation, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Sex, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION, Command, ActivityLogEntry } from './types';
 import { findPath, findPathFlying } from './pathfinding';
 import { createCutlass, createGrogRation, createSemen } from './items';
 import { tryStartConversation, tryStartConversationWhileWalking, updateTalking, tickConversationCooldown, beginConversation } from './conversation';
@@ -182,6 +182,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
     takeTarget: null,
     consumingItem: null,
     lustSeekCooldown: 0,
+    commandQueue: [],
   };
 }
 
@@ -257,7 +258,7 @@ export function createActors(humanCount: number, decks: Deck[]): Actor[] {
   return actors;
 }
 
-export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0): void {
+export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = []): void {
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
@@ -305,7 +306,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 
     switch (member.state) {
       case CrewState.IDLE:
-        updateIdle(member, decks, dt, crew, lanternOil, brightness);
+        updateIdle(member, decks, dt, crew, lanternOil, brightness, activityLog, gameTime);
         break;
       case CrewState.WALKING:
         updateWalking(member, dt, crew, brightness, barrelInventory, decks);
@@ -314,6 +315,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           member.profile.hunger = Math.min(255, member.profile.hunger + 180);
+          activityLog.push({ text: `${member.profile.name} finished eating`, time: gameTime });
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
@@ -321,6 +323,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       case CrewState.SLEEPING:
         member.profile.energy = Math.min(255, member.profile.energy + ENERGY_RESTORE_RATE * dt);
         if (member.profile.energy >= 255) {
+          activityLog.push({ text: `${member.profile.name} woke up`, time: gameTime });
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
         }
@@ -403,6 +406,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
                   theirRelation.attraction = Math.min(255, theirRelation.attraction + 32);
                   member.thoughtBubble = 'heart';
                   member.thoughtBubbleTimer = 3;
+                  activityLog.push({ text: `${member.profile.name} kissed ${partner.profile.name}`, time: gameTime });
                 } else {
                   // Unwelcome kiss — negative outcome
                   myRelation.attraction = Math.max(0, myRelation.attraction - 32);
@@ -411,6 +415,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
                   theirRelation.friendship = Math.max(0, theirRelation.friendship - 32);
                   member.thoughtBubble = 'broken_heart';
                   member.thoughtBubbleTimer = 3;
+                  activityLog.push({ text: `${member.profile.name} kissed ${partner.profile.name} (unwelcome)`, time: gameTime });
                 }
                 // Kiss boosts lust for both
                 const myLust = member.statuses.get('lust') as { amount: number } | undefined;
@@ -473,6 +478,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
               partner.idleTimer = 1 + Math.random() * 2;
               partner.copulationTarget = null;
             }
+            activityLog.push({ text: `${member.profile.name} copulated with ${partner?.profile.name ?? 'someone'}`, time: gameTime });
+          } else if (member.copulationTarget?.type === 'barrel') {
+            activityLog.push({ text: `${member.profile.name} copulated with a barrel`, time: gameTime });
           }
           member.thoughtBubble = 'heart';
           member.thoughtBubbleTimer = 3;
@@ -485,6 +493,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           if (member.consumingItem) {
+            activityLog.push({ text: `${member.profile.name} drank ${member.consumingItem.name.toLowerCase()}`, time: gameTime });
             if (member.consumingItem.name === 'Grog ration') {
               const cur = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
               member.statuses.set('drunkedness', { amount: Math.min(255, cur + 140) });
@@ -517,6 +526,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
               pet.thoughtBubbleTimer = 3;
               pet.copulationTarget = null;
               pet.idleTimer = 1 + Math.random() * 2;
+              activityLog.push({ text: `${member.profile.name} petted ${pet.profile.name}`, time: gameTime });
             }
           }
           member.thoughtBubble = 'heart';
@@ -630,12 +640,195 @@ function trySeekLustPartner(member: Actor, crew: Actor[], decks: Deck[]): boolea
   return true;
 }
 
-function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number): void {
+/** Try to execute the next command in the actor's queue. Returns true if a command was executed. */
+function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activityLog: ActivityLogEntry[], gameTime: number): boolean {
+  if (member.commandQueue.length === 0) return false;
+
+  const cmd = member.commandQueue[0];
+  const name = member.profile.name;
+
+  const fail = (reason: string) => {
+    activityLog.push({ text: `${name}: ${cmd.name} failed — ${reason}`, time: gameTime });
+    member.commandQueue.length = 0; // drop entire chain
+  };
+
+  const log = (text: string) => {
+    activityLog.push({ text: `${name}: ${text}`, time: gameTime });
+  };
+
+  // Remove the command we're about to execute
+  member.commandQueue.shift();
+
+  switch (cmd.name) {
+    case 'Sleep': {
+      const beds = findTilesOfType(decks, TileType.BED);
+      const target = pickRandom(beds);
+      if (!target) { fail('no bed found'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.SLEEPING)) { fail('can\'t reach bed'); return true; }
+      log('going to sleep');
+      return true;
+    }
+    case 'Eat': {
+      const stoves = findTilesOfType(decks, TileType.STOVE);
+      const target = pickRandom(stoves);
+      if (!target) { fail('no stove found'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.EATING)) { fail('can\'t reach stove'); return true; }
+      log('going to eat');
+      return true;
+    }
+    case 'Steer': {
+      const helms = findTilesOfType(decks, TileType.HELM);
+      const target = pickRandom(helms);
+      if (!target) { fail('no helm found'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.STEERING)) { fail('can\'t reach helm'); return true; }
+      log('going to steer');
+      return true;
+    }
+    case 'Navigate': {
+      const tables = findTilesOfType(decks, TileType.MAP_TABLE);
+      const target = pickRandom(tables);
+      if (!target) { fail('no map table found'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.NAVIGATING)) { fail('can\'t reach map table'); return true; }
+      log('going to navigate');
+      return true;
+    }
+    case 'Kiss': {
+      if (cmd.actorId === undefined) { fail('no target actorId'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      member.copulationTarget = { type: 'crew', actorId: target.id };
+      target.copulationTarget = { type: 'crew', actorId: member.id };
+      target.state = CrewState.IDLE;
+      target.path = [];
+      target.idleTimer = 999;
+      const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
+      if (!orderCrewBesideTile(member, targetTile, decks, CrewState.KISSING)) {
+        member.copulationTarget = null;
+        target.copulationTarget = null;
+        target.idleTimer = 1 + Math.random() * 2;
+        fail(`can't reach ${target.profile.name}`);
+        return true;
+      }
+      log(`going to kiss ${target.profile.name}`);
+      return true;
+    }
+    case 'Copulate': {
+      if (cmd.actorId === undefined) { fail('no target actorId'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      member.copulationTarget = { type: 'crew', actorId: target.id };
+      target.copulationTarget = { type: 'crew', actorId: member.id };
+      target.state = CrewState.IDLE;
+      target.path = [];
+      target.idleTimer = 999;
+      const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
+      if (!orderCrewToAdjacentTile(member, targetTile, decks, CrewState.COPULATING)) {
+        member.copulationTarget = null;
+        target.copulationTarget = null;
+        target.idleTimer = 1 + Math.random() * 2;
+        fail(`can't reach ${target.profile.name}`);
+        return true;
+      }
+      log(`going to copulate with ${target.profile.name}`);
+      return true;
+    }
+    case 'Pet': {
+      if (cmd.actorId === undefined) { fail('no target actorId'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      member.copulationTarget = { type: 'crew', actorId: target.id };
+      target.copulationTarget = { type: 'crew', actorId: member.id };
+      target.state = CrewState.IDLE;
+      target.path = [];
+      target.idleTimer = 999;
+      const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
+      if (!orderCrewBesideTile(member, targetTile, decks, CrewState.PETTING)) {
+        member.copulationTarget = null;
+        target.copulationTarget = null;
+        target.idleTimer = 1 + Math.random() * 2;
+        fail(`can't reach ${target.profile.name}`);
+        return true;
+      }
+      log(`going to pet ${target.profile.name}`);
+      return true;
+    }
+    case 'GoTo': {
+      const x = cmd.x ?? 0;
+      const y = cmd.y ?? 0;
+      const deck = cmd.deck ?? member.deck;
+      if (!orderCrewTo(member, { x, y, deck }, decks)) { fail(`can't reach (${x},${y},${deck})`); return true; }
+      log(`going to (${x},${y},${deck})`);
+      return true;
+    }
+    case 'Converse': {
+      if (cmd.actorId === undefined) { fail('no target actorId'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      member.copulationTarget = { type: 'crew', actorId: target.id };
+      target.copulationTarget = { type: 'crew', actorId: member.id };
+      target.state = CrewState.IDLE;
+      target.path = [];
+      target.idleTimer = 999;
+      const targetTile = { x: Math.floor(target.pixelX / TILE_SIZE), y: Math.floor(target.pixelY / TILE_SIZE), deck: target.deck };
+      if (!orderCrewBesideTile(member, targetTile, decks, CrewState.TALKING)) {
+        member.copulationTarget = null;
+        target.copulationTarget = null;
+        target.idleTimer = 1 + Math.random() * 2;
+        fail(`can't reach ${target.profile.name}`);
+        return true;
+      }
+      log(`going to talk to ${target.profile.name}`);
+      return true;
+    }
+    case 'Stop': {
+      member.state = CrewState.IDLE;
+      member.path = [];
+      member.idleTimer = 1 + Math.random() * 2;
+      member.copulationTarget = null;
+      log('stopped');
+      return true;
+    }
+    case 'Order': {
+      if (cmd.actorId === undefined || !cmd.order) { fail('Order needs actorId and order'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      // Compliance check based on friendship
+      const rel = target.relations.find(r => r.actorId === member.id);
+      const friendship = rel?.friendship ?? 128;
+      if (friendship < 64 && Math.random() > 0.3) {
+        log(`ordered ${target.profile.name} to ${cmd.order.name} but they refused`);
+        return true;
+      }
+      target.commandQueue.length = 0; // clear their queue
+      target.commandQueue.push(cmd.order);
+      log(`ordered ${target.profile.name} to ${cmd.order.name}`);
+      return true;
+    }
+    case 'Tell': {
+      if (cmd.actorId === undefined) { fail('Tell needs actorId'); return true; }
+      const target = crew.find(c => c.id === cmd.actorId);
+      if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+      log(`told ${target.profile.name}: "${cmd.text ?? '...'}"`);
+      // For now Tell is just cosmetic — shows speech bubble
+      member.speechBubbleText = cmd.text ?? '...';
+      member.speechBubbleTimer = 3;
+      return true;
+    }
+    default:
+      fail(`unknown command "${cmd.name}"`);
+      return true;
+  }
+}
+
+function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, activityLog: ActivityLogEntry[] = [], gameTime: number = 0): void {
   // Waiting for copulation partner — don't wander
   if (member.copulationTarget) return;
 
   member.idleTimer -= dt;
   if (member.idleTimer > 0) return;
+
+  // Process command queue first
+  if (tryExecuteCommand(member, decks, crew, activityLog, gameTime)) return;
 
   if (member.actorType === 'human') {
     updateIdleHuman(member, decks, dt, crew, lanternOil, brightness);

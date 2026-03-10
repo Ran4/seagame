@@ -1,4 +1,4 @@
-import { Deck, Actor, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE } from './types';
+import { Deck, Actor, Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, ActivityLogEntry } from './types';
 import { createSemen, createGrogRation } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile, DRINK_DURATION } from './crew';
@@ -30,6 +30,8 @@ export class Game {
   private time = 0;
   private lastTime = 0;
   private waterOffset = { x: 0, y: 0 };
+  private activityLog: ActivityLogEntry[] = [];
+  private orderPollTimer = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.decks = createShip();
@@ -711,9 +713,21 @@ export class Game {
     const timeOfDay = (this.time + this.dayTimeOffset) % SECONDS_PER_DAY;
     const brightness = getShipBrightness(timeOfDay);
 
+    // Poll for external order files
+    this.orderPollTimer += dt;
+    if (this.orderPollTimer >= 1) {
+      this.orderPollTimer = 0;
+      this.pollOrders();
+    }
+
+    // Trim activity log to last 50 entries
+    if (this.activityLog.length > 50) {
+      this.activityLog.splice(0, this.activityLog.length - 50);
+    }
+
     // Crew AI — track state transitions to play sounds
     const prevStates = this.actors.map(c => c.state);
-    updateActors(this.actors, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness);
+    updateActors(this.actors, this.decks, dt, this.barrelInventory, this.time, this.lanternOil, brightness, this.activityLog);
     for (let i = 0; i < this.actors.length; i++) {
       const deck = this.actors[i].deck;
       if (prevStates[i] === CrewState.LIGHTING_LANTERN && this.actors[i].state !== CrewState.LIGHTING_LANTERN) {
@@ -736,6 +750,40 @@ export class Game {
           }
         }
       }
+    }
+  }
+
+  private async pollOrders(): Promise<void> {
+    try {
+      const resp = await fetch('/api/orders');
+      if (!resp.ok) return;
+      const orders: { actorName: string; commands: Command[] }[] = await resp.json();
+      for (const { actorName, commands } of orders) {
+        const actor = this.actors.find(a => a.profile.name.toLowerCase() === actorName.toLowerCase());
+        if (!actor) {
+          this.activityLog.push({ text: `Orders for unknown actor "${actorName}"`, time: this.time });
+          continue;
+        }
+        actor.commandQueue.length = 0; // clear existing queue
+        actor.commandQueue.push(...commands);
+        // Force idle so commands execute immediately
+        if (actor.state === CrewState.IDLE) {
+          actor.idleTimer = 0;
+        }
+        const names = commands.map(c => c.name);
+        let cmdText: string;
+        if (names.length === 1) {
+          cmdText = `received ${names[0]} command`;
+        } else if (names.length <= 5) {
+          cmdText = `received commands ${names.join(', ')}`;
+        } else {
+          const shown = names.slice(0, 5).join(', ');
+          cmdText = `received ${names.length} commands: ${shown} and ${names.length - 5} more`;
+        }
+        this.activityLog.push({ text: `${actor.profile.name}: ${cmdText}`, time: this.time });
+      }
+    } catch {
+      // Server not available or no orders — silent
     }
   }
 
@@ -906,6 +954,7 @@ export class Game {
       brightness,
       this.lanternOil,
       timeOfDay,
+      this.activityLog,
     );
   }
 }
