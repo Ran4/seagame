@@ -273,6 +273,8 @@ export function stopConversation(member: Actor, crew: Actor[]): void {
   member.speechBubbleText = null;
   member.speechBubbleTimer = 0;
   member.conversationMyTurn = false;
+  member.conversationScript = [];
+  member.conversationExchangesLeft = 0;
 }
 
 export function tickConversationCooldown(member: Actor, dt: number): void {
