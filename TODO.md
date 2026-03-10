@@ -4,20 +4,12 @@ THINGS BELOW must be discussed first. Will they really be fun to add?
 
 I want to implement a new feature, let's discuss it. Game design first (but do look at code to figure out roughly how to implement it).
 
-Animals! They're just like crew members really. They walk around randomly. They too have hunger and energy etc. and they want to go to sleep and eat etc.
-Difference is, the player can't command them to do stuff. You can however do things like select crewmember -> right click -> Interact ->  Pet.
-
-Petting an animal increases the friendship between the crewmember and the animal (both friendships go up by like 2, so if starting at 128, 64 pets maxes out friendship).
-
-I want at least the following pets:
-
-* Dog (Always a Bichon Frise, because they cute!). Tends to follow other entities that it likes (be it human crewmember or monkey or other dog!).
-* Parrot (flies around, sometimes lands)
-* Monkey (like 0.5 meters tall, like a cute monkey, but micheveous!)
-
 --------------------------------------------------------------------------------
 
 ## Done
+
+- Animals! They're just like crew members really. They walk around randomly. They too have hunger and energy etc. and they want to go to sleep and eat etc.
+Difference is, the player can't command them to do stuff. You can however do things like select crewmember -> right click -> Interact ->  Pet.
 
 - Implement this new status of crew members: Lust (0-255)
     * For men, ticks up over time (0.15 per second, so 0-255 in 1700 seconds ~2.361 days). start randomly between 0 and 128.

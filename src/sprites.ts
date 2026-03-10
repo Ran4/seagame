@@ -1,4 +1,9 @@
-import { TileType, ActorType } from './types';
+import {TileType, ActorType} from './types';
+
+// Downscale sprites on load for crisp pixel art.
+// Set to 0 to skip downscaling and use the raw high-res sprites.
+// export const SPRITE_RESOLUTION = 64;
+export const SPRITE_RESOLUTION = 0;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -7,6 +12,21 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+/** Downscale an image to SPRITE_RESOLUTION×SPRITE_RESOLUTION using nearest-neighbor, returns a new HTMLImageElement */
+function downscale(img: HTMLImageElement): HTMLImageElement {
+  const targetSize = SPRITE_RESOLUTION;
+  if (!targetSize || img.width <= targetSize) return img;
+  const canvas = document.createElement('canvas');
+  canvas.width = targetSize;
+  canvas.height = targetSize;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, targetSize, targetSize);
+  const out = new Image();
+  out.src = canvas.toDataURL();
+  return out;
 }
 
 export interface SpriteSheet {
@@ -72,17 +92,17 @@ export async function loadSprites(): Promise<SpriteSheet> {
   const tiles = new Map<TileType, HTMLImageElement>();
   for (let i = 0; i < tileNames.length; i++) {
     const img = tileLoads[i];
-    if (img) tiles.set(tileNames[i][0], img);
+    if (img) tiles.set(tileNames[i][0], downscale(img));
   }
 
-  const water2 = otherCoreLoads[0];
-  const crewSprites = otherCoreLoads.slice(1);
+  const water2 = downscale(otherCoreLoads[0]);
+  const crewSprites = otherCoreLoads.slice(1).map(img => downscale(img));
 
   const items = new Map<string, HTMLImageElement>();
   for (let i = 0; i < itemNames.length; i++) {
     const img = itemLoads[i];
     if (img) {
-      items.set(itemNames[i], img);
+      items.set(itemNames[i], downscale(img));
     } else {
       console.warn(`Item sprite not loaded: ${itemNames[i]}`);
     }
@@ -92,13 +112,13 @@ export async function loadSprites(): Promise<SpriteSheet> {
   const animals = new Map<string, HTMLImageElement>();
   for (let i = 0; i < animalTypes.length; i++) {
     const img = animalLoads[i];
-    if (img) animals.set(animalTypes[i], img);
+    if (img) animals.set(animalTypes[i], downscale(img));
   }
 
   const bubbles = new Map<string, HTMLImageElement>();
   for (let i = 0; i < bubbleNames.length; i++) {
     const img = bubbleLoads[i];
-    if (img) bubbles.set(bubbleNames[i], img);
+    if (img) bubbles.set(bubbleNames[i], downscale(img));
   }
 
   return {

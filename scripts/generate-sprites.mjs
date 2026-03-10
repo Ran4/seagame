@@ -59,7 +59,7 @@ const SPRITES = [
   ['crew_yellow', `${CREW_STYLE} Small pirate character seen from directly above. Yellow/gold captain's hat, gold-trimmed dark coat. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
 
   // Animals
-  ['animal_dog', `${CREW_STYLE} A small fluffy white Bichon Frise dog seen from directly above on a pirate ship deck. Round fluffy white head, small body, stubby legs visible. Adorable and compact. Fluffy white fur all over.`],
+  ['animal_dog', `${CREW_STYLE} Top-down bird's-eye view looking straight down at a small cream-colored Bichon Frise dog. Round fluffy cream/beige head from above, compact body, four tiny paws visible. The fur is solid light beige-cream color (not pure white). Dark outline around the body. Two tiny dark ears. Small curly tail at rear.`],
   ['animal_parrot', `${CREW_STYLE} A colorful tropical parrot seen from directly above on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak visible from above. Tail feathers trailing behind. Perched standing pose.`],
   ['animal_monkey', `${CREW_STYLE} A small cute capuchin monkey seen from directly above on a pirate ship deck. Light brown fur, dark face visible from above, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`],
 
