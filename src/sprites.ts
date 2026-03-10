@@ -88,7 +88,10 @@ export async function loadSprites(): Promise<SpriteSheet> {
   const animalTypes = ['dog', 'parrot', 'monkey'];
   const directionalAnimals = new Set(['dog']);
   const animalLoads = await Promise.all(
-    animalTypes.map(name => loadImage(`/sprites/animal_${name}.png`).catch(() => null)),
+    animalTypes.map(name => {
+      const file = directionalAnimals.has(name) ? `animal_${name}__south` : `animal_${name}`;
+      return loadImage(`/sprites/${file}.png`).catch(() => null);
+    }),
   );
   // Load directional variants (north, west) for directional animals
   const animalDirLoads = await Promise.all(

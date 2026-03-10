@@ -182,7 +182,7 @@ async function generate(name, prompt) {
 }
 
 const DIRECTION_SUFFIXES = {
-  south: { suffix: '', promptDir: 'facing south (downward)' },
+  south: { suffix: '__south', promptDir: 'facing south (downward)' },
   north: { suffix: '__north', promptDir: 'facing north (upward), seen from behind' },
   west:  { suffix: '__west', promptDir: 'facing west (left), seen from the side' },
 };
