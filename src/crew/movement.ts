@@ -159,7 +159,8 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
 
 export function orderCrewTo(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE): boolean {
   const from = currentTile(member);
-  const path = findPath(decks, from, target);
+  const pathFn = member.conditions.has('flyer') ? findPathFlying : findPath;
+  const path = pathFn(decks, from, target);
   if (path && path.length > 0) {
     member.path = path;
     member.state = CrewState.WALKING;

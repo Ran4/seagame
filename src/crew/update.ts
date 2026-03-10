@@ -629,7 +629,7 @@ function wanderRandomly(member: Actor, decks: Deck[]): void {
   }
   const target = pickRandom(allWalkable);
   if (target) {
-    const pathFn = member.actorType === 'parrot' ? findPathFlying : findPath;
+    const pathFn = member.conditions.has('flyer') ? findPathFlying : findPath;
     const path = pathFn(decks, from, target);
     if (path && path.length > 0) {
       member.path = path;

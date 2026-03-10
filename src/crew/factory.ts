@@ -121,6 +121,9 @@ export function createActors(humanCount: number, decks: Deck[]): Actor[] {
     if (member.actorType !== 'dog') {
       member.statuses.set('climber', { skill: 128 });
     }
+    if (member.actorType === 'parrot') {
+      member.statuses.set('flyer', null);
+    }
   }
 
   // Initialize lust for actors that have it
