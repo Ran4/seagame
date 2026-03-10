@@ -515,6 +515,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
               if (theirRel) theirRel.friendship = Math.min(255, theirRel.friendship + PET_FRIENDSHIP_GAIN);
               pet.thoughtBubble = 'heart';
               pet.thoughtBubbleTimer = 3;
+              pet.copulationTarget = null;
+              pet.idleTimer = 1 + Math.random() * 2;
             }
           }
           member.thoughtBubble = 'heart';
