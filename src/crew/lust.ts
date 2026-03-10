@@ -12,7 +12,6 @@ export function trySeekLustPartner(member: Actor, crew: Actor[], decks: Deck[]):
     if (other.id === member.id) continue;
     if (other.deck !== member.deck) continue;
     if (other.actorType !== member.actorType) continue; // same species only
-    if (other.copulationTarget) continue;
     if (other.state === CrewState.COPULATING || other.state === CrewState.KISSING) continue;
     const myRel = member.relations.find(r => r.actorId === other.id);
     const theirRel = other.relations.find(r => r.actorId === member.id);
