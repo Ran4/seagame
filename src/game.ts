@@ -30,11 +30,13 @@ export function createWorld(): World {
   }
 
   // Seed first barrel on lower deck with grog rations
+  const lowerDeckIndex = decks.length - 1;
+  const lowerDeck = decks[lowerDeckIndex];
   outer:
-  for (let y = 0; y < decks[2].height; y++) {
-    for (let x = 0; x < decks[2].width; x++) {
-      if (decks[2].tiles[y][x] === TileType.BARREL) {
-        const key = `2-${x}-${y}`;
+  for (let y = 0; y < lowerDeck.height; y++) {
+    for (let x = 0; x < lowerDeck.width; x++) {
+      if (lowerDeck.tiles[y][x] === TileType.BARREL) {
+        const key = `${lowerDeckIndex}-${x}-${y}`;
         const items = barrelInventory.get(key) || [];
         for (let g = 0; g < 4; g++) items.push(createGrogRation());
         barrelInventory.set(key, items);
