@@ -70,6 +70,7 @@ const SPRITES = [
   ['tiles', 'table', `${TILE_STYLE} Rectangular wooden dining table, seen from directly above. Dark brown sturdy wood surface with visible grain. Simple ship's mess table.`],
   ['tiles', 'lantern', `${TILE_STYLE} A brass ship's lantern on the deck, seen from directly above. Round brass base with a glass dome on top containing a warm yellow flame. Golden metallic color with warm light glow.`],
   ['tiles', 'raised_floor', `${TILE_STYLE} Dark wooden ship deck floor planks. Rich dark brown horizontal wood planks with thin dark gaps between them. Darker stained wood compared to a regular deck — like mahogany or dark oak. Well-worn but maintained. Seamless and tileable.`],
+  ['tiles', 'nest', `${TILE_STYLE} A bird's nest on a wooden ship deck, seen from directly above. Circular nest made of intertwined twigs, straw, and rope fibers. Warm brown and tan colors. Small cozy hollow in the center lined with soft feathers. Rustic and natural looking.`],
 
   // Crew
   ['actors', 'crew_red', `${CREW_STYLE} Small pirate character. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
@@ -115,10 +116,7 @@ async function generate(category, name, prompt) {
   const prefix = CATEGORY_PREFIX[category];
   const filename = `${prefix}__${name}.png`;
   const outPath = path.join(SPRITES_ROOT, category, filename);
-  if (fs.existsSync(outPath)) {
-    console.log(`  - ${filename} (exists, skipping)`);
-    return true;
-  }
+  if (fs.existsSync(outPath)) return true;
 
   console.log(`  Generating ${filename}...`);
 
@@ -211,17 +209,35 @@ async function main() {
   const allSprites = expandSprites();
   console.log(`Generating ${allSprites.length} sprites into ${SPRITES_ROOT}\n`);
 
-  let ok = 0;
+  // First pass: separate existing from new
+  const skipped = [];
+  const toGenerate = [];
+  for (const [category, name, prompt] of allSprites) {
+    const prefix = CATEGORY_PREFIX[category];
+    const filename = `${prefix}__${name}.png`;
+    const outPath = path.join(SPRITES_ROOT, category, filename);
+    if (fs.existsSync(outPath)) {
+      skipped.push(filename);
+    } else {
+      toGenerate.push([category, name, prompt]);
+    }
+  }
+
+  if (skipped.length > 0) {
+    console.log(`Skipping ${skipped.length} already generated: ${skipped.join(', ')}\n`);
+  }
+
+  let ok = skipped.length;
   let fail = 0;
 
   // Batch 4 at a time
-  for (let i = 0; i < allSprites.length; i += 4) {
-    const batch = allSprites.slice(i, i + 4);
+  for (let i = 0; i < toGenerate.length; i += 4) {
+    const batch = toGenerate.slice(i, i + 4);
     const results = await Promise.all(batch.map(([cat, name, prompt]) => generate(cat, name, prompt)));
     for (const r of results) r ? ok++ : fail++;
   }
 
-  console.log(`\nDone: ${ok} generated, ${fail} failed`);
+  console.log(`\nDone: ${ok} ok, ${fail} failed`);
 }
 
 main();

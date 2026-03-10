@@ -754,17 +754,53 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
     if (trySeekLustPartner(member, allActors, decks)) return;
   }
 
-  // Tired? Try nearby bed, otherwise sleep in place
+  // Tired? Find a place to sleep
   if ((member.conditions.has('tired') || member.conditions.has('exhausted')) && (brightness < 0.7 || member.conditions.has('exhausted'))) {
+    if (member.actorType === 'parrot') {
+      // Parrots sleep in nests, never beds
+      const nests = findTilesOfType(decks, TileType.NEST);
+      let foundNest = false;
+      if (nests.length > 0) {
+        const target = pickRandom(nests);
+        if (target) {
+          const pathFn = findPathFlying;
+          const path = pathFn(decks, from, target);
+          if (path) {
+            member.path = path;
+            member.state = CrewState.WALKING;
+            member.targetState = CrewState.SLEEPING;
+            foundNest = true;
+          }
+        }
+      }
+      if (!foundNest) {
+        // No nest reachable — find a random floor tile to sleep on
+        const floors = findTilesOfType(decks, TileType.FLOOR).filter(f => f.deck === member.deck);
+        const target = pickRandom(floors);
+        if (target) {
+          const path = findPathFlying(decks, from, target);
+          if (path && path.length <= 8) {
+            member.path = path;
+            member.state = CrewState.WALKING;
+            member.targetState = CrewState.SLEEPING;
+            return;
+          }
+        }
+        // Fallback: sleep in place
+        member.state = CrewState.SLEEPING;
+      }
+      return;
+    }
+
+    // Non-parrot animals: try nearby bed, otherwise sleep in place
     const beds = findTilesOfType(decks, TileType.BED);
-    // Try beds on same deck first, pick closest
     const sameDeckBeds = beds.filter(b => b.deck === member.deck);
     let foundBed = false;
     if (sameDeckBeds.length > 0) {
       const target = pickRandom(sameDeckBeds);
       if (target) {
         const path = findPath(decks, from, target);
-        if (path && path.length <= 8) { // only use bed if nearby
+        if (path && path.length <= 8) {
           member.path = path;
           member.state = CrewState.WALKING;
           member.targetState = CrewState.SLEEPING;
@@ -773,7 +809,6 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
       }
     }
     if (!foundBed) {
-      // Sleep in place
       member.state = CrewState.SLEEPING;
       return;
     }

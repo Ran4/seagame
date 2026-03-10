@@ -73,6 +73,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
     [TileType.TABLE, 'table'],
     [TileType.LANTERN, 'lantern'],
     [TileType.RAISED_FLOOR, 'raised_floor'],
+    [TileType.NEST, 'nest'],
   ];
 
   const itemNames = ['cutlass', 'semen', 'grog_ration'];

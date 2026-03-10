@@ -44,6 +44,7 @@ export enum TileType {
   MAP_TABLE,
   LANTERN,
   RAISED_FLOOR,
+  NEST,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -56,6 +57,7 @@ export const WALKABLE = new Set<TileType>([
   TileType.MAP_TABLE,
   TileType.LANTERN,
   TileType.RAISED_FLOOR,
+  TileType.NEST,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -96,6 +98,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.MAP_TABLE]: '#4a6644',
   [TileType.LANTERN]: '#c89b3c',
   [TileType.RAISED_FLOOR]: '#b89458',
+  [TileType.NEST]: '#8b7355',
 };
 
 export interface Point {
