@@ -3,6 +3,65 @@ import fs from 'fs';
 import path from 'path';
 import { parseShorthand } from './src/command-shorthand';
 
+function statePlugin() {
+  let cachedState: any = null;
+
+  return {
+    name: 'state-api',
+    configureServer(server: any) {
+      server.middlewares.use('/api/state', (req: any, res: any) => {
+        if (req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk: string) => { body += chunk; });
+          req.on('end', () => {
+            try {
+              cachedState = JSON.parse(body);
+              res.statusCode = 204;
+              res.end();
+            } catch {
+              res.statusCode = 400;
+              res.end('Invalid JSON');
+            }
+          });
+          return;
+        }
+
+        // GET
+        if (!cachedState) {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'No state yet — game client has not posted' }));
+          return;
+        }
+
+        const url = new URL(req.url!, `http://${req.headers.host}`);
+        const params = url.searchParams;
+        let result: any;
+
+        if (params.has('log')) {
+          result = { log: cachedState.log };
+        } else if (params.has('actors')) {
+          result = { actors: cachedState.actors };
+        } else if (params.has('actor')) {
+          const name = params.get('actor')!.toLowerCase();
+          const detail = cachedState.actorDetails?.[name];
+          result = detail ? { actor: detail } : { error: `Actor "${name}" not found` };
+        } else if (params.has('barrels')) {
+          result = { barrels: cachedState.barrels };
+        } else if (params.has('time')) {
+          result = { time: cachedState.time };
+        } else {
+          // Return everything except actorDetails (use ?actor=name for that)
+          const { actorDetails, ...rest } = cachedState;
+          result = rest;
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(result, null, 2));
+      });
+    },
+  };
+}
+
 function ordersPlugin() {
   const ordersDir = path.resolve(__dirname, 'orders');
   return {
@@ -62,7 +121,7 @@ function ordersPlugin() {
 }
 
 export default defineConfig({
-  plugins: [ordersPlugin()],
+  plugins: [statePlugin(), ordersPlugin()],
   server: {
     port: 7070,
   },

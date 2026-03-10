@@ -31,6 +31,7 @@ src/
   input.ts         Keyboard + mouse input state, camera scrolling, click/hover handling
   sprites.ts       Async sprite loader — loads PNGs from /sprites/, returns SpriteSheet
   audio.ts         AudioManager — preloads SFX, handles music loop (starts on first click)
+  debug-state.ts   serializeState() — produces JSON snapshot of World for /api/state
 
 scripts/
   generate-sprites.mjs   Generates tile + crew pixel art via OpenAI gpt-image-1 API
@@ -48,6 +49,7 @@ architecture/
 
 features/
   COMMAND_SYSTEM.md      Command system — serializable action queues, external order files
+  LIVE_DEBUGGING.md      Live state inspection via /api/state endpoint
 
 orders/
   orders_for_*.jsonl     External order files (one per actor, polled once/sec by Vite plugin)
@@ -134,6 +136,8 @@ Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMe
 Escape or clicking outside closes the menu.
 
 **Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/COMMAND_SYSTEM.md` for the full command reference.
+
+**Live debugging:** Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`). The `World` object is also on `window.__world`. See `features/LIVE_DEBUGGING.md`.
 
 ## Adding new tile types
 

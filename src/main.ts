@@ -3,11 +3,27 @@ import { Renderer } from './renderer';
 import { createInputHandler } from './input';
 import { AudioManager } from './audio';
 import { loadSprites } from './sprites';
+import { serializeState } from './debug-state';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 if (!canvas) throw new Error('Canvas element not found');
 
 const world = createWorld();
+
+// Expose for browser console / chrome extension debugging
+(window as any).__world = world;
+
+// POST state snapshot to server every second for /api/state endpoint
+setInterval(() => {
+  try {
+    const snapshot = serializeState(world);
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    }).catch(() => {}); // silent on failure
+  } catch {}
+}, 1000);
 const renderer = new Renderer(canvas);
 const input = createInputHandler(canvas);
 const audio = new AudioManager();
