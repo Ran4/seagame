@@ -19,9 +19,10 @@ npm run dev      # Vite dev server on port 7070
 
 ```
 src/
-  main.ts          Entry point — creates Game and starts loop
-  game.ts          Game class — owns all state, orchestrates update/render
-  types.ts         All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540)
+  main.ts          Entry point — creates World, wires up renderer/input/audio, runs game loop
+  game.ts          createWorld() + update() — free functions operating on World struct
+  menu.ts          Context menu — buildContextMenu(), handleMenuClick(), menuItemToCommand()
+  types.ts         All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540), World struct
   ship.ts          Ship layout — two decks defined as ASCII art, parsed to TileType[][]
   crew.ts          Actor AI — needs system (hunger/energy), A* pathfinding, autonomous behavior (humans + animals)
   conversation.ts  Crew conversations — snippets, proximity trigger, turn-based speech bubbles
@@ -106,7 +107,7 @@ Water animates by alternating two sprite frames.
 - Left-click crew: select. Left-click stairs: switch deck view.
 - Hover over furniture: tooltip with tile name
 
-### Right-click context menu (`game.ts`, `types.ts`)
+### Right-click context menu (`menu.ts`, `types.ts`)
 Right-click opens a context menu with actions. Two targets:
 
 **Right-click a human crew member:**
@@ -125,14 +126,14 @@ Right-click opens a context menu with actions. Two targets:
 - Stairs → "Go to stairs"
 - Barrel → "Items ▶" (if barrel has items) + "Copulate" (males only)
 
-**Barrel items submenu (3-level):** Right-clicking a barrel with a crew selected shows "Items ▶" → per-item entries (e.g. "Semen (x2) ▶") → "Take". Clicking "Take" pathfinds the crew to the barrel then transfers one unit to their inventory on arrival. Uses `TAKING_ITEM` crew state. Stackable items show quantity and decrement; non-stackable items are moved whole. Empty barrels have their inventory entry cleaned up. Barrel contents stored in `Game.barrelInventory: Map<string, Item[]>` keyed by `"deck-x-y"`.
+**Barrel items submenu (3-level):** Right-clicking a barrel with a crew selected shows "Items ▶" → per-item entries (e.g. "Semen (x2) ▶") → "Take". Clicking "Take" pathfinds the crew to the barrel then transfers one unit to their inventory on arrival. Uses `TAKING_ITEM` crew state. Stackable items show quantity and decrement; non-stackable items are moved whole. Empty barrels have their inventory entry cleaned up. Barrel contents stored in `World.barrelInventory: Map<string, Item[]>` keyed by `"deck-x-y"`.
 
 **Submenus (up to 3 levels):** `ContextMenuItem` supports `submenu?: ContextMenuItem[]`, nestable to 3 levels. Parent items show "▶" and open a flyout on hover. `handleMenuClick` checks deepest level first. Returns `undefined` (keep menu open) for submenu parents/disabled sub-items, vs `null` (close) for outside clicks. Disabled items (`disabled: true`) render grey and are not clickable. Level-3 panels edge-clamp (flip to left side if they'd overflow `CANVAS_WIDTH`). `ContextMenuItem` also supports `action?: string` and `itemData?: { barrelKey, itemName }` for non-state-based actions like taking items.
 
 Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
 Escape or clicking outside closes the menu.
 
-**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `Game.menuItemToCommand()` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/COMMAND_SYSTEM.md` for the full command reference.
+**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/COMMAND_SYSTEM.md` for the full command reference.
 
 ## Adding new tile types
 

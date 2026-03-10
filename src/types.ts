@@ -315,3 +315,25 @@ export interface ActivityLogEntry {
   text: string;
   time: number;  // game time when logged
 }
+
+// All game simulation state — the "world" struct that free functions operate on
+export interface World {
+  decks: Deck[];
+  actors: Actor[];
+  camera: Camera;
+  activeDeck: number;
+  selectedActorId: number | null;
+  selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null;
+  contextMenu: ContextMenu | null;
+  worldMap: WorldMap;
+  barrelInventory: Map<string, Item[]>;
+  lanternOil: Map<string, number>;
+  dayTimeOffset: number;
+  mapOverlayOpen: boolean;
+  wasNavigating: boolean;
+  navTimer: number;
+  time: number;
+  waterOffset: { x: number; y: number };
+  activityLog: ActivityLogEntry[];
+  orderPollTimer: number;
+}

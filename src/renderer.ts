@@ -2,7 +2,7 @@ import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, Actor, Camera, CrewState,
   ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
-  ActivityLogEntry,
+  ActivityLogEntry, World, getShipBrightness,
 } from './types';
 import { SpriteSheet, DirectionalSprite } from './sprites';
 import { SHIP_SPEED } from './worldmap';
@@ -54,30 +54,17 @@ export class Renderer {
   }
 
 
-  render(
-    deck: Deck,
-    deckIndex: number,
-    crew: Actor[],
-    camera: Camera,
-    selectedActorId: number | null,
-    selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null,
-    time: number,
-    mousePos: { x: number; y: number },
-    contextMenu: ContextMenu | null = null,
-    decks: Deck[] = [],
-    soundMuted: boolean = false,
-    sfxMuted: boolean = false,
-    worldMap: WorldMap | null = null,
-    mapOverlayOpen: boolean = false,
-    hasNavigator: boolean = false,
-    hasHelmsman: boolean = false,
-    barrelInventory: Map<string, Item[]> = new Map(),
-    waterOffset: { x: number; y: number } = { x: 0, y: 0 },
-    brightness: number = 1.0,
-    lanternOil: Map<string, number> = new Map(),
-    timeOfDay: number = 0,
-    activityLog: ActivityLogEntry[] = [],
-  ): void {
+  render(world: World, mousePos: { x: number; y: number }, soundMuted: boolean, sfxMuted: boolean): void {
+    const { decks, actors: crew, camera, selectedActorId, selectedObject, time,
+            contextMenu, worldMap, mapOverlayOpen, barrelInventory,
+            waterOffset, lanternOil, activityLog } = world;
+    const deck = decks[world.activeDeck];
+    const deckIndex = world.activeDeck;
+    const hasNavigator = crew.some(c => c.state === CrewState.NAVIGATING);
+    const hasHelmsman = crew.some(c => c.state === CrewState.STEERING);
+    const timeOfDay = (time + world.dayTimeOffset) % SECONDS_PER_DAY;
+    const brightness = getShipBrightness(timeOfDay);
+
     const ctx = this.ctx;
     this.hoveredItem = null as typeof this.hoveredItem;
     this.mousePos = mousePos;

@@ -61,7 +61,7 @@ Each actor has `commandQueue: Command[]` (FIFO). When idle, the actor pops the n
 
 The right-click context menu dispatches commands via `issueCommand()`. This function interrupts the actor's current activity (frees conversation/interaction partners), clears the command queue, pushes the new command, and forces the actor idle so it executes on the next tick. The menu still controls which options are shown (e.g. attraction checks for Kiss), but execution goes through the command system.
 
-`Game.menuItemToCommand()` converts a `ContextMenuItem` into a `Command` based on the menu context (tile position, target actor, etc.).
+`menuItemToCommand()` in `menu.ts` converts a `ContextMenuItem` into a `Command` based on the menu context (tile position, target actor, etc.).
 
 ## Chaining
 
@@ -76,37 +76,65 @@ This walks to deck 2, (3,5) then eats at the nearest stove. If any command fails
 
 Order files live in `orders/orders_for_<name>.jsonl` (one per actor, lowercase name). The Vite dev server plugin (`vite.config.ts`) serves `GET /api/orders` which reads all files, parses them, and empties them. The game polls this endpoint once per second.
 
-Lines support JS-style object literals (unquoted keys):
+Two formats are supported: **shorthand** (terse, recommended) and **JS object literals** (original format). Lines starting with `#` are comments. Both formats can be mixed in the same file.
+
+### Shorthand format
+
+Command name followed by space-separated arguments. Case-insensitive. Arguments are positional, matching the command's field order.
 
 ```bash
-# Tell Anne to sleep
-echo '{name: "Sleep"}' >> orders/orders_for_anne.jsonl
+# Basic commands
+echo 'Eat' >> orders/orders_for_anne.jsonl
+echo 'Sleep 5 3 1' >> orders/orders_for_anne.jsonl
+echo 'Kiss 2' >> orders/orders_for_anne.jsonl
 
-# Tell Anne to sleep in a specific bed
-echo '{name: "Sleep", deck: 1, x: 5, y: 3}' >> orders/orders_for_anne.jsonl
+# Optional args — omit trailing optionals
+echo 'GoTo 3 5' >> orders/orders_for_anne.jsonl
+echo 'GoTo 3 5 2' >> orders/orders_for_anne.jsonl
+echo 'GoToDeck 1' >> orders/orders_for_anne.jsonl
 
-# Tell Anne to kiss actor 1 (Jack)
-echo '{name: "Kiss", actorId: 1}' >> orders/orders_for_anne.jsonl
+# Rest-of-line string args
+echo 'Tell 1 Ahoy matey' >> orders/orders_for_anne.jsonl
+echo 'TakeItem 2-4-3 Grog ration' >> orders/orders_for_anne.jsonl
+echo 'Drink Grog ration' >> orders/orders_for_anne.jsonl
 
-# Chain: go somewhere then eat
-echo '{name: "GoTo", deck: 2, x: 3, y: 5}' >> orders/orders_for_anne.jsonl
-echo '{name: "Eat"}' >> orders/orders_for_anne.jsonl
-
-# Order Jack to kiss Mary (actor 2)
-echo '{name: "Order", actorId: 1, order: {name: "Kiss", actorId: 2}}' >> orders/orders_for_anne.jsonl
-
-# Take item from a barrel
-echo '{name: "TakeItem", barrelKey: "2-4-3", itemName: "Grog ration"}' >> orders/orders_for_anne.jsonl
-
-# Drink from inventory
-echo '{name: "Drink", itemName: "Grog ration"}' >> orders/orders_for_anne.jsonl
+# Nested commands with parens
+echo 'Order 1 (Kiss 2)' >> orders/orders_for_anne.jsonl
+echo 'Order 0 (Order 1 (Kiss 2))' >> orders/orders_for_anne.jsonl
+echo 'Order 1 (Tell 2 Ahoy matey)' >> orders/orders_for_anne.jsonl
 ```
+
+**Argument types by suffix in spec:**
+
+| Suffix | Type | Example |
+|--------|------|---------|
+| (none) | Required int | `actorId` → `Kiss 2` |
+| `?` | Optional int (skipped if next token isn't a number) | `deck?` → `GoTo 3 5` or `GoTo 3 5 2` |
+| `$` | Required string token | `barrelKey$` → `TakeItem 2-4-3 ...` |
+| `...` | Rest of line (paren-aware) | `text...` → `Tell 1 Ahoy matey` |
+| `()` | Recursive command in parens | `order()` → `Order 1 (Kiss 2)` |
+
+### JS object literal format
+
+The original format — JS-style objects with unquoted keys:
+
+```bash
+echo '{name: "Sleep"}' >> orders/orders_for_anne.jsonl
+echo '{name: "Sleep", deck: 1, x: 5, y: 3}' >> orders/orders_for_anne.jsonl
+echo '{name: "Kiss", actorId: 1}' >> orders/orders_for_anne.jsonl
+echo '{name: "Order", actorId: 1, order: {name: "Kiss", actorId: 2}}' >> orders/orders_for_anne.jsonl
+echo '{name: "TakeItem", barrelKey: "2-4-3", itemName: "Grog ration"}' >> orders/orders_for_anne.jsonl
+```
+
+### Format detection
+
+Lines starting with `{` are parsed as JS object literals. All other non-empty, non-comment lines are parsed as shorthand.
 
 New commands replace the actor's existing queue. The actor is forced idle so execution starts immediately.
 
 ## Activity log
 
-All command events are logged to `Game.activityLog: ActivityLogEntry[]` and rendered bottom-right (last 8 entries, fading with age). Logged events:
+All command events are logged to `World.activityLog: ActivityLogEntry[]` and rendered bottom-right (last 8 entries, fading with age). Logged events:
 - Command received (with command names)
 - Command started ("going to kiss Jack")
 - Command failed ("can't reach Jack") — drops entire chain
@@ -117,13 +145,15 @@ All command events are logged to `Game.activityLog: ActivityLogEntry[]` and rend
 1. Add a new variant to the `Command` union in `types.ts`
 2. Add a case to `tryExecuteCommand()` in `crew.ts`
 3. The command should set up pathfinding + target state, same as other commands do
-4. Add the command name to `menuItemToCommand()` in `game.ts` if it should be accessible from the context menu
+4. Add the command name to `menuItemToCommand()` in `menu.ts` if it should be accessible from the context menu
 
 ## Implementation files
 
 - `types.ts` — `Command` union type, `ActivityLogEntry` interface, `commandQueue` on `Actor`
 - `crew.ts` — `tryExecuteCommand()`, `issueCommand()`, completion logs in state handlers
-- `game.ts` — `pollOrders()`, `menuItemToCommand()`, activity log management
+- `game.ts` — `createWorld()`, `update()`, `pollOrders()`, activity log management
+- `menu.ts` — `buildContextMenu()`, `handleMenuClick()`, `menuItemToCommand()`
 - `renderer.ts` — `drawActivityLog()`
-- `vite.config.ts` — `ordersPlugin()` Vite server middleware
+- `command-shorthand.ts` — `parseShorthand()`, `parseShorthandLines()`, shorthand spec table
+- `vite.config.ts` — `ordersPlugin()` Vite server middleware (uses both parsers)
 - `orders/` — `.jsonl` files per actor
