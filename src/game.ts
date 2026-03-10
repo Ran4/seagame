@@ -231,12 +231,18 @@ export class Game {
       const mx = this.input.mouseClick.x;
       const my = this.input.mouseClick.y;
 
-      // Sound toggle button (bottom-left, 24x24 with 8px margin)
+      // Sound toggle buttons (bottom-left, 24x24 with 8px margin)
       const btnSize = 24;
       const btnX = 8;
       const btnY = CANVAS_HEIGHT - btnSize - 8;
       if (mx >= btnX && mx <= btnX + btnSize && my >= btnY && my <= btnY + btnSize) {
         this.audio.toggleMute();
+        this.input.mouseClick = null;
+      }
+      // SFX toggle button (right of music button)
+      const sfxBtnX = btnX + btnSize + 4;
+      if (mx >= sfxBtnX && mx <= sfxBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+        this.audio.toggleSfxMute();
         this.input.mouseClick = null;
       }
 
@@ -861,6 +867,7 @@ export class Game {
       this.contextMenu,
       this.decks,
       this.audio.muted,
+      this.audio.sfxMuted,
       this.worldMap,
       this.mapOverlayOpen,
       hasNavigator,

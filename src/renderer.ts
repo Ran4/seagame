@@ -64,6 +64,7 @@ export class Renderer {
     contextMenu: ContextMenu | null = null,
     decks: Deck[] = [],
     soundMuted: boolean = false,
+    sfxMuted: boolean = false,
     worldMap: WorldMap | null = null,
     mapOverlayOpen: boolean = false,
     hasNavigator: boolean = false,
@@ -164,7 +165,7 @@ export class Renderer {
     if (worldMap) {
       this.drawCompass(worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }
-    this.drawSoundButton(soundMuted);
+    this.drawSoundButton(soundMuted, sfxMuted);
     this.drawTooltip(deck, camera, mousePos);
     if (contextMenu) {
       this.drawContextMenu(contextMenu, mousePos);
@@ -629,13 +630,13 @@ export class Renderer {
     }
   }
 
-  private drawSoundButton(muted: boolean): void {
+  private drawSoundButton(muted: boolean, sfxMuted: boolean): void {
     const ctx = this.ctx;
     const size = 24;
     const x = 8;
     const y = CANVAS_HEIGHT - size - 8;
 
-    // Background
+    // Music button (left)
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(x, y, size, size);
     ctx.strokeStyle = '#555';
@@ -645,20 +646,15 @@ export class Renderer {
     const cx = x + size / 2 - 2;
     const cy = y + size / 2;
 
-    // Speaker body
+    // Music note icon
     ctx.fillStyle = muted ? '#666' : '#ddd';
     ctx.beginPath();
-    ctx.moveTo(cx - 6, cy - 3);
-    ctx.lineTo(cx - 3, cy - 3);
-    ctx.lineTo(cx + 1, cy - 7);
-    ctx.lineTo(cx + 1, cy + 7);
-    ctx.lineTo(cx - 3, cy + 3);
-    ctx.lineTo(cx - 6, cy + 3);
-    ctx.closePath();
+    ctx.arc(cx - 2, cy + 4, 3, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillRect(cx + 0.5, cy - 6, 2, 10);
+    ctx.fillRect(cx + 0.5, cy - 6, 6, 2);
 
     if (muted) {
-      // X mark
       ctx.strokeStyle = '#cc4444';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -667,15 +663,48 @@ export class Renderer {
       ctx.moveTo(cx + 9, cy - 4);
       ctx.lineTo(cx + 4, cy + 4);
       ctx.stroke();
+    }
+
+    // SFX button (right)
+    const sx = x + size + 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(sx, y, size, size);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 0.5, y + 0.5, size - 1, size - 1);
+
+    const scx = sx + size / 2 - 2;
+    const scy = y + size / 2;
+
+    // Speaker body
+    ctx.fillStyle = sfxMuted ? '#666' : '#ddd';
+    ctx.beginPath();
+    ctx.moveTo(scx - 6, scy - 3);
+    ctx.lineTo(scx - 3, scy - 3);
+    ctx.lineTo(scx + 1, scy - 7);
+    ctx.lineTo(scx + 1, scy + 7);
+    ctx.lineTo(scx - 3, scy + 3);
+    ctx.lineTo(scx - 6, scy + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    if (sfxMuted) {
+      ctx.strokeStyle = '#cc4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(scx + 4, scy - 4);
+      ctx.lineTo(scx + 9, scy + 4);
+      ctx.moveTo(scx + 9, scy - 4);
+      ctx.lineTo(scx + 4, scy + 4);
+      ctx.stroke();
     } else {
-      // Sound waves
       ctx.strokeStyle = '#ddd';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx + 3, cy, 4, -Math.PI / 4, Math.PI / 4);
+      ctx.arc(scx + 3, scy, 4, -Math.PI / 4, Math.PI / 4);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(cx + 3, cy, 7, -Math.PI / 4, Math.PI / 4);
+      ctx.arc(scx + 3, scy, 7, -Math.PI / 4, Math.PI / 4);
       ctx.stroke();
     }
   }

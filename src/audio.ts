@@ -1,4 +1,5 @@
-const STORAGE_KEY = 'seagame_sound_muted';
+const MUSIC_STORAGE_KEY = 'seagame_sound_muted';
+const SFX_STORAGE_KEY = 'seagame_sfx_muted';
 
 type SoundEntry = {
   audio: HTMLAudioElement;
@@ -10,10 +11,12 @@ export class AudioManager {
   private music: HTMLAudioElement | null = null;
   private musicStarted = false;
   private _muted: boolean;
+  private _sfxMuted: boolean;
   activeDeck = 0;
 
   constructor() {
-    this._muted = localStorage.getItem(STORAGE_KEY) === '1';
+    this._muted = localStorage.getItem(MUSIC_STORAGE_KEY) === '1';
+    this._sfxMuted = localStorage.getItem(SFX_STORAGE_KEY) === '1';
 
     this.preload('click', '/audio/elevenlabs-generated/click.mp3', 'ui');
     this.preload('stairs', '/audio/elevenlabs-generated/stairs.mp3', 'ui');
@@ -33,9 +36,13 @@ export class AudioManager {
     return this._muted;
   }
 
+  get sfxMuted(): boolean {
+    return this._sfxMuted;
+  }
+
   toggleMute(): void {
     this._muted = !this._muted;
-    localStorage.setItem(STORAGE_KEY, this._muted ? '1' : '0');
+    localStorage.setItem(MUSIC_STORAGE_KEY, this._muted ? '1' : '0');
     if (this.music) {
       if (this._muted) {
         this.music.pause();
@@ -45,6 +52,11 @@ export class AudioManager {
     }
   }
 
+  toggleSfxMute(): void {
+    this._sfxMuted = !this._sfxMuted;
+    localStorage.setItem(SFX_STORAGE_KEY, this._sfxMuted ? '1' : '0');
+  }
+
   private preload(name: string, src: string, category: 'ui' | 'world', volume = 0.5): void {
     const audio = new Audio(src);
     audio.volume = volume;
@@ -52,6 +64,7 @@ export class AudioManager {
   }
 
   play(name: string, soundDeck: number): void {
+    if (this._sfxMuted) return;
     const entry = this.sounds.get(name);
     if (!entry) return;
     const clone = entry.audio.cloneNode() as HTMLAudioElement;

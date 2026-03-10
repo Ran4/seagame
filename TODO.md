@@ -14,6 +14,7 @@ THINGS BELOW must be discussed first. Will they really be fun to add?
     * Condition "Lustful" if lust > 160.
     * High lust should drive crew to seek out high-attraction partners -
       would make copulation/kissing happen organically instead of only by player order.
+
 - Crew conversations — idle crew near each other could talk (speech bubbles with procedural snippets), affecting friendship over time.
 
 --------------------------------------------------------------------------------
