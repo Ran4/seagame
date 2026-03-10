@@ -50,6 +50,9 @@ const ITEM_STYLE = `${BASE_STYLE} Inventory icon. Centered.`;
 
 const BUBBLE_STYLE = `${BASE_STYLE} Thought bubble icon. A small white round thought bubble with a symbol inside it and two small circles trailing below-left as the bubble tail.`;
 
+// Sprite definitions: [name, prompt] or [name, prompt, { directional: true }]
+// Directional sprites generate 3 files: name.png (south), name__north.png, name__west.png
+// East is rendered by flipping west at runtime.
 const SPRITES = [
   // Tiles
   ['water', `${TILE_STYLE} Deep ocean water tile. Dark navy blue with subtle teal-colored wave ripple pattern. Seamless tileable. No border, no outline, no frame - the art must go edge to edge filling the entire image.`],
@@ -74,7 +77,7 @@ const SPRITES = [
   ['crew_yellow', `${CREW_STYLE} Small pirate character seen from directly above. Yellow/gold captain's hat, gold-trimmed dark coat. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
 
   // Animals
-  ['animal_dog', `${CREW_STYLE} A Bichon Frise dog facing south (downward), taking up about 3/5 of the image, centered. Bright white fluffy fur with a dark pixel outline. Round fluffy head at top with two small dark eyes and a tiny black nose. Compact oval body. Four small paws.`],
+  ['animal_dog', `${CREW_STYLE} A Bichon Frise dog, taking up about 3/5 of the image, centered. Bright white fluffy fur with a dark pixel outline. Round fluffy head with two small dark eyes and a tiny black nose. Compact oval body. Four small paws.`, { directional: true }],
   ['animal_parrot', `${CREW_STYLE} A colorful tropical parrot seen from directly above on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak visible from above. Tail feathers trailing behind. Perched standing pose.`],
   ['animal_monkey', `${CREW_STYLE} A small cute capuchin monkey seen from directly above on a pirate ship deck. Light brown fur, dark face visible from above, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`],
 
@@ -178,15 +181,36 @@ async function generate(name, prompt) {
   }
 }
 
+const DIRECTION_SUFFIXES = {
+  south: { suffix: '', promptDir: 'facing south (downward)' },
+  north: { suffix: '__north', promptDir: 'facing north (upward), seen from behind' },
+  west:  { suffix: '__west', promptDir: 'facing west (left), seen from the side' },
+};
+
+function expandSprites() {
+  const expanded = [];
+  for (const [name, prompt, opts] of SPRITES) {
+    if (opts?.directional) {
+      for (const [, { suffix, promptDir }] of Object.entries(DIRECTION_SUFFIXES)) {
+        expanded.push([`${name}${suffix}`, `${prompt} The character is ${promptDir}.`]);
+      }
+    } else {
+      expanded.push([name, prompt]);
+    }
+  }
+  return expanded;
+}
+
 async function main() {
-  console.log(`Generating ${SPRITES.length} sprites into ${OUT_DIR}\n`);
+  const allSprites = expandSprites();
+  console.log(`Generating ${allSprites.length} sprites into ${OUT_DIR}\n`);
 
   let ok = 0;
   let fail = 0;
 
   // Batch 4 at a time
-  for (let i = 0; i < SPRITES.length; i += 4) {
-    const batch = SPRITES.slice(i, i + 4);
+  for (let i = 0; i < allSprites.length; i += 4) {
+    const batch = allSprites.slice(i, i + 4);
     const results = await Promise.all(batch.map(([name, prompt]) => generate(name, prompt)));
     for (const r of results) r ? ok++ : fail++;
   }

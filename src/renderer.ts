@@ -3,7 +3,7 @@ import {
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, Actor, Camera, CrewState,
   ContextMenu, STATE_NAMES, WorldMap, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
 } from './types';
-import { SpriteSheet } from './sprites';
+import { SpriteSheet, DirectionalSprite } from './sprites';
 import { SHIP_SPEED } from './worldmap';
 
 const WATER_COLOR_1 = '#1a5276';
@@ -431,15 +431,43 @@ export class Renderer {
 
     // Pick sprite: animal sprite for non-humans, crew sprite for humans
     const isAnimal = member.actorType !== 'human';
-    const animalSprite = isAnimal ? this.sprites?.animals.get(member.actorType) : null;
-    const crewSprite = !isAnimal ? this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)] : null;
-    const sprite = animalSprite ?? crewSprite;
+    let sprite: HTMLImageElement | null = null;
+    let flipX = false;
+    if (isAnimal) {
+      const animalEntry = this.sprites?.animals.get(member.actorType) ?? null;
+      if (animalEntry && 'south' in animalEntry) {
+        // Directional sprite
+        const dir = animalEntry as DirectionalSprite;
+        if (member.facing === 'north' && dir.north) {
+          sprite = dir.north;
+        } else if (member.facing === 'west' && dir.west) {
+          sprite = dir.west;
+        } else if (member.facing === 'east' && dir.west) {
+          sprite = dir.west;
+          flipX = true;
+        } else {
+          sprite = dir.south;
+        }
+      } else {
+        sprite = animalEntry as HTMLImageElement | null;
+      }
+    } else {
+      sprite = this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)] ?? null;
+    }
     // Animals are drawn slightly smaller (monkey even smaller)
     const sizeScale = member.actorType === 'monkey' ? 0.7 : isAnimal ? 0.85 : 1.0;
     const size = TILE_SIZE * sizeScale;
 
     if (sprite) {
-      ctx.drawImage(sprite, sx - size / 2, sy - size / 2, size, size);
+      if (flipX) {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+        ctx.restore();
+      } else {
+        ctx.drawImage(sprite, sx - size / 2, sy - size / 2, size, size);
+      }
     } else {
       // Fallback: colored circle (smaller for animals)
       const radius = isAnimal ? (member.actorType === 'monkey' ? 6 : 7) : 10;

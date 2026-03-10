@@ -29,11 +29,17 @@ function downscale(img: HTMLImageElement): HTMLImageElement {
   return out;
 }
 
+export interface DirectionalSprite {
+  south: HTMLImageElement;
+  north: HTMLImageElement | null;
+  west: HTMLImageElement | null;  // east is west flipped at render time
+}
+
 export interface SpriteSheet {
   tiles: Map<TileType, HTMLImageElement>;
   waterFrames: HTMLImageElement[];
   crew: HTMLImageElement[];
-  animals: Map<string, HTMLImageElement>;
+  animals: Map<string, HTMLImageElement | DirectionalSprite>;
   items: Map<string, HTMLImageElement>;
   bubbles: Map<string, HTMLImageElement>;
 }
@@ -80,8 +86,16 @@ export async function loadSprites(): Promise<SpriteSheet> {
 
   // Animal sprites (optional)
   const animalTypes = ['dog', 'parrot', 'monkey'];
+  const directionalAnimals = new Set(['dog']);
   const animalLoads = await Promise.all(
     animalTypes.map(name => loadImage(`/sprites/animal_${name}.png`).catch(() => null)),
+  );
+  // Load directional variants (north, west) for directional animals
+  const animalDirLoads = await Promise.all(
+    animalTypes.filter(n => directionalAnimals.has(n)).flatMap(name => [
+      loadImage(`/sprites/animal_${name}__north.png`).catch(() => null),
+      loadImage(`/sprites/animal_${name}__west.png`).catch(() => null),
+    ]),
   );
 
   // Bubble sprites (optional)
@@ -109,10 +123,23 @@ export async function loadSprites(): Promise<SpriteSheet> {
   }
   console.log('Item sprites loaded:', [...items.keys()]);
 
-  const animals = new Map<string, HTMLImageElement>();
+  const animals = new Map<string, HTMLImageElement | DirectionalSprite>();
+  let dirIdx = 0;
   for (let i = 0; i < animalTypes.length; i++) {
     const img = animalLoads[i];
-    if (img) animals.set(animalTypes[i], downscale(img));
+    const name = animalTypes[i];
+    if (!img) continue;
+    if (directionalAnimals.has(name)) {
+      const north = animalDirLoads[dirIdx++];
+      const west = animalDirLoads[dirIdx++];
+      animals.set(name, {
+        south: downscale(img),
+        north: north ? downscale(north) : null,
+        west: west ? downscale(west) : null,
+      });
+    } else {
+      animals.set(name, downscale(img));
+    }
   }
 
   const bubbles = new Map<string, HTMLImageElement>();

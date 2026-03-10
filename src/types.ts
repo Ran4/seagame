@@ -209,6 +209,7 @@ export interface Actor {
   conditions: Set<string>;
   pixelX: number;
   pixelY: number;
+  facing: 'north' | 'south' | 'east' | 'west';
   deck: number;
   state: CrewState;
   targetState: CrewState;

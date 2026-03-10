@@ -160,6 +160,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
     conditions: new Set(),
     pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
     pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
+    facing: 'south',
     deck: spawnDeck,
     state: CrewState.IDLE,
     targetState: CrewState.IDLE,
@@ -938,6 +939,15 @@ function updateWalking(member: Actor, dt: number, crew: Actor[], brightness: num
   const dx = targetX - member.pixelX;
   const dy = targetY - member.pixelY;
   const dist = Math.sqrt(dx * dx + dy * dy);
+
+  // Update facing direction based on dominant axis
+  if (dist > 2) {
+    if (Math.abs(dx) > Math.abs(dy)) {
+      member.facing = dx > 0 ? 'east' : 'west';
+    } else {
+      member.facing = dy > 0 ? 'south' : 'north';
+    }
+  }
 
   if (dist < 2) {
     member.pixelX = targetX;
