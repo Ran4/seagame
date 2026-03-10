@@ -162,7 +162,7 @@ export function buildContextMenu(
       // Only male crew can copulate with barrels
       if (tileActions && tileType === TileType.BARREL) {
         const selected = world.actors.find(c => c.id === world.selectedActorId);
-        if (selected?.profile.sex !== 'M') {
+        if (selected?.profile.sex !== 'M' || selected.conditions.has('dickless')) {
           tileActions = tileActions.filter(a => a.targetState !== CrewState.COPULATING);
         }
         // Barrel inventory shown as visual item grid on context menu
