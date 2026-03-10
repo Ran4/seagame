@@ -679,13 +679,14 @@ export class Game {
 
     // Crew-crew interactions (Kiss, Copulate, Converse, Pet)
     if (menuItem.targetActorId !== undefined) {
-      const cmdName: Record<string, string> = {
-        [CrewState.KISSING]: 'Kiss',
-        [CrewState.COPULATING]: 'Copulate',
-        [CrewState.TALKING]: 'Converse',
-        [CrewState.PETTING]: 'Pet',
-      };
-      return { name: cmdName[menuItem.targetState] ?? menuItem.targetState, actorId: menuItem.targetActorId };
+      const actorId = menuItem.targetActorId;
+      switch (menuItem.targetState) {
+        case CrewState.KISSING: return { name: 'Kiss', actorId };
+        case CrewState.COPULATING: return { name: 'Copulate', actorId };
+        case CrewState.TALKING: return { name: 'Converse', actorId };
+        case CrewState.PETTING: return { name: 'Pet', actorId };
+        default: return null;
+      }
     }
 
     // Actor self-actions (Stop, Drink, GoToDeck)
@@ -718,24 +719,19 @@ export class Game {
       }
     }
 
-    const tileCmd: Record<string, string> = {
-      [CrewState.SLEEPING]: 'Sleep',
-      [CrewState.EATING]: 'Eat',
-      [CrewState.STEERING]: 'Steer',
-      [CrewState.MANNING_CANNON]: 'ManCannon',
-      [CrewState.NAVIGATING]: 'Navigate',
-      [CrewState.LOOKOUT]: 'Lookout',
-      [CrewState.LIGHTING_LANTERN]: 'LightLantern',
-      [CrewState.EXTINGUISHING_LANTERN]: 'ExtinguishLantern',
-    };
+    const tileX = this.contextMenu.tileX;
+    const tileY = this.contextMenu.tileY;
 
-    if (menuItem.targetState === CrewState.COPULATING) {
-      return { name: 'CopulateBarrel', x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: this.contextMenu.deck };
-    }
-
-    const cmdName = tileCmd[menuItem.targetState];
-    if (cmdName) {
-      return { name: cmdName, x: this.contextMenu.tileX, y: this.contextMenu.tileY, deck: targetDeck };
+    switch (menuItem.targetState) {
+      case CrewState.COPULATING: return { name: 'CopulateBarrel', deck: this.contextMenu.deck, x: tileX, y: tileY };
+      case CrewState.SLEEPING: return { name: 'Sleep', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.EATING: return { name: 'Eat', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.STEERING: return { name: 'Steer', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.MANNING_CANNON: return { name: 'ManCannon', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.NAVIGATING: return { name: 'Navigate', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.LOOKOUT: return { name: 'Lookout', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.LIGHTING_LANTERN: return { name: 'LightLantern', deck: targetDeck, x: tileX, y: tileY };
+      case CrewState.EXTINGUISHING_LANTERN: return { name: 'ExtinguishLantern', deck: targetDeck, x: tileX, y: tileY };
     }
 
     // Stairs/mast "go to" — GoTo on the connected deck

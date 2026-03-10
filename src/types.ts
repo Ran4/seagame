@@ -288,18 +288,28 @@ export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
   | { type: 'crew'; actorId: number };
 
-// Command system — serializable actions for actors
-export interface Command {
-  name: string;
-  actorId?: number;        // target actor (for Kiss, Tell, Order, etc.)
-  text?: string;           // for Tell
-  order?: Command;         // for Order (recursive)
-  deck?: number;           // for GoTo, or specific tile (Sleep at this bed, etc.)
-  x?: number;
-  y?: number;
-  barrelKey?: string;      // for TakeItem
-  itemName?: string;       // for TakeItem, Drink
-}
+// Command system — serializable actions for actors (discriminated union on `name`)
+export type Command =
+  | { name: 'Sleep';              deck?: number; x?: number; y?: number }
+  | { name: 'Eat';               deck?: number; x?: number; y?: number }
+  | { name: 'Steer';             deck?: number; x?: number; y?: number }
+  | { name: 'Navigate';          deck?: number; x?: number; y?: number }
+  | { name: 'ManCannon';         deck?: number; x?: number; y?: number }
+  | { name: 'Lookout';           deck?: number; x?: number; y?: number }
+  | { name: 'GoTo';              deck?: number; x: number; y: number }
+  | { name: 'GoToDeck';          deck: number }
+  | { name: 'CopulateBarrel';    deck: number; x: number; y: number }
+  | { name: 'LightLantern';      deck: number; x: number; y: number }
+  | { name: 'ExtinguishLantern'; deck: number; x: number; y: number }
+  | { name: 'Kiss';              actorId: number }
+  | { name: 'Copulate';          actorId: number }
+  | { name: 'Pet';               actorId: number }
+  | { name: 'Converse';          actorId: number }
+  | { name: 'TakeItem';          barrelKey: string; itemName: string }
+  | { name: 'Drink';             itemName?: string }
+  | { name: 'Stop' }
+  | { name: 'Tell';              actorId: number; text?: string }
+  | { name: 'Order';             actorId: number; order: Command };
 
 export interface ActivityLogEntry {
   text: string;

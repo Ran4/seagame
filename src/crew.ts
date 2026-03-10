@@ -641,9 +641,9 @@ function trySeekLustPartner(member: Actor, crew: Actor[], decks: Deck[]): boolea
 }
 
 /** Try to execute the next command in the actor's queue. Returns true if a command was executed. */
-function findTileOrRandom(decks: Deck[], type: TileType, cmd: Command): DeckPoint | undefined {
-  if (cmd.x !== undefined && cmd.y !== undefined) {
-    return { x: cmd.x, y: cmd.y, deck: cmd.deck ?? 0 };
+function findTileOrRandom(decks: Deck[], type: TileType, pos: { deck?: number; x?: number; y?: number }): DeckPoint | undefined {
+  if (pos.x !== undefined && pos.y !== undefined) {
+    return { x: pos.x, y: pos.y, deck: pos.deck ?? 0 };
   }
   return pickRandom(findTilesOfType(decks, type));
 }
@@ -664,10 +664,9 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
   };
 
   // Helper for actor-targeting commands (Kiss, Copulate, Pet, Converse)
-  const setupActorTarget = (targetState: CrewState, beside: boolean): boolean => {
-    if (cmd.actorId === undefined) { fail('no target actorId'); return true; }
-    const target = crew.find(c => c.id === cmd.actorId);
-    if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
+  const setupActorTarget = (actorId: number, targetState: CrewState, beside: boolean): boolean => {
+    const target = crew.find(c => c.id === actorId);
+    if (!target) { fail(`actor ${actorId} not found`); return true; }
     member.copulationTarget = { type: 'crew', actorId: target.id };
     target.copulationTarget = { type: 'crew', actorId: member.id };
     target.state = CrewState.IDLE;
@@ -744,21 +743,18 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'Kiss': {
-      setupActorTarget(CrewState.KISSING, true);
+      setupActorTarget(cmd.actorId, CrewState.KISSING, true);
       if (member.copulationTarget) log(`going to kiss ${crew.find(c => c.id === cmd.actorId)?.profile.name}`);
       return true;
     }
     case 'Copulate': {
-      setupActorTarget(CrewState.COPULATING, false);
+      setupActorTarget(cmd.actorId, CrewState.COPULATING, false);
       if (member.copulationTarget) log(`going to copulate with ${crew.find(c => c.id === cmd.actorId)?.profile.name}`);
       return true;
     }
     case 'CopulateBarrel': {
-      const x = cmd.x ?? 0;
-      const y = cmd.y ?? 0;
-      const deck = cmd.deck ?? member.deck;
-      member.copulationTarget = { type: 'barrel', x, y, deck };
-      if (!orderCrewToAdjacentTile(member, { x, y, deck }, decks, CrewState.COPULATING)) {
+      member.copulationTarget = { type: 'barrel', x: cmd.x, y: cmd.y, deck: cmd.deck };
+      if (!orderCrewToAdjacentTile(member, { x: cmd.x, y: cmd.y, deck: cmd.deck }, decks, CrewState.COPULATING)) {
         member.copulationTarget = null;
         fail('can\'t reach barrel');
         return true;
@@ -767,25 +763,23 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'Pet': {
-      setupActorTarget(CrewState.PETTING, true);
+      setupActorTarget(cmd.actorId, CrewState.PETTING, true);
       if (member.copulationTarget) log(`going to pet ${crew.find(c => c.id === cmd.actorId)?.profile.name}`);
       return true;
     }
     case 'Converse': {
-      setupActorTarget(CrewState.TALKING, true);
+      setupActorTarget(cmd.actorId, CrewState.TALKING, true);
       if (member.copulationTarget) log(`going to talk to ${crew.find(c => c.id === cmd.actorId)?.profile.name}`);
       return true;
     }
     case 'GoTo': {
-      const x = cmd.x ?? 0;
-      const y = cmd.y ?? 0;
       const deck = cmd.deck ?? member.deck;
-      if (!orderCrewTo(member, { x, y, deck }, decks)) { fail(`can't reach (${x},${y},${deck})`); return true; }
-      log(`going to (${x},${y},${deck})`);
+      if (!orderCrewTo(member, { x: cmd.x, y: cmd.y, deck }, decks)) { fail(`can't reach (${cmd.x},${cmd.y},${deck})`); return true; }
+      log(`going to (${cmd.x},${cmd.y},${deck})`);
       return true;
     }
     case 'GoToDeck': {
-      const targetDeckIdx = cmd.deck ?? 0;
+      const targetDeckIdx = cmd.deck;
       const targetDeck = decks[targetDeckIdx];
       if (!targetDeck) { fail(`deck ${targetDeckIdx} doesn't exist`); return true; }
       let reached = false;
@@ -803,7 +797,6 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'TakeItem': {
-      if (!cmd.barrelKey || !cmd.itemName) { fail('TakeItem needs barrelKey and itemName'); return true; }
       const parts = cmd.barrelKey.split('-').map(Number);
       const [d, bx, by] = parts;
       member.takeTarget = { barrelKey: cmd.barrelKey, itemName: cmd.itemName };
@@ -828,10 +821,7 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'LightLantern': {
-      const x = cmd.x ?? 0;
-      const y = cmd.y ?? 0;
-      const deck = cmd.deck ?? member.deck;
-      if (!orderCrewToAdjacentTile(member, { x, y, deck }, decks, CrewState.LIGHTING_LANTERN)) {
+      if (!orderCrewToAdjacentTile(member, { x: cmd.x, y: cmd.y, deck: cmd.deck }, decks, CrewState.LIGHTING_LANTERN)) {
         fail('can\'t reach lantern');
         return true;
       }
@@ -839,10 +829,7 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'ExtinguishLantern': {
-      const x = cmd.x ?? 0;
-      const y = cmd.y ?? 0;
-      const deck = cmd.deck ?? member.deck;
-      if (!orderCrewToAdjacentTile(member, { x, y, deck }, decks, CrewState.EXTINGUISHING_LANTERN)) {
+      if (!orderCrewToAdjacentTile(member, { x: cmd.x, y: cmd.y, deck: cmd.deck }, decks, CrewState.EXTINGUISHING_LANTERN)) {
         fail('can\'t reach lantern');
         return true;
       }
@@ -871,7 +858,6 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'Order': {
-      if (cmd.actorId === undefined || !cmd.order) { fail('Order needs actorId and order'); return true; }
       const target = crew.find(c => c.id === cmd.actorId);
       if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
       // Compliance check based on friendship
@@ -887,7 +873,6 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     case 'Tell': {
-      if (cmd.actorId === undefined) { fail('Tell needs actorId'); return true; }
       const target = crew.find(c => c.id === cmd.actorId);
       if (!target) { fail(`actor ${cmd.actorId} not found`); return true; }
       log(`told ${target.profile.name}: "${cmd.text ?? '...'}"`);
@@ -897,7 +882,7 @@ function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activity
       return true;
     }
     default:
-      fail(`unknown command "${cmd.name}"`);
+      fail(`unknown command "${(cmd as { name: string }).name}"`);
       return true;
   }
 }
