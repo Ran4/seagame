@@ -35,11 +35,25 @@ export interface DirectionalSprite {
   west: HTMLImageElement | null;  // east is west flipped at render time
 }
 
+async function loadDirectionalSprite(basePath: string): Promise<DirectionalSprite | null> {
+  const south = await loadImage(`${basePath}__south.png`).catch(() => null);
+  if (!south) return null;
+  const [north, west] = await Promise.all([
+    loadImage(`${basePath}__north.png`).catch(() => null),
+    loadImage(`${basePath}__west.png`).catch(() => null),
+  ]);
+  return {
+    south: downscale(south),
+    north: north ? downscale(north) : null,
+    west: west ? downscale(west) : null,
+  };
+}
+
 export interface SpriteSheet {
   tiles: Map<TileType, HTMLImageElement>;
   waterFrames: HTMLImageElement[];
-  crew: HTMLImageElement[];
-  animals: Map<string, HTMLImageElement | DirectionalSprite>;
+  crew: DirectionalSprite[];
+  animals: Map<string, DirectionalSprite>;
   items: Map<string, HTMLImageElement>;
   bubbles: Map<string, HTMLImageElement>;
 }
@@ -69,42 +83,34 @@ export async function loadSprites(): Promise<SpriteSheet> {
     tileNames.map(([, name]) => loadImage(`/sprites/${name}.png`).catch(() => null)),
   );
 
-  const otherCoreLoads = await Promise.all([
-    // Water frame 2
-    loadImage('/sprites/water2.png'),
-    // Crew sprites
-    loadImage('/sprites/crew_red.png'),
-    loadImage('/sprites/crew_blue.png'),
-    loadImage('/sprites/crew_green.png'),
-    loadImage('/sprites/crew_yellow.png'),
-  ]);
+  // Water frame 2
+  const water2Load = loadImage('/sprites/water2.png');
+
+  // Crew sprites (directional)
+  const crewNames = ['crew_red', 'crew_blue', 'crew_green', 'crew_yellow'];
+  const crewLoads = Promise.all(
+    crewNames.map(name => loadDirectionalSprite(`/sprites/${name}`)),
+  );
+
+  // Animal sprites (directional)
+  const animalTypes = ['dog', 'parrot', 'monkey'];
+  const animalLoads = Promise.all(
+    animalTypes.map(name => loadDirectionalSprite(`/sprites/animal_${name}`)),
+  );
 
   // Item sprites loaded separately (optional, may not exist)
-  const itemLoads = await Promise.all(
+  const itemLoads = Promise.all(
     itemNames.map(name => loadImage(`/sprites/item_${name}.png`).catch(() => null)),
   );
 
-  // Animal sprites (optional)
-  const animalTypes = ['dog', 'parrot', 'monkey'];
-  const directionalAnimals = new Set(['dog']);
-  const animalLoads = await Promise.all(
-    animalTypes.map(name => {
-      const file = directionalAnimals.has(name) ? `animal_${name}__south` : `animal_${name}`;
-      return loadImage(`/sprites/${file}.png`).catch(() => null);
-    }),
-  );
-  // Load directional variants (north, west) for directional animals
-  const animalDirLoads = await Promise.all(
-    animalTypes.filter(n => directionalAnimals.has(n)).flatMap(name => [
-      loadImage(`/sprites/animal_${name}__north.png`).catch(() => null),
-      loadImage(`/sprites/animal_${name}__west.png`).catch(() => null),
-    ]),
-  );
-
   // Bubble sprites (optional)
-  const bubbleLoads = await Promise.all(
+  const bubbleLoads = Promise.all(
     bubbleNames.map(name => loadImage(`/sprites/bubble_${name}.png`).catch(() => null)),
   );
+
+  const [water2, crewResults, animalResults, itemResults, bubbleResults] = await Promise.all([
+    water2Load, crewLoads, animalLoads, itemLoads, bubbleLoads,
+  ]);
 
   const tiles = new Map<TileType, HTMLImageElement>();
   for (let i = 0; i < tileNames.length; i++) {
@@ -112,12 +118,11 @@ export async function loadSprites(): Promise<SpriteSheet> {
     if (img) tiles.set(tileNames[i][0], downscale(img));
   }
 
-  const water2 = downscale(otherCoreLoads[0]);
-  const crewSprites = otherCoreLoads.slice(1).map(img => downscale(img));
+  const crewSprites: DirectionalSprite[] = crewResults.filter((s): s is DirectionalSprite => s !== null);
 
   const items = new Map<string, HTMLImageElement>();
   for (let i = 0; i < itemNames.length; i++) {
-    const img = itemLoads[i];
+    const img = itemResults[i];
     if (img) {
       items.set(itemNames[i], downscale(img));
     } else {
@@ -126,34 +131,21 @@ export async function loadSprites(): Promise<SpriteSheet> {
   }
   console.log('Item sprites loaded:', [...items.keys()]);
 
-  const animals = new Map<string, HTMLImageElement | DirectionalSprite>();
-  let dirIdx = 0;
+  const animals = new Map<string, DirectionalSprite>();
   for (let i = 0; i < animalTypes.length; i++) {
-    const img = animalLoads[i];
-    const name = animalTypes[i];
-    if (!img) continue;
-    if (directionalAnimals.has(name)) {
-      const north = animalDirLoads[dirIdx++];
-      const west = animalDirLoads[dirIdx++];
-      animals.set(name, {
-        south: downscale(img),
-        north: north ? downscale(north) : null,
-        west: west ? downscale(west) : null,
-      });
-    } else {
-      animals.set(name, downscale(img));
-    }
+    const ds = animalResults[i];
+    if (ds) animals.set(animalTypes[i], ds);
   }
 
   const bubbles = new Map<string, HTMLImageElement>();
   for (let i = 0; i < bubbleNames.length; i++) {
-    const img = bubbleLoads[i];
+    const img = bubbleResults[i];
     if (img) bubbles.set(bubbleNames[i], downscale(img));
   }
 
   return {
     tiles,
-    waterFrames: [tiles.get(TileType.WATER)!, water2],
+    waterFrames: [tiles.get(TileType.WATER)!, downscale(water2)],
     crew: crewSprites,
     animals,
     items,

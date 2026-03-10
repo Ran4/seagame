@@ -429,30 +429,24 @@ export class Renderer {
     const sx = member.pixelX - camera.x;
     const sy = member.pixelY - camera.y;
 
-    // Pick sprite: animal sprite for non-humans, crew sprite for humans
+    // Pick directional sprite for the actor's facing direction
     const isAnimal = member.actorType !== 'human';
     let sprite: HTMLImageElement | null = null;
     let flipX = false;
-    if (isAnimal) {
-      const animalEntry = this.sprites?.animals.get(member.actorType) ?? null;
-      if (animalEntry && 'south' in animalEntry) {
-        // Directional sprite
-        const dir = animalEntry as DirectionalSprite;
-        if (member.facing === 'north' && dir.north) {
-          sprite = dir.north;
-        } else if (member.facing === 'west' && dir.west) {
-          sprite = dir.west;
-        } else if (member.facing === 'east' && dir.west) {
-          sprite = dir.west;
-          flipX = true;
-        } else {
-          sprite = dir.south;
-        }
+    const dirSprite: DirectionalSprite | null = isAnimal
+      ? (this.sprites?.animals.get(member.actorType) ?? null)
+      : (this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)] ?? null);
+    if (dirSprite) {
+      if (member.facing === 'north' && dirSprite.north) {
+        sprite = dirSprite.north;
+      } else if (member.facing === 'west' && dirSprite.west) {
+        sprite = dirSprite.west;
+      } else if (member.facing === 'east' && dirSprite.west) {
+        sprite = dirSprite.west;
+        flipX = true;
       } else {
-        sprite = animalEntry as HTMLImageElement | null;
+        sprite = dirSprite.south;
       }
-    } else {
-      sprite = this.sprites?.crew[member.profile.spriteIndex % (this.sprites?.crew.length ?? 1)] ?? null;
     }
     // Animals are drawn slightly smaller (monkey even smaller)
     const sizeScale = member.actorType === 'monkey' ? 0.7 : isAnimal ? 0.85 : 1.0;

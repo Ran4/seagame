@@ -71,15 +71,15 @@ const SPRITES = [
   ['raised_floor', `${TILE_STYLE} Dark wooden ship deck floor planks. Rich dark brown horizontal wood planks with thin dark gaps between them. Darker stained wood compared to a regular deck — like mahogany or dark oak. Well-worn but maintained. Seamless and tileable.`],
 
   // Crew
-  ['crew_red', `${CREW_STYLE} Small pirate character seen from directly above. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
-  ['crew_blue', `${CREW_STYLE} Small pirate character seen from directly above. Blue tricorn hat, blue naval coat. Visible round head from above, shoulders, and feet. Idle standing pose facing downward.`],
-  ['crew_green', `${CREW_STYLE} Small pirate character seen from directly above. Green headband, green vest over dark shirt. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
-  ['crew_yellow', `${CREW_STYLE} Small pirate character seen from directly above. Yellow/gold captain's hat, gold-trimmed dark coat. Visible round head, shoulders, and feet. Idle standing pose facing downward.`],
+  ['crew_red', `${CREW_STYLE} Small pirate character. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
+  ['crew_blue', `${CREW_STYLE} Small pirate character. Blue tricorn hat, blue naval coat. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
+  ['crew_green', `${CREW_STYLE} Small pirate character. Green headband, green vest over dark shirt. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
+  ['crew_yellow', `${CREW_STYLE} Small pirate character. Yellow/gold captain's hat, gold-trimmed dark coat. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
 
   // Animals
   ['animal_dog', `${CREW_STYLE} A Bichon Frise dog, taking up about 3/5 of the image, centered. Bright white fluffy fur with a dark pixel outline. Round fluffy head with two small dark eyes and a tiny black nose. Compact oval body. Four small paws.`, { directional: true }],
-  ['animal_parrot', `${CREW_STYLE} A colorful tropical parrot seen from directly above on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak visible from above. Tail feathers trailing behind. Perched standing pose.`],
-  ['animal_monkey', `${CREW_STYLE} A small cute capuchin monkey seen from directly above on a pirate ship deck. Light brown fur, dark face visible from above, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`],
+  ['animal_parrot', `${CREW_STYLE} A colorful tropical parrot on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak. Tail feathers trailing behind. Perched standing pose.`, { directional: true }],
+  ['animal_monkey', `${CREW_STYLE} A small cute capuchin monkey on a pirate ship deck. Light brown fur, dark face, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`, { directional: true }],
 
   // Items
   ['item_cutlass', `${ITEM_STYLE} A pirate's cutlass — short curved steel sword with a brass hand guard and dark wooden grip. Diagonal orientation, blade pointing upper-right.`],
@@ -183,7 +183,7 @@ async function generate(name, prompt) {
 
 const DIRECTION_SUFFIXES = {
   south: { suffix: '__south', promptDir: 'facing south (downward)' },
-  north: { suffix: '__north', promptDir: 'facing north (upward), seen from behind' },
+  north: { suffix: '__north', promptDir: 'facing north (upward), back of head visible' },
   west:  { suffix: '__west', promptDir: 'facing west (left), seen from the side' },
 };
 
