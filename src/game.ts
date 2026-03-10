@@ -3,7 +3,7 @@ import { createSemen, createGrogRation } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
-import { updateSailing, updateNavigator, updateHelmsman, setDestination, stopSailing, createWorldMap, SHIP_SPEED } from './worldmap';
+import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick } from './worldmap';
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 
@@ -146,49 +146,11 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // Map overlay click interception
   if (input.mouseClick && world.mapOverlayOpen) {
-    const mx = input.mouseClick.x;
-    const my = input.mouseClick.y;
-    const ox = 40, oy = 40, ow = 880, oh = 460;
-
-    // Close button (top-right X)
-    const closeX = ox + ow - 28;
-    const closeY = oy + 8;
-    const closeSize = 20;
-    if (mx >= closeX && mx <= closeX + closeSize && my >= closeY && my <= closeY + closeSize) {
+    const result = handleMapOverlayClick(world.worldMap, input.mouseClick.x, input.mouseClick.y);
+    if (result === 'close') {
       world.mapOverlayOpen = false;
-      input.mouseClick = null;
-    } else if (mx >= ox && mx <= ox + ow && my >= oy && my <= oy + oh) {
-      // Stop Sailing button (bottom-right of overlay)
-      if (world.worldMap.destinationIsland) {
-        const btnW = 100, btnH = 22;
-        const btnX = ox + ow - btnW - 10;
-        const btnY = oy + oh - btnH - 8;
-        if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
-          stopSailing(world.worldMap);
-          audio.play('click', world.activeDeck);
-          input.mouseClick = null;
-        }
-      }
-      if (input.mouseClick) {
-        // Check if clicked on an island
-        const toScreenX = (wx: number) => ox + (wx / 100) * ow;
-        const toScreenY = (wy: number) => oy + 30 + ((wy / 80) * (oh - 50));
-
-        for (const island of world.worldMap.islands) {
-          const ix = toScreenX(island.x);
-          const iy = toScreenY(island.y);
-          const dx = mx - ix;
-          const dy = my - iy;
-          if (dx * dx + dy * dy < 14 * 14) {
-            setDestination(world.worldMap, island);
-            audio.play('click', world.activeDeck);
-            break;
-          }
-        }
-      }
-    } else {
-      // Clicked outside overlay — close it
-      world.mapOverlayOpen = false;
+    } else if (result === 'click') {
+      audio.play('click', world.activeDeck);
     }
     input.mouseClick = null;
   }

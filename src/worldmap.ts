@@ -77,3 +77,47 @@ export function stopSailing(map: WorldMap): void {
 export function setDestination(map: WorldMap, island: Island): void {
   map.destinationIsland = island;
 }
+
+// Overlay layout constants (shared with renderer.drawMapOverlay)
+const OVL_X = 40, OVL_Y = 40, OVL_W = 880, OVL_H = 460;
+
+/** Handle a click on the map overlay. Returns: 'click' (play sound), 'close' (close overlay), or null (no action). */
+export function handleMapOverlayClick(map: WorldMap, mx: number, my: number): 'click' | 'close' | null {
+  // Close button (top-right X)
+  const closeX = OVL_X + OVL_W - 28;
+  const closeY = OVL_Y + 8;
+  const closeSize = 20;
+  if (mx >= closeX && mx <= closeX + closeSize && my >= closeY && my <= closeY + closeSize) {
+    return 'close';
+  }
+
+  if (mx >= OVL_X && mx <= OVL_X + OVL_W && my >= OVL_Y && my <= OVL_Y + OVL_H) {
+    // Stop Sailing button (bottom-right of overlay)
+    if (map.destinationIsland) {
+      const btnW = 100, btnH = 22;
+      const btnX = OVL_X + OVL_W - btnW - 10;
+      const btnY = OVL_Y + OVL_H - btnH - 8;
+      if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
+        stopSailing(map);
+        return 'click';
+      }
+    }
+    // Check if clicked on an island
+    const toScreenX = (wx: number) => OVL_X + (wx / 100) * OVL_W;
+    const toScreenY = (wy: number) => OVL_Y + 30 + ((wy / 80) * (OVL_H - 50));
+    for (const island of map.islands) {
+      const ix = toScreenX(island.x);
+      const iy = toScreenY(island.y);
+      const dx = mx - ix;
+      const dy = my - iy;
+      if (dx * dx + dy * dy < 14 * 14) {
+        setDestination(map, island);
+        return 'click';
+      }
+    }
+    return null; // inside overlay but no hit
+  }
+
+  // Clicked outside overlay — close it
+  return 'close';
+}
