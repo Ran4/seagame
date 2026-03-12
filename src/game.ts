@@ -82,6 +82,7 @@ export function createWorld(): World {
     waterOffset: { x: 0, y: 0 },
     activityLog: [],
     orderPollTimer: 0,
+    spottedIslands: new Set(),
   };
 }
 
@@ -340,7 +341,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // Crew AI — track state transitions to play sounds
   const prevStates = world.actors.map(c => c.state);
-  updateActors(world.actors, world.decks, dt, world.barrelInventory, world.time, world.lanternOil, brightness, world.activityLog);
+  updateActors(world.actors, world.decks, dt, world.barrelInventory, world.time, world.lanternOil, brightness, world.activityLog, world.worldMap, world.spottedIslands);
   for (let i = 0; i < world.actors.length; i++) {
     const deck = world.actors[i].deck;
     if (prevStates[i] === CrewState.LIGHTING_LANTERN && world.actors[i].state !== CrewState.LIGHTING_LANTERN) {

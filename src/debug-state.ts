@@ -31,6 +31,7 @@ export interface StateSnapshot {
   actorDetails: Record<string, ActorDetail>;
   time: { gameTime: number; timeOfDay: number; brightness: number; speed: number };
   barrels: Record<string, { name: string; quantity: number }[]>;
+  spottedIslands: number[];
 }
 
 export function serializeState(world: World): StateSnapshot {
@@ -102,5 +103,6 @@ export function serializeState(world: World): StateSnapshot {
       speed: world.worldMap.currentSpeed,
     },
     barrels,
+    spottedIslands: Array.from(world.spottedIslands),
   };
 }

@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
@@ -15,6 +15,11 @@ const NIGHT_FEAR_RATE = 1.0;
 
 // Actor types that can do human work (steer, man cannons, navigate, etc.)
 const WORK_ACTOR_TYPES: Set<ActorType> = new Set(['human']);
+
+const ISLAND_SPOT_DISTANCE = 3;    // leagues
+const ISLAND_SPOT_RESET = 16;      // leagues — clear spotted set when all islands are this far
+const LAND_HO_MORALE_BOOST = 30;
+const LAND_HO_SPEECH_DURATION = 6; // seconds
 
 const ENERGY_RESTORE_RATE = 255 / 240; // full restore in ~240s (8 in-game hours)
 const DRUNKEDNESS_RATE = 255 / 720;
@@ -117,7 +122,24 @@ function canAccessDeck(member: Actor, deckIndex: number): boolean {
   return true;
 }
 
-export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = []): void {
+export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = [], worldMap?: WorldMap, spottedIslands?: Set<number>): void {
+  // Reset spotted islands when ship moves far from all spotted islands
+  if (worldMap && spottedIslands && spottedIslands.size > 0) {
+    let allFar = true;
+    for (const islandId of spottedIslands) {
+      const island = worldMap.islands.find(i => i.id === islandId);
+      if (island) {
+        const dx = worldMap.shipX - island.x;
+        const dy = worldMap.shipY - island.y;
+        if (Math.sqrt(dx * dx + dy * dy) < ISLAND_SPOT_RESET) {
+          allFar = false;
+          break;
+        }
+      }
+    }
+    if (allFar) spottedIslands.clear();
+  }
+
   for (const member of crew) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
@@ -240,6 +262,17 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         break;
       case CrewState.LOOKOUT:
         member.stateTimer -= dt;
+        // Tick speech bubble (updateTalking only runs for TALKING state)
+        if (member.speechBubbleTimer > 0) {
+          member.speechBubbleTimer -= dt;
+          if (member.speechBubbleTimer <= 0) {
+            member.speechBubbleText = null;
+            member.speechBubbleTimer = 0;
+          }
+        }
+        if (worldMap && spottedIslands) {
+          checkForIslandSpotting(member, crew, worldMap, spottedIslands, activityLog, gameTime);
+        }
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
@@ -438,6 +471,24 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.copulationTarget = null;
         }
         break;
+    }
+  }
+}
+
+function checkForIslandSpotting(lookout: Actor, crew: Actor[], worldMap: WorldMap, spottedIslands: Set<number>, activityLog: ActivityLogEntry[], gameTime: number): void {
+  for (const island of worldMap.islands) {
+    if (spottedIslands.has(island.id)) continue;
+    const dx = worldMap.shipX - island.x;
+    const dy = worldMap.shipY - island.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= ISLAND_SPOT_DISTANCE) {
+      spottedIslands.add(island.id);
+      lookout.speechBubbleText = 'Land ho!';
+      lookout.speechBubbleTimer = LAND_HO_SPEECH_DURATION;
+      for (const member of crew) {
+        member.profile.morale = Math.min(255, member.profile.morale + LAND_HO_MORALE_BOOST);
+      }
+      activityLog.push({ text: `${lookout.profile.name} spotted ${island.name}: "Land ho!"`, time: gameTime });
+      return; // one island per tick
     }
   }
 }

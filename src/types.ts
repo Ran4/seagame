@@ -339,4 +339,5 @@ export interface World {
   waterOffset: { x: number; y: number };
   activityLog: ActivityLogEntry[];
   orderPollTimer: number;
+  spottedIslands: Set<number>;
 }
