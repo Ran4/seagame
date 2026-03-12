@@ -1,4 +1,4 @@
-import { Item } from './types';
+import { Item, Actor, ActivityLogEntry } from './types';
 
 export function createCutlass(gameTime: number = 0): Item {
   return {
@@ -22,4 +22,26 @@ export function createSemen(gameTime: number): Item {
     description: 'A viscous fluid.',
     stackable: true, quantity: 1, spoilAfter: 3600, hungerRestore: 5,
   };
+}
+
+export function updateSpoilage(barrelInventory: Map<string, Item[]>, actors: Actor[], gameTime: number, activityLog: ActivityLogEntry[]): void {
+  for (const [key, items] of barrelInventory) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.spoilAfter !== null && gameTime - item.createdAt >= item.spoilAfter) {
+        activityLog.push({ text: `${item.name} in barrel spoiled`, time: gameTime });
+        items.splice(i, 1);
+      }
+    }
+    if (items.length === 0) barrelInventory.delete(key);
+  }
+  for (const actor of actors) {
+    for (let i = actor.profile.inventory.length - 1; i >= 0; i--) {
+      const item = actor.profile.inventory[i];
+      if (item.spoilAfter !== null && gameTime - item.createdAt >= item.spoilAfter) {
+        activityLog.push({ text: `${actor.profile.name}'s ${item.name} spoiled`, time: gameTime });
+        actor.profile.inventory.splice(i, 1);
+      }
+    }
+  }
 }

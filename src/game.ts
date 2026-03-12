@@ -1,5 +1,5 @@
 import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World } from './types';
-import { createSemen, createGrogRation } from './items';
+import { createSemen, createGrogRation, updateSpoilage } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
@@ -335,6 +335,8 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   if (world.activityLog.length > 50) {
     world.activityLog.splice(0, world.activityLog.length - 50);
   }
+
+  updateSpoilage(world.barrelInventory, world.actors, world.time, world.activityLog);
 
   // Crew AI — track state transitions to play sounds
   const prevStates = world.actors.map(c => c.state);
