@@ -10,4 +10,5 @@ export interface RenderContext {
   camera: Camera;
   deckIndex: number;
   hoveredItem: { item: Item; x: number; y: number } | null;
+  hoveredBarTooltip: string[] | null;
 }

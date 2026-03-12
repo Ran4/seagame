@@ -57,6 +57,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
       name, sex, color, spriteIndex, numberOfHands,
       hunger: 200 + Math.random() * 55,
       energy: 200 + Math.random() * 55,
+      morale: 128 + Math.random() * 32,
       inventory: [],
       hands: [],
     },

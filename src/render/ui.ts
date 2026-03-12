@@ -2,7 +2,7 @@ import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Deck, Actor,
   STATE_NAMES, Item, SECONDS_PER_DAY,
-  ActivityLogEntry,
+  ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS,
 } from '../types';
 import { RenderContext } from './context';
 import { TILE_NAMES } from './index';
@@ -425,6 +425,19 @@ function layoutCrewPanel(rc: RenderContext, member: Actor, draw: boolean): numbe
   }
   y += 20;
 
+  // Morale bar
+  if (draw) {
+    ctx.fillText('Morale', px + 10, y + 10);
+    drawBar(rc, px + 75, y, 115, 12, p.morale / 255, '#2ecc71');
+    // Hover tooltip
+    const barX = px + 75, barY = y, barW = 115, barH = 12;
+    if (rc.mousePos.x >= barX && rc.mousePos.x <= barX + barW &&
+        rc.mousePos.y >= barY && rc.mousePos.y <= barY + barH) {
+      rc.hoveredBarTooltip = buildMoraleTooltip(member, rc.brightness, rc.lanternOil);
+    }
+  }
+  y += 20;
+
   // Drunk bar (conditional)
   const drunkAmount = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
   if (drunkAmount > 0) {
@@ -505,6 +518,84 @@ function layoutCrewPanel(rc: RenderContext, member: Actor, draw: boolean): numbe
 
   y += 6; // bottom padding
   return y - py;
+}
+
+function buildMoraleTooltip(member: Actor, brightness: number, lanternOil: Map<string, number>): string[] {
+  const p = member.profile;
+  const lines: string[] = [`Morale: ${Math.round(p.morale)}/255`];
+
+  // Hunger
+  if (p.hunger >= 200) lines.push('Belly: Well-fed  \u2191');
+  else if (p.hunger >= 128) lines.push('Belly: Fed  \u2192');
+  else if (p.hunger < 15) lines.push('Belly: Starving  \u2193\u2193');
+  else if (p.hunger < 70) lines.push('Belly: Hungry  \u2193');
+  else lines.push('Belly: Peckish  \u2192');
+
+  // Energy
+  if (p.energy >= 200) lines.push('Rest: Well-rested  \u2191');
+  else if (p.energy >= 128) lines.push('Rest: Rested  \u2192');
+  else if (p.energy < 25) lines.push('Rest: Exhausted  \u2193\u2193');
+  else if (p.energy < 60) lines.push('Rest: Tired  \u2193');
+  else lines.push('Rest: Okay  \u2192');
+
+  // Friendship
+  let avgFriendship = 128;
+  if (member.relations.length > 0) {
+    let sum = 0;
+    for (const r of member.relations) sum += r.friendship;
+    avgFriendship = sum / member.relations.length;
+  }
+  if (avgFriendship >= 160) lines.push('Crew: Well-liked  \u2191');
+  else if (avgFriendship >= 128) lines.push('Crew: Gets along  \u2192');
+  else if (avgFriendship < 64) lines.push('Crew: Disliked  \u2193\u2193');
+  else if (avgFriendship < 96) lines.push('Crew: Unpopular  \u2193');
+  else lines.push('Crew: Tolerated  \u2192');
+
+  // Night status
+  if (brightness < 0.5) {
+    const RADIUS = LANTERN_SAFE_RADIUS;
+    const mx = Math.floor(member.pixelX / TILE_SIZE);
+    const my = Math.floor(member.pixelY / TILE_SIZE);
+    let nearLit = false;
+    for (const [key, oil] of lanternOil) {
+      if (oil <= 0) continue;
+      if (!key.startsWith(`${member.deck}-`)) continue;
+      const parts = key.slice(`${member.deck}-`.length).split('-');
+      if (Math.abs(mx - parseInt(parts[0])) + Math.abs(my - parseInt(parts[1])) <= RADIUS) {
+        nearLit = true; break;
+      }
+    }
+    if (nearLit) lines.push('Night: Lantern nearby  \u2192');
+    else if (p.morale < NIGHT_FEAR_MORALE_THRESHOLD) lines.push('Night: Fear  \u2193\u2193');
+    else lines.push('Night: Brave  \u2192');
+  }
+
+  return lines;
+}
+
+export function drawBarTooltip(rc: RenderContext, lines: string[]): void {
+  const ctx = rc.ctx;
+  const mousePos = rc.mousePos;
+  ctx.font = '11px monospace';
+  const pad = 6;
+  const lineH = 14;
+  const maxW = Math.max(...lines.map(l => ctx.measureText(l).width));
+  const tw = maxW + pad * 2;
+  const th = lines.length * lineH + pad * 2;
+  let tx = mousePos.x + 14;
+  let ty = mousePos.y - th - 4;
+  if (tx + tw > CANVAS_WIDTH) tx = mousePos.x - tw - 4;
+  if (ty < 0) ty = mousePos.y + 18;
+  ctx.fillStyle = 'rgba(0,0,0,0.9)';
+  ctx.fillRect(tx, ty, tw, th);
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
+  ctx.textAlign = 'left';
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillStyle = i === 0 ? '#ffffff' : '#aaaaaa';
+    ctx.fillText(lines[i], tx + pad, ty + pad + (i + 1) * lineH - 3);
+  }
 }
 
 function drawObjectPanel(

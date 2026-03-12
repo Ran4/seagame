@@ -14,6 +14,7 @@ interface ActorDetail extends ActorSummary {
   sex: string;
   hunger: number;
   energy: number;
+  morale: number;
   facing: string;
   relations: { name: string; friendship: number; attraction: number }[];
   inventory: { name: string; quantity: number }[];
@@ -64,6 +65,7 @@ export function serializeState(world: World): StateSnapshot {
       sex: a.profile.sex,
       hunger: a.profile.hunger,
       energy: a.profile.energy,
+      morale: a.profile.morale,
       facing: a.facing,
       relations: a.relations.map(r => {
         const other = world.actors.find(o => o.id === r.actorId);

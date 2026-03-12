@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
@@ -10,6 +10,8 @@ import { LUST_ACTOR_TYPES } from './factory';
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
 const PET_FRIENDSHIP_GAIN = 2;
+const MORALE_RATE = 0.3; // drift toward target per second
+const NIGHT_FEAR_RATE = 1.0;
 
 // Actor types that can do human work (steer, man cannons, navigate, etc.)
 const WORK_ACTOR_TYPES: Set<ActorType> = new Set(['human']);
@@ -61,6 +63,12 @@ export function refreshConditions(member: Actor): void {
   else if (member.profile.energy < 60) member.conditions.add('tired');
   if (member.profile.hunger < 15) member.conditions.add('starving');
   else if (member.profile.hunger < 70) member.conditions.add('hungry');
+  // Derived: morale levels
+  if (member.profile.morale >= 192) member.conditions.add('happy');
+  else if (member.profile.morale >= 128) member.conditions.add('content');
+  else if (member.profile.morale < 32) member.conditions.add('mutinous');
+  else if (member.profile.morale < 64) member.conditions.add('miserable');
+  else if (member.profile.morale < 96) member.conditions.add('grumbling');
 }
 
 function getWalkableTiles(deck: Deck, deckIndex: number): DeckPoint[] {
@@ -140,6 +148,48 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     // Tick lust seek cooldown
     if (member.lustSeekCooldown > 0) {
       member.lustSeekCooldown = Math.max(0, member.lustSeekCooldown - dt);
+    }
+
+    // Morale tick — drift toward target derived from needs/relations
+    {
+      const hungerContrib = member.profile.hunger;
+      const energyContrib = member.profile.energy;
+      let avgFriendship = 128;
+      if (member.relations.length > 0) {
+        let sum = 0;
+        for (const r of member.relations) sum += r.friendship;
+        avgFriendship = sum / member.relations.length;
+      }
+      const target = (hungerContrib + energyContrib + avgFriendship) / 3;
+      const diff = target - member.profile.morale;
+      const step = MORALE_RATE * dt;
+      if (Math.abs(diff) < step) {
+        member.profile.morale = target;
+      } else {
+        member.profile.morale += Math.sign(diff) * step;
+      }
+
+      // Night fear: crew lose extra morale in the dark when not near a lit lantern
+      if (brightness < 0.5 && member.profile.morale < NIGHT_FEAR_MORALE_THRESHOLD) {
+        const mx = Math.floor(member.pixelX / TILE_SIZE);
+        const my = Math.floor(member.pixelY / TILE_SIZE);
+        let nearLitLantern = false;
+        for (const [key, oil] of lanternOil) {
+          if (oil <= 0) continue;
+          const prefix = `${member.deck}-`;
+          if (!key.startsWith(prefix)) continue;
+          const parts = key.slice(prefix.length).split('-');
+          const lx = parseInt(parts[0]);
+          const ly = parseInt(parts[1]);
+          if (Math.abs(mx - lx) + Math.abs(my - ly) <= LANTERN_SAFE_RADIUS) {
+            nearLitLantern = true;
+            break;
+          }
+        }
+        if (!nearLitLantern) {
+          member.profile.morale = Math.max(0, member.profile.morale - NIGHT_FEAR_RATE * dt);
+        }
+      }
     }
 
     refreshConditions(member);
@@ -348,6 +398,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
             if (member.consumingItem.name === 'Grog ration') {
               const cur = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
               member.statuses.set('drunkedness', { amount: Math.min(255, cur + 140) });
+              member.profile.morale = Math.min(255, member.profile.morale + 20);
             }
             if (member.consumingItem.hungerRestore > 0) {
               member.profile.hunger = Math.min(255, member.profile.hunger + member.consumingItem.hungerRestore);

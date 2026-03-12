@@ -13,6 +13,7 @@ export const DUSK_START = 420;
 export const NIGHT_START = 480;
 
 export const NIGHT_BRIGHTNESS = 0.3;
+export const NIGHT_FEAR_MORALE_THRESHOLD = 192;
 const BRIGHTNESS_RANGE = 1.0 - NIGHT_BRIGHTNESS;
 
 // TODO: when seasons exist, make this change over the seasons!
@@ -25,6 +26,7 @@ export function getShipBrightness(timeOfDay: number): number {
 }
 
 // Lantern constants
+export const LANTERN_SAFE_RADIUS = 5;
 export const LANTERN_BURNOUT_RATE = 0.4;
 export const LIGHT_LANTERN_DURATION = 3;
 export const EXTINGUISH_LANTERN_DURATION = 0.5;
@@ -194,6 +196,7 @@ export interface ActorProfile {
   numberOfHands: number;
   hunger: number;   // 0-255
   energy: number;   // 0-255
+  morale: number;   // 0-255
   inventory: Item[];
   hands: Item[];    // length <= numberOfHands
 }

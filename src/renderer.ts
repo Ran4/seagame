@@ -8,7 +8,7 @@ import {
   RenderContext,
   drawWater, drawDeck, drawActor,
   drawUI, drawSoundButton, drawActivityLog, drawCompass,
-  drawTooltip, drawItemTooltip,
+  drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
 } from './render';
 
@@ -58,6 +58,7 @@ export class Renderer {
       camera,
       deckIndex,
       hoveredItem: null,
+      hoveredBarTooltip: null,
     };
 
     ctx.fillStyle = WATER_COLOR_1;
@@ -154,6 +155,9 @@ export class Renderer {
     }
     if (rc.hoveredItem) {
       drawItemTooltip(rc, rc.hoveredItem.item);
+    }
+    if (rc.hoveredBarTooltip) {
+      drawBarTooltip(rc, rc.hoveredBarTooltip);
     }
 
     this.hoveredItem = rc.hoveredItem;
