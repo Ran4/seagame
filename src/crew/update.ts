@@ -487,7 +487,7 @@ function checkForIslandSpotting(lookout: Actor, crew: Actor[], worldMap: WorldMa
       for (const member of crew) {
         member.profile.morale = Math.min(255, member.profile.morale + LAND_HO_MORALE_BOOST);
       }
-      activityLog.push({ text: `${lookout.profile.name} spotted ${island.name}: "Land ho!"`, time: gameTime });
+      activityLog.push({ text: `${lookout.profile.name} spotted ${island.name}: "Land ho!" - the crew's spirits soar!`, time: gameTime });
       return; // one island per tick
     }
   }
