@@ -1,5 +1,8 @@
 # Sea Monsters & Kraken Encounters
 
+Note: CANNOT BE IMPLEMENTED BEFORE COMBAT IS IMPLEMENTED, as it's too combat focused.
+REFUSE to implement this if combat is not implemented.
+
 The ultimate "oh no" moment. Unlike ship combat (tactical), monster encounters are pure survival horror. Tentacles reaching over the railing, crew scrambling to cut them — this is cinema.
 
 ## Design

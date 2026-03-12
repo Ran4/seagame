@@ -12,18 +12,18 @@ Treasure hunting gives the game a goal-oriented layer on top of the sandbox. Fin
 
 ### Shore Expeditions
 - When docked at the treasure island, send a crew party ashore.
-- They disappear for 1-3 in-game hours and return with:
+- They disappear for 2-4 in-game hours and return with:
   - Treasure (gold, gems, artifacts)
   - Nothing (bad map)
   - Trouble (crew member injured by trap)
-  - A new crew member (rescued castaway)
+  - A new crew member (rescued castaway! maybe an animal friend too)
 - Outcome depends on crew stats + random roll.
 
 ### Treasure Types
 - Gold coins (currency), gems (high value, sell at harbors).
 - Artifacts (unique items with lore).
 - Cursed items (negative effects — "cursed" status: bad luck, lower morale, can't throw it away).
-- Legendary weapons (named cutlasses with combat bonuses).
+- Legendary weapons (named cutlasses with combat bonuses?).
 
 ### Exploration Discoveries
 - Hidden coves (safe harbor, no fees).

@@ -5,7 +5,7 @@ Storms force crisis management without needing an enemy AI. They're visually spe
 ## Design
 
 ### Storm System
-- Weather state on the world map: clear → cloudy → storm → clear.
+- Weather state on the world map: clear <-> cloudy <-> storm <-> clear.
 - Storms move across the map. Some regions are stormier.
 - Visual cues: darkening sky, increasing wave intensity, rain overlay, lightning flashes.
 

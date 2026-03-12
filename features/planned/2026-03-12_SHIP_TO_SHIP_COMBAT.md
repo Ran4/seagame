@@ -1,6 +1,10 @@
 # Ship-to-Ship Combat
 
-The core action loop: sail → encounter → fight → loot → repair → sail. Every other system gains meaning when combat exists — eating matters because starving crew can't fight, relationships matter because friends fight harder together, the helm matters because maneuvering is life or death.
+The core action loop:
+sail → encounter → fight → loot → repair → sail.
+
+Every other system gains meaning when combat exists — eating matters because starving crew can't fight,
+the helm matters because maneuvering is life or death.
 
 ## Design
 
@@ -11,7 +15,7 @@ The core action loop: sail → encounter → fight → loot → repair → sail.
 
 ### Combat Phase
 - Ships broadside each other. Crew at cannons fire automatically.
-- Rate of fire depends on crew skill, hunger, energy. Each cannon has a cone of fire and a reload timer.
+- Rate of fire depends on crew skill (later! not now), hunger, energy. Each cannon has a cone of fire and a reload timer.
 - Cannonballs can miss, hit hull (damage), or hit crew (injury/death).
 
 ### Hull Damage
@@ -21,8 +25,7 @@ The core action loop: sail → encounter → fight → loot → repair → sail.
 
 ### Boarding
 - When ships are adjacent, player can order crew to board via planks.
-- Melee combat using cutlasses from inventory.
-- Crew with higher energy + friendship with allies fight better.
+- LATER, but DO NOT implement now: Melee combat using cutlasses from inventory.
 - Winning a boarding action captures the enemy ship's cargo.
 
 ### Consequences
@@ -32,4 +35,4 @@ The core action loop: sail → encounter → fight → loot → repair → sail.
 
 ## Implementation Notes
 
-Start simple: enemy ships as a World-level entity with HP and crew count (no need to simulate their full AI). Cannon fire as a periodic damage roll. Boarding as a series of 1v1 stat comparisons. Extend the existing command system with "Fire Cannon" and "Board Enemy" commands. Pathfinding already handles multi-deck navigation, so crew walking to cannons is free.
+Start simple: enemy ships as a World-level entity with HP and crew count (no need to simulate their full AI). Cannon fire as a periodic damage roll. Boarding as a series of 1v1 stat comparisons. The existing command system can be extended with "Fire Cannon" and "Board Enemy" commands. The pathfinding system already handles multi-deck navigation, so crew walking to cannons is free.

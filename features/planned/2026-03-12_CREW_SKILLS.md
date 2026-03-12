@@ -10,23 +10,24 @@ Makes every actor irreplaceable. When your best helmsman dies in a storm, it hur
 - **Combat** (0-255): melee damage, defense.
 - **Cooking** (0-255): food quality, hunger restore bonus.
 - **Navigation** (0-255): map reading, course accuracy.
-- Each starts random 20-80.
+- Each starts random 10-60.
 
 ### Learning by Doing
 - Skills improve through use: steering raises Sailing, firing cannons raises Gunnery, etc.
-- Rate: +1 per in-game hour of activity.
+- Rate: varies depending on category. But for example, combat: +0.2 per in-game second of activity. navigating
+  is a lot slower as some crew might spend half their time navigating.
 - No XP menus, no level-up screens — quiet, organic growth discovered when checking crew stats.
 
-### Skill Effects (at 200+)
+### Skill Effects (at 192+)
 - Sailing: can navigate storms without mast damage.
 - Gunnery: double fire rate.
-- Combat: can fight two enemies at once during boarding.
+- Combat: ??? TBA leave an issue markdown file in issues/ that it's not implemented yet
 - Cooking: meals restore +50% hunger.
 - Navigation: reveals hidden islands on map.
 
 ### Traits
 - Permanent traits assigned at creation or earned through events.
-- "Eagle Eye" (better lookout range), "Iron Stomach" (immune to pufferfish), "Sea Legs" (no storm stumbling), "Berserker" (double combat when injured).
+- SOME traits: "Eagle Eye" (better lookout range), "Iron Stomach" (immune to pufferfish), "Sea Legs" (no storm stumbling), "Berserker" (double combat when badly injured).
 - Traits make each crew member unique and create attachment.
 
 ## Implementation Notes
