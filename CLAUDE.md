@@ -66,7 +66,8 @@ Currently 2 decks (index 0 = upper, 1 = lower). Keys 2/3 switch. Plan for up to 
 
 ### Actor AI (`crew.ts`)
 All entities are `Actor` with `actorType: 'human' | 'dog' | 'parrot' | 'monkey'`.
-Each actor has hunger/energy (0-255, high = satisfied). Needs tick down over time.
+Each actor has hunger/energy/morale (0-255, high = satisfied). Needs tick down over time.
+Morale modifiers: night fear (below `NIGHT_FEAR_MORALE_THRESHOLD` brightness → morale drain), lanterns (mitigate night fear).
 States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING.
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.

@@ -7,11 +7,17 @@ import { tryExecuteCommand } from './commands';
 import { trySeekLustPartner } from './lust';
 import { LUST_ACTOR_TYPES } from './factory';
 
+// Needs decay
 const HUNGER_RATE = 0.7;
 const ENERGY_RATE = 0.4;
-const PET_FRIENDSHIP_GAIN = 2;
+
+// Morale
 const MORALE_RATE = 0.3; // drift toward target per second
 const NIGHT_FEAR_RATE = 1.0;
+const DOG_MORALE_BONUS = 15; // added to morale target if friendly dog on same deck
+
+// Social
+const PET_FRIENDSHIP_GAIN = 2;
 
 // Actor types that can do human work (steer, man cannons, navigate, etc.)
 const WORK_ACTOR_TYPES: Set<ActorType> = new Set(['human']);
@@ -182,7 +188,12 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         for (const r of member.relations) sum += r.friendship;
         avgFriendship = sum / member.relations.length;
       }
-      const target = (hungerContrib + energyContrib + avgFriendship) / 3;
+      // Dog morale bonus: if any friendly dog is on the same deck, nudge target up
+      const hasFriendlyDog = member.actorType === 'human' && crew.some(c =>
+        c.actorType === 'dog' && c.deck === member.deck &&
+        (member.relations.find(r => r.actorId === c.id)?.friendship ?? 0) >= 128
+      );
+      const target = Math.min(255, (hungerContrib + energyContrib + avgFriendship) / 3 + (hasFriendlyDog ? DOG_MORALE_BONUS : 0));
       const diff = target - member.profile.morale;
       const step = MORALE_RATE * dt;
       if (Math.abs(diff) < step) {
