@@ -120,21 +120,36 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
         const match = getAutocomplete(world.commandInput.text);
         if (match && world.commandInput.text.indexOf(' ') < 0) {
           world.commandInput.text = match.commandName;
+          world.commandInput.cursorPos = match.commandName.length;
           if (world.commandInput.mode === 'html') {
             input.hiddenInput.value = match.commandName;
           }
         }
       } else if (world.commandInput.mode === 'manual') {
+        const ci = world.commandInput;
         if (key === 'Backspace') {
-          world.commandInput.text = world.commandInput.text.slice(0, -1);
+          if (ci.cursorPos > 0) {
+            ci.text = ci.text.slice(0, ci.cursorPos - 1) + ci.text.slice(ci.cursorPos);
+            ci.cursorPos--;
+          }
+        } else if (key === 'ArrowLeft') {
+          if (ci.cursorPos > 0) ci.cursorPos--;
+        } else if (key === 'ArrowRight') {
+          if (ci.cursorPos < ci.text.length) ci.cursorPos++;
+        } else if (key === 'Delete') {
+          if (ci.cursorPos < ci.text.length) {
+            ci.text = ci.text.slice(0, ci.cursorPos) + ci.text.slice(ci.cursorPos + 1);
+          }
         } else if (key.length === 1) {
-          world.commandInput.text += key;
+          ci.text = ci.text.slice(0, ci.cursorPos) + key + ci.text.slice(ci.cursorPos);
+          ci.cursorPos++;
         }
       }
     }
     // Sync from hidden input in html mode
     if (world.commandInput && world.commandInput.mode === 'html') {
       world.commandInput.text = input.hiddenInput.value;
+      world.commandInput.cursorPos = input.hiddenInput.selectionStart ?? input.hiddenInput.value.length;
     }
     // Suppress all other input while command bar is open
     input.keyEvents.length = 0;
@@ -154,7 +169,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
         if (key === 'Backspace') { openMode = 'manual'; break; }
       }
       if (openMode) {
-        world.commandInput = { text: '', mode: openMode };
+        world.commandInput = { text: '', mode: openMode, cursorPos: 0 };
         if (openMode === 'html') {
           input.hiddenInput.value = '';
           input.hiddenInput.focus();

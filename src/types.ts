@@ -296,6 +296,7 @@ export interface Item {
 export interface CommandInput {
   text: string;
   mode: 'html' | 'manual';
+  cursorPos: number;
 }
 
 export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note';

@@ -146,10 +146,12 @@ export function drawCommandInput(rc: RenderContext, commandInput: CommandInput):
     ctx.fillText(text, textX, textY);
   }
 
-  // Blinking cursor
+  // Blinking cursor at cursorPos
   const cursorVisible = Math.floor(Date.now() / 500) % 2 === 0;
   if (cursorVisible) {
-    const cursorX = textX + ctx.measureText(text).width;
+    ctx.font = '13px monospace';
+    const beforeCursor = text.slice(0, commandInput.cursorPos);
+    const cursorX = textX + ctx.measureText(beforeCursor).width;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(cursorX + 1, barY + 6, 1.5, barH - 12);
   }
