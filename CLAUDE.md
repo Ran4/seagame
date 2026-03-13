@@ -17,30 +17,41 @@ npm run dev      # Vite dev server on port 7070
 
 ## Project structure
 
+### Code
+
 ```
 src/
-  main.ts          Entry point — creates World, wires up renderer/input/audio, runs game loop
-  game.ts          createWorld() + update() — free functions operating on World struct
-  menu.ts          Context menu — buildContextMenu(), handleMenuClick(), menuItemToCommand()
-  types.ts         All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540), World struct
-  ship.ts          Ship layout — two decks defined as ASCII art, parsed to TileType[][]
-  crew.ts          Actor AI — needs system (hunger/energy), A* pathfinding, autonomous behavior (humans + animals)
-  conversation.ts  Crew conversations — snippets, proximity trigger, turn-based speech bubbles
-  pathfinding.ts   A* on multi-deck tile grid — nodes are (x, y, deck), stairs connect decks
-  renderer.ts      Canvas rendering — sprites with colored-rectangle fallback, UI overlays
-  input.ts         Keyboard + mouse input state, camera scrolling, click/hover handling
-  sprites.ts       Async sprite loader — loads PNGs from /sprites/, returns SpriteSheet
-  audio.ts         AudioManager — preloads SFX, handles music loop (starts on first click)
-  debug-state.ts   serializeState() — produces JSON snapshot of World for /api/state
+  main.ts              Entry point — creates World, wires up renderer/input/audio, runs game loop
+  game.ts              createWorld() + update() — free functions operating on World struct
+  menu.ts              Context menu — buildContextMenu(), handleMenuClick(), menuItemToCommand()
+  types.ts             All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540), World struct
+  ship.ts              Ship layout — two decks defined as ASCII art, parsed to TileType[][]
+  crew/                Actor AI module (was crew.ts, split into submodules)
+    index.ts           Re-exports public API (updateActors, issueCommand, createActors, movement helpers)
+    update.ts          refreshConditions(), updateActors() — needs system, autonomous behavior
+    commands.ts        issueCommand() — executes Command objects (from menu or order files)
+    factory.ts         createActors() — spawns humans + animals with randomized traits/relations
+    movement.ts        orderCrewTo/Adjacent/Beside — pathfinding-based movement helpers
+    lust.ts            Attraction/copulation logic
+  conversation.ts      Crew conversations — snippets, proximity trigger, turn-based speech bubbles
+  pathfinding.ts       A* on multi-deck tile grid — nodes are (x, y, deck), stairs connect decks
+  renderer.ts          Canvas rendering — sprites with colored-rectangle fallback, UI overlays
+  input.ts             Keyboard + mouse input state, camera scrolling, click/hover handling
+  sprites.ts           Async sprite loader — loads PNGs from /sprites/, returns SpriteSheet
+  audio.ts             AudioManager — preloads SFX, handles music loop (starts on first click)
+  items.ts             Item factory functions — createCutlass(), createGrogRation(), createSemen(), spoilage
+  worldmap.ts          World map — islands, sailing, navigation, SECONDS_PER_DAY
+  command-shorthand.ts Parses shorthand command strings (e.g. "Sleep 1 3 5") into Command objects
+  debug-state.ts       serializeState() — produces JSON snapshot of World for /api/state
 
 public/
-  sprites/                 PNG sprites (32x32 pixel art at 1024x1024, scaled down in-game)
-  audio/                   shanty.wav (music)
-    sfx/                   Procedural/OpenAI-generated SFX (WAV fallbacks)
-    elevenlabs-generated/  ElevenLabs-generated SFX (MP3, used by default)
+  sprites/                 PNG sprites
+  audio/                   Music
+    sfx/                   Procedural/OpenAI-generated SFX
+    elevenlabs-generated/  ElevenLabs-generated SFX
 ```
 
-Folders used during development/debugging:
+### Folders used during development/debugging
 
 ```
 scripts/
@@ -58,23 +69,21 @@ features/
 issues/                  Known issues and open bugs
 
 orders/
-  orders_for_*.jsonl     External order files (one per actor, polled once/sec by Vite plugin)
+  orders_for_*.jsonl     Write orders (one per actor) here to execute them, polled once/sec by Vite plugin
 ```
 
 ## Key concepts
 
 ### Ship layout (`ship.ts`)
-Decks are defined as ASCII strings, each char maps to a TileType:
-- `.` water, `#` hull, `_` floor, `S` stairs, `W` helm, `M` mast
-- `C` cannon, `K` stove, `B` bed, `R` barrel, `T` table
+Decks are defined as ASCII strings, each char maps to a TileType.
 
-Currently 2 decks (index 0 = upper, 1 = lower). Keys 2/3 switch. Plan for up to 4 decks.
+Currently 2 decks (index 0 = upper, 1 = lower). We will plan for up to 4 decks (3+lookout spot)
 
-### Actor AI (`crew.ts`)
+### Actor AI (`crew/`)
 All entities are `Actor` with `actorType: 'human' | 'dog' | 'parrot' | 'monkey'`.
 Each actor has hunger/energy/morale (0-255, high = satisfied). Needs tick down over time.
 Morale modifiers: night fear (below `NIGHT_FEAR_MORALE_THRESHOLD` brightness → morale drain), lanterns (mitigate night fear).
-States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING.
+States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING etc.
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.
 Player gives orders to humans via right-click context menus (see below) or the command system (see `features/COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
@@ -148,14 +157,7 @@ Escape or clicking outside closes the menu.
 
 ## Adding new tile types
 
-1. Add to `TileType` enum in `types.ts`
-2. Add to `WALKABLE` set if crew can stand on it
-3. Add color to `TILE_COLORS`
-4. Add char mapping in `ship.ts` `CHAR_TO_TILE`
-5. Place it in the deck ASCII layout
-6. Add name to `TILE_NAMES` in `renderer.ts` (for tooltip)
-7. Add sprite generation prompt in `scripts/generate-sprites.mjs`
-8. Run `node scripts/generate-sprites.mjs` (skips existing sprites)
+See .claude/rules/adding_new_tile_types.md
 
 ## Adding new actor behaviors
 
@@ -167,23 +169,11 @@ Gate human-only behaviors with `WORK_ACTOR_TYPES.has(member.actorType)`.
 
 ## Adding new thought bubbles
 
-1. Add the type to `ThoughtBubble` union in `types.ts` (e.g. `'skull'`)
-2. Add sprite prompt in `generate-sprites.mjs` using `BUBBLE_STYLE` (name: `bubble_<type>`)
-3. Add the name to `bubbleNames` array in `sprites.ts`
-4. Run `node scripts/generate-sprites.mjs` to generate the PNG
-5. Set `member.thoughtBubble = '<type>'` and `member.thoughtBubbleTimer = <seconds>` where needed in `crew.ts`
-6. Fallback rendering (no sprite) is handled in `drawCrewMember()` in `renderer.ts` — add a case there if needed
+See .claude/rules/adding_new_thought_bubbles.md
 
 ## Generating assets
 
-Sprites require `OPENAI_API_KEY` in `.env`. SFX supports three backends per sound (see `generate-sfx.mjs`).
-ElevenLabs sounds require `ELEVENLABS_API_KEY` in `.env`. Scripts skip already-existing files.
-```
-node scripts/generate-sprites.mjs   # pixel art tiles + crew
-node scripts/generate-music.mjs     # shanty.wav
-node scripts/generate-sfx.mjs       # SFX (procedural → sfx/, elevenlabs → elevenlabs-generated/)
-```
-Delete a file and rerun to regenerate just that one.
+See .claude/rules/generating_assets.md
 
 ## Style guidelines
 
