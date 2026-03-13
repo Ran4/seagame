@@ -82,32 +82,32 @@ Currently 2 decks (index 0 = upper, 1 = lower). We will plan for up to 4 decks (
 ### Actor AI (`crew/`)
 All entities are `Actor` with `actorType: 'human' | 'dog' | 'parrot' | 'monkey'`.
 Each actor has hunger/energy/morale (0-255, high = satisfied). Needs tick down over time.
-Morale modifiers: night fear (below `NIGHT_FEAR_MORALE_THRESHOLD` brightness → morale drain), lanterns (mitigate night fear).
-States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING etc.
+Morale modifiers: night fear (when dark and morale below `NIGHT_FEAR_MORALE_THRESHOLD` → extra morale drain), lanterns (mitigate night fear).
+States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING.
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.
-Player gives orders to humans via right-click context menus (see below) or the command system (see `features/COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
-Sleep restores energy gradually (~0.53/s, full restore in ~480s). Eating uses a fixed timer (8s).
+Player gives orders to humans via right-click context menus (see below) or the command system (see `features/implemented/2026-03-10_COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
+Sleep restores energy gradually (rate-based, sleeps until full). Eating uses a fixed timer.
 
-**Statuses & Conditions** (`refreshConditions()` in `crew.ts`):
-Each crew member has `statuses: Map<string, payload | null>` (raw state) and `conditions: Set<string>` (rebuilt every tick). Statuses hold permanent traits (`'dickless'`, null payload) or tracked values (`'drunkedness'`, `{ amount }` payload). Conditions include every status key plus derived conditions: `'drunk'` (drunkedness >= 128), `'tipsy'` (>= 64), `'exhausted'` (energy < 25, sleeps even in daytime), `'tired'` (energy < 60), `'starving'` (hunger < 15), `'hungry'` (hunger < 70). Game code reads `conditions` for behaviour; writes go to `statuses`. Drunk effects: wobbly walking (25% per step), lowered kiss/copulate thresholds. Tipsy: 8% wobble, slightly lowered thresholds.
+**Statuses & Conditions** (`refreshConditions()` in `crew/update.ts`):
+Each crew member has `statuses: Map<string, payload | null>` (raw state) and `conditions: Set<string>` (rebuilt every tick). Statuses hold permanent traits (`'dickless'`, null payload) or tracked values (`'drunkedness'`, `{ amount }` payload). Conditions include every status key plus derived conditions: `'drunk'`, `'tipsy'`, `'exhausted'` (sleeps even in daytime), `'tired'`, `'starving'`, `'hungry'`. Game code reads `conditions` for behaviour; writes go to `statuses`. Drunk effects: wobbly walking, lowered kiss/copulate thresholds. Tipsy: less wobble, slightly lowered thresholds.
 
 **Relations:** Each actor has `relations: ActorRelation[]` with entries for every other actor (including cross-species).
-- `friendship` (0-255): >=128 friend, <64 dislike. Initialized randomly 64-192.
-- `attraction` (0-255): >=128 both sides required for copulation. Initialized randomly 0-160 (0 cross-species).
+- `friendship` (0-255): high = friend, low = dislike. Cross-species starts at same range as same-species.
+- `attraction` (0-255): mutual high attraction required for copulation. 0 cross-species.
 
 **Interactions** (right-click actor with another selected → "Interact ▶" submenu):
-- **Pet** (3s, human→animal only): +2 friendship both ways. Heart thought bubble.
-- **Kiss** (3s, human→human): enabled if initiator's friendship >= 64 OR attraction >= 64. If both sides have attraction >= 64: +32 attraction each. Otherwise: -32 attraction and -32 friendship each.
-- **Copulate** (15s, same species): enabled if both sides have attraction >= 128. Barrel copulation has no attraction check.
+- **Pet** (human→animal only): friendship gain both ways. Heart thought bubble.
+- **Kiss** (human→human): enabled if initiator's friendship or attraction meets threshold. Positive if both attracted, negative otherwise (attraction/friendship penalty).
+- **Copulate** (same species): enabled if both sides have high mutual attraction. Barrel copulation has no attraction check.
 
-**Thought bubbles:** Shown above the initiator for 3s after kiss/copulation completes.
+**Thought bubbles:** Shown above the initiator after kiss/copulation completes.
 - Kiss (positive) → heart bubble. Kiss (negative) → broken heart bubble.
 - Copulation (crew-crew) → heart bubble.
 Sprites: `bubble_heart.png`, `bubble_broken_heart.png`. Fallback: circle with unicode symbol.
-Stored as `thoughtBubble: ThoughtBubble | null` + `thoughtBubbleTimer` on CrewMember.
+Stored as `thoughtBubble: ThoughtBubble | null` + `thoughtBubbleTimer` on Actor.
 
-**Conversations** (`conversation.ts`): Idle actors within 2 tiles on the same deck may autonomously start talking (15% chance per idle decision for humans; animals attempt at 1/20th rate with animal-specific lines like "Woof!", "BRAWWK!", etc.). Conversations have 3-5 exchanges of ~3s each, with crew alternating speech bubbles containing procedural pirate-themed snippets. Snippet categories (generic, work, hungry, tired, friendly, unfriendly, night) are chosen by weighted random based on context (hunger, energy, friendship, brightness). At conversation end: +2 friendship (or -3 for the 15% "disagreement" conversations). 30-60s cooldown after each conversation. Player can stop via right-click "Stop talking". Rendered as canvas-drawn white rounded-rect speech bubbles with text (distinct from sprite-based thought bubbles).
+**Conversations** (`conversation.ts`): Idle actors within proximity on the same deck may autonomously start talking (animals attempt at a much lower rate with animal-specific lines like "Woof!", "BRAWWK!", etc.). Conversations have multiple exchanges, with crew alternating speech bubbles containing procedural pirate-themed snippets. Snippet categories (generic, work, hungry, tired, friendly, unfriendly, night) are chosen by weighted random based on context. At conversation end: usually small friendship gain, small chance of friendship loss, rare chance of large friendship loss. Cooldown after each conversation. Player can stop via right-click "Stop talking". Rendered as canvas-drawn white rounded-rect speech bubbles with text (distinct from sprite-based thought bubbles).
 
 ### Pathfinding (`pathfinding.ts`)
 Standard A* with 4-directional movement. Stairs tiles connect decks (same x,y position).
@@ -153,7 +153,7 @@ Escape or clicking outside closes the menu.
 
 **Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/implemented/2026-03-10_COMMAND_SYSTEM.md` for the full command reference.
 
-**Live debugging:** Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`). The `World` object is also on `window.__world`. See `features/LIVE_DEBUGGING.md`.
+**Live debugging:** Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`). The `World` object is also on `window.__world`. See `features/implemented/2026-03-10_LIVE_DEBUGGING.md`.
 
 ## Adding new tile types
 
