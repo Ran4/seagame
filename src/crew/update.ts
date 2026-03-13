@@ -39,6 +39,9 @@ const DANCE_DURATION = 15;
 const DANCE_MORALE_GAIN = 8;
 const DANCE_FRIENDSHIP_GAIN = 4;
 const DANCE_COOLDOWN = 150;
+const DANCE_LUST_GAIN = 10;
+const DANCE_ATTRACTION_GAIN = 5;
+const DANCE_ATTRACTION_RADIUS = 3;
 
 function getDogMoraleAdj(member: Actor, crew: Actor[]): number {
   if (member.actorType !== 'human') return 0;
@@ -586,11 +589,30 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         }
         if (member.stateTimer <= 0) {
           member.profile.morale = Math.min(255, member.profile.morale + DANCE_MORALE_GAIN);
+          // Lust boost from dancing
+          const danceLust = member.statuses.get('lust') as { amount: number } | undefined;
+          if (danceLust) danceLust.amount = Math.min(255, danceLust.amount + DANCE_LUST_GAIN);
+          // Nearby watchers get attracted to this dancer (within 3 tiles)
+          const dmx = Math.floor(member.pixelX / TILE_SIZE);
+          const dmy = Math.floor(member.pixelY / TILE_SIZE);
+          for (const watcher of crew) {
+            if (watcher.id === member.id || watcher.deck !== member.deck) continue;
+            if (member.shantyInitiatorId !== null && watcher.shantyInitiatorId === member.shantyInitiatorId) continue;
+            const wx = Math.floor(watcher.pixelX / TILE_SIZE);
+            const wy = Math.floor(watcher.pixelY / TILE_SIZE);
+            if (Math.abs(dmx - wx) + Math.abs(dmy - wy) <= DANCE_ATTRACTION_RADIUS) {
+              const watcherRel = watcher.relations.find(r => r.actorId === member.id);
+              if (watcherRel) watcherRel.attraction = Math.min(255, watcherRel.attraction + DANCE_ATTRACTION_GAIN);
+            }
+          }
           if (member.shantyInitiatorId !== null) {
             for (const other of crew) {
               if (other.id === member.id || other.shantyInitiatorId !== member.shantyInitiatorId) continue;
               const rel = member.relations.find(r => r.actorId === other.id);
-              if (rel) rel.friendship = Math.min(255, rel.friendship + DANCE_FRIENDSHIP_GAIN);
+              if (rel) {
+                rel.friendship = Math.min(255, rel.friendship + DANCE_FRIENDSHIP_GAIN);
+                rel.attraction = Math.min(255, rel.attraction + DANCE_ATTRACTION_GAIN);
+              }
             }
             if (member.id === member.shantyInitiatorId) {
               activityLog.push({ text: `${member.profile.name} led a merry dance`, time: gameTime });
