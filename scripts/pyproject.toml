@@ -1,0 +1,9 @@
+[project]
+name = "seagame-scripts"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.25",
+    "openai>=1.0",
+    "pydantic-settings>=2.0",
+]
