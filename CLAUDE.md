@@ -80,10 +80,12 @@ Decks are defined as ASCII strings, each char maps to a TileType.
 Currently 2 decks (index 0 = upper, 1 = lower). We will plan for up to 4 decks (3+lookout spot)
 
 ### Actor AI (`crew/`)
+Read code for exact details.
+
 All entities are `Actor` with `actorType: 'human' | 'dog' | 'parrot' | 'monkey'`.
 Each actor has hunger/energy/morale (0-255, high = satisfied). Needs tick down over time.
-Morale modifiers: night fear (when dark and morale below `NIGHT_FEAR_MORALE_THRESHOLD` → extra morale drain), lanterns (mitigate night fear).
-States: IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING.
+Morale modifiers include night fear (when dark and morale below `NIGHT_FEAR_MORALE_THRESHOLD` → extra morale drain), lanterns (mitigate night fear), ...
+States: `IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING`
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.
 Player gives orders to humans via right-click context menus (see below) or the command system (see `features/implemented/2026-03-10_COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
@@ -126,34 +128,17 @@ Water animates by alternating two sprite frames.
 - Hover over furniture: tooltip with tile name
 
 ### Right-click context menu (`menu.ts`, `types.ts`)
-Right-click opens a context menu with actions. Two targets:
 
-**Right-click a human crew member:**
-- "Stop [action]" — shown if crew is busy (walking, eating, sleeping, steering, manning cannon)
-- "Go to Upper/Lower Deck" — sends crew to the other deck via stairs
-- "Interact ▶" — submenu with Converse/Kiss/Copulate (shown when another human is selected)
+See .claude/rules/context_menu.md
 
-**Right-click an animal (with human selected):**
-- "Interact ▶" → "Pet" (3s, +2 friendship both ways)
+## Command dispatch
 
-**Right-click a furniture tile (with crew selected):**
-- Bed → "Sleep" (restores energy gradually, ~480s for full restore)
-- Stove → "Eat"
-- Helm → "Steer"
-- Cannon → "Man Cannon"
-- Stairs → "Go to stairs"
-- Barrel → "Items ▶" (if barrel has items) + "Copulate" (males only)
+All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/implemented/2026-03-10_COMMAND_SYSTEM.md` for the full command reference.
 
-**Barrel items submenu (3-level):** Right-clicking a barrel with a crew selected shows "Items ▶" → per-item entries (e.g. "Semen (x2) ▶") → "Take". Clicking "Take" pathfinds the crew to the barrel then transfers one unit to their inventory on arrival. Uses `TAKING_ITEM` crew state. Stackable items show quantity and decrement; non-stackable items are moved whole. Empty barrels have their inventory entry cleaned up. Barrel contents stored in `World.barrelInventory: Map<string, Item[]>` keyed by `"deck-x-y"`.
+## Live debugging
 
-**Submenus (up to 3 levels):** `ContextMenuItem` supports `submenu?: ContextMenuItem[]`, nestable to 3 levels. Parent items show "▶" and open a flyout on hover. `handleMenuClick` checks deepest level first. Returns `undefined` (keep menu open) for submenu parents/disabled sub-items, vs `null` (close) for outside clicks. Disabled items (`disabled: true`) render grey and are not clickable. Level-3 panels edge-clamp (flip to left side if they'd overflow `CANVAS_WIDTH`). `ContextMenuItem` also supports `action?: string` and `itemData?: { barrelKey, itemName }` for non-state-based actions like taking items.
-
-Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
-Escape or clicking outside closes the menu.
-
-**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/implemented/2026-03-10_COMMAND_SYSTEM.md` for the full command reference.
-
-**Live debugging:** Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`). The `World` object is also on `window.__world`. See `features/implemented/2026-03-10_LIVE_DEBUGGING.md`.
+Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`).
+The `World` object is also on `window.__world`. See `features/implemented/2026-03-10_LIVE_DEBUGGING.md`.
 
 ## Adding new tile types
 
