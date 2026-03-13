@@ -604,7 +604,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.facing = vx > 0.3 ? 'east' : vx < -0.3 ? 'west' : 'south';
         }
         if (member.stateTimer <= 0) {
-          member.profile.morale = Math.min(255, member.profile.morale + DANCE_MORALE_GAIN);
+          const danceMorale = (member.actorType === 'human' && (member.skills.dancing ?? 0) >= SKILL_MASTERY) ? DANCE_MORALE_GAIN * 2 : DANCE_MORALE_GAIN;
+          member.profile.morale = Math.min(255, member.profile.morale + danceMorale);
           // Lust boost from dancing
           const danceLust = member.statuses.get('lust') as { amount: number } | undefined;
           if (danceLust) danceLust.amount = Math.min(255, danceLust.amount + DANCE_LUST_GAIN);

@@ -1,1 +1,0 @@
-- Skill mastery effects — At 192+ dancing skill: bigger morale boosts for the master dancer.
