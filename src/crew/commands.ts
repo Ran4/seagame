@@ -259,6 +259,18 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       return true;
     }
     case 'Dance': {
+      const DANCE_CMD_DURATION = 15;
+      member.state = CrewState.DANCING;
+      member.stateTimer = DANCE_CMD_DURATION;
+      member.shantyInitiatorId = null;
+      member.thoughtBubble = 'music_note';
+      member.thoughtBubbleTimer = DANCE_CMD_DURATION;
+      member.conversationCooldown = 30;
+      member.path = [];
+      log('started dancing');
+      return true;
+    }
+    case 'GroupDance': {
       const DANCE_MAX = 5;
       const DANCE_CMD_DURATION = 15;
       const dancers: Actor[] = [member];
@@ -279,7 +291,7 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
         dancer.conversationCooldown = 30;
         dancer.path = [];
       }
-      log('started dancing');
+      log('started a group dance');
       return true;
     }
     case 'Stop': {

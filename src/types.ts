@@ -320,6 +320,7 @@ export type Command =
   | { name: 'Drink';             itemName?: string }
   | { name: 'Sing' }
   | { name: 'Dance' }
+  | { name: 'GroupDance' }
   | { name: 'Stop' }
   | { name: 'Tell';              actorId: number; text?: string }
   | { name: 'Order';             actorId: number; order: Command };

@@ -26,6 +26,7 @@ const COMMANDS: Record<string, string[]> = {
   Drink:             ['itemName...'],
   Sing:              [],
   Dance:             [],
+  GroupDance:         [],
   Stop:              [],
   Tell:              ['actorId', 'text...'],
   Order:             ['actorId', 'order()'],

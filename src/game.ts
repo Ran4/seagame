@@ -397,8 +397,12 @@ async function pollOrders(world: World): Promise<void> {
       }
       actor.commandQueue.length = 0; // clear existing queue
       actor.commandQueue.push(...commands);
-      // Force idle so commands execute immediately
+      // Force idle so commands execute immediately (also interrupt wandering)
       if (actor.state === CrewState.IDLE) {
+        actor.idleTimer = 0;
+      } else if (actor.state === CrewState.WALKING && actor.targetState === CrewState.IDLE) {
+        actor.state = CrewState.IDLE;
+        actor.path = [];
         actor.idleTimer = 0;
       }
       const names = commands.map(c => c.name);
