@@ -553,6 +553,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         break;
       case CrewState.DANCING: {
         if (member.actorType === 'human') member.skills.dancing = Math.min(255, (member.skills.dancing ?? 0) + 0.3 * dt);
+        member.profile.energy = Math.max(0, member.profile.energy - 3.0 * dt);
         member.stateTimer -= dt;
         // Dance animation: distinct moves cycling every ~2.5s
         // Each move: stepping, spinning (pause-spin-pause), or moonwalking
