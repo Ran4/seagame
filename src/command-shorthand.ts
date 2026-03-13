@@ -6,7 +6,7 @@ import type { Command } from './types';
  *   (none) = required int, ? = optional int, $ = required string token,
  *   ... = rest of line as string, () = recursive command in parens
  */
-const COMMANDS: Record<string, string[]> = {
+export const COMMANDS: Record<string, string[]> = {
   Sleep:             ['deck?', 'x?', 'y?'],
   Eat:               ['deck?', 'x?', 'y?'],
   Steer:             ['deck?', 'x?', 'y?'],

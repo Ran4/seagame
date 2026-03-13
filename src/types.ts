@@ -293,6 +293,11 @@ export interface Item {
   hungerRestore: number;     // hunger added when consumed (0-255 scale)
 }
 
+export interface CommandInput {
+  text: string;
+  mode: 'html' | 'manual';
+}
+
 export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note';
 
 export type CopulationTarget =
@@ -355,4 +360,5 @@ export interface World {
   danceCooldown: number;
   mutinyState: 'none' | 'ultimatum' | 'game_over';
   mutinyTimer: number;
+  commandInput: CommandInput | null;
 }

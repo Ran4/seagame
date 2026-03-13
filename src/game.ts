@@ -6,6 +6,7 @@ import { createInputHandler, updateCamera, handleClick, InputState } from './inp
 import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick } from './worldmap';
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
+import { getAutocomplete, submitCommandInput } from './command-input';
 
 export function createWorld(): World {
   const decks = createShip();
@@ -87,6 +88,7 @@ export function createWorld(): World {
     danceCooldown: 0,
     mutinyState: 'none',
     mutinyTimer: 0,
+    commandInput: null,
   };
 }
 
@@ -95,6 +97,68 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // Game over — skip simulation updates, only handle input for restart
   if (world.mutinyState === 'game_over') return;
+
+  // --- Command input bar ---
+  input.commandBarOpen = world.commandInput !== null;
+  if (world.commandInput) {
+    for (const key of input.keyEvents) {
+      if (key === 'Escape') {
+        world.commandInput = null;
+        input.hiddenInput.blur();
+        break;
+      } else if (key === 'Enter') {
+        submitCommandInput(world);
+        input.hiddenInput.blur();
+        break;
+      } else if (key === 'Tab') {
+        const match = getAutocomplete(world.commandInput.text);
+        if (match && world.commandInput.text.indexOf(' ') < 0) {
+          world.commandInput.text = match.commandName;
+          if (world.commandInput.mode === 'html') {
+            input.hiddenInput.value = match.commandName;
+          }
+        }
+      } else if (world.commandInput.mode === 'manual') {
+        if (key === 'Backspace') {
+          world.commandInput.text = world.commandInput.text.slice(0, -1);
+        } else if (key.length === 1) {
+          world.commandInput.text += key;
+        }
+      }
+    }
+    // Sync from hidden input in html mode
+    if (world.commandInput && world.commandInput.mode === 'html') {
+      world.commandInput.text = input.hiddenInput.value;
+    }
+    // Suppress all other input while command bar is open
+    input.keyEvents.length = 0;
+    input.keysDown.clear();
+    // Close on click outside
+    if (input.mouseClick) {
+      world.commandInput = null;
+      input.hiddenInput.blur();
+      input.mouseClick = null;
+    }
+  } else {
+    // Open command input bar (Enter = html mode, Backspace = manual mode)
+    if (world.selectedActorId !== null && !world.contextMenu && !world.mapOverlayOpen) {
+      let openMode: 'html' | 'manual' | null = null;
+      for (const key of input.keyEvents) {
+        if (key === 'Enter') { openMode = 'html'; break; }
+        if (key === 'Backspace') { openMode = 'manual'; break; }
+      }
+      if (openMode) {
+        world.commandInput = { text: '', mode: openMode };
+        if (openMode === 'html') {
+          input.hiddenInput.value = '';
+          input.hiddenInput.focus();
+        }
+        input.keysDown.delete('Enter');
+        input.keysDown.delete('Backspace');
+      }
+    }
+  }
+  input.keyEvents.length = 0;
 
   // Tick shanty/dance cooldowns
   if (world.shantyCooldown > 0) world.shantyCooldown = Math.max(0, world.shantyCooldown - dt);

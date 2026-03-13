@@ -11,6 +11,7 @@ import {
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
 } from './render';
+import { drawCommandInput } from './command-input';
 
 const WATER_COLOR_1 = '#1a5276';
 
@@ -152,6 +153,9 @@ export class Renderer {
     drawTooltip(rc, deck);
     if (contextMenu) {
       drawContextMenu(rc, contextMenu, mousePos);
+    }
+    if (world.commandInput) {
+      drawCommandInput(rc, world.commandInput);
     }
     if (mapOverlayOpen && worldMap) {
       drawMapOverlay(rc, worldMap, mousePos, time, hasNavigator, hasHelmsman, hasExpertNavigator);

@@ -560,30 +560,40 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         member.stateTimer -= dt;
         // Dance animation: distinct moves cycling every ~2.5s
         // Each move: stepping, spinning (pause-spin-pause), or moonwalking
+        // Drunk dancers are sloppier — bigger amplitude, wobblier
         const danceT = DANCE_DURATION - member.stateTimer;
         const dancePhase = member.id * 1.7;
-        const danceW = 5;
+        const drunk = member.conditions.has('drunk');
+        const tipsy = member.conditions.has('tipsy');
+        const danceAmp = drunk ? 9 : tipsy ? 7 : 5;
+        const danceW = drunk ? 4 : 5; // drunk = slower, lurchier
         const danceFacings: Array<Actor['facing']> = ['south', 'east', 'north', 'west'];
         const moveCycle = 2.5;
         const moveIdx = Math.floor((danceT + dancePhase) / moveCycle) % 3;
         const moveT = ((danceT + dancePhase) % moveCycle); // time within current move
+        // Drunk wobble: random perpendicular drift
+        if (drunk || tipsy) {
+          const wobble = (drunk ? 15 : 8) * (Math.sin(danceT * 11 + dancePhase * 3) * 0.5 + Math.sin(danceT * 7) * 0.5);
+          member.pixelY += wobble * dt;
+        }
         if (moveIdx === 0) {
           // Spinning: pause 0.5s → spin 1.5s → pause 0.5s
           if (moveT < 0.5 || moveT > 2.0) {
             member.facing = 'south'; // stand still facing south
           } else {
             const spinDir = Math.sin(dancePhase) > 0 ? 1 : -1;
-            member.facing = danceFacings[((Math.floor((moveT - 0.5) * 8) * spinDir) % 4 + 4) % 4];
+            const spinSpeed = drunk ? 5 : 8; // drunk spins slower
+            member.facing = danceFacings[((Math.floor((moveT - 0.5) * spinSpeed) * spinDir) % 4 + 4) % 4];
           }
         } else if (moveIdx === 1) {
           // Moonwalk — move one way, face the other
-          member.pixelX += 5 * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
+          member.pixelX += danceAmp * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
           const vx = Math.cos(danceW * danceT + dancePhase);
           member.facing = vx > 0 ? 'west' : 'east';
         } else {
           // Stepping — move back and forth, face movement direction
-          member.pixelX += 5 * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
-          member.pixelY += 3 * danceW * Math.cos(0.7 * danceW * danceT + dancePhase + 2) * dt;
+          member.pixelX += danceAmp * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
+          member.pixelY += (danceAmp * 0.6) * danceW * Math.cos(0.7 * danceW * danceT + dancePhase + 2) * dt;
           const vx = Math.cos(danceW * danceT + dancePhase);
           member.facing = vx > 0.3 ? 'east' : vx < -0.3 ? 'west' : 'south';
         }
@@ -832,10 +842,16 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
   }
 
   // Dancing: daytime, high average morale, 2+ idle humans on same deck
-  if (world && brightness > 0.7 && world.danceCooldown <= 0 && member.conversationCooldown <= 0 && Math.random() < DANCE_CHANCE) {
+  // Drunk/tipsy crew are more likely to dance and need lower morale
+  {
+  const isDrunk = member.conditions.has('drunk');
+  const isTipsy = member.conditions.has('tipsy');
+  const danceChance = isDrunk ? DANCE_CHANCE * 3 : isTipsy ? DANCE_CHANCE * 2 : DANCE_CHANCE;
+  const danceMoraleReq = isDrunk ? DANCE_MORALE_THRESHOLD - 40 : isTipsy ? DANCE_MORALE_THRESHOLD - 20 : DANCE_MORALE_THRESHOLD;
+  if (world && brightness > 0.7 && world.danceCooldown <= 0 && member.conversationCooldown <= 0 && Math.random() < danceChance) {
     const humansForDance = crew.filter(c => c.actorType === 'human');
     const avgMoraleDance = humansForDance.reduce((sum, c) => sum + c.profile.morale, 0) / humansForDance.length;
-    if (avgMoraleDance >= DANCE_MORALE_THRESHOLD) {
+    if (avgMoraleDance >= danceMoraleReq) {
       const danceCandidates = humansForDance.filter(c =>
         c.deck === member.deck && c.id !== member.id &&
         (c.state === CrewState.IDLE || (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE)) &&
@@ -855,6 +871,7 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
         return;
       }
     }
+  }
   }
 
   // Otherwise wander

@@ -2,23 +2,40 @@ import {Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, Actor, Deck, W
 
 export interface InputState {
   keysDown: Set<string>;
+  keyEvents: string[];  // raw keydown event.key values, consumed each frame
   mouseClick: {x: number; y: number} | null;
   rightClick: {x: number; y: number} | null;
   mousePos: {x: number; y: number};
   scrollY: number; // accumulated scroll in pixels
+  hiddenInput: HTMLInputElement;
+  commandBarOpen: boolean; // set by game.ts, used to preventDefault in keydown
 }
 
 export function createInputHandler(canvas: HTMLCanvasElement): InputState {
+  const hiddenInput = document.createElement('input');
+  hiddenInput.id = 'command-input';
+  hiddenInput.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+  hiddenInput.setAttribute('autocomplete', 'off');
+  document.body.appendChild(hiddenInput);
+
   const state: InputState = {
     keysDown: new Set(),
+    keyEvents: [],
     mouseClick: null,
     rightClick: null,
     mousePos: {x: 0, y: 0},
     scrollY: 0,
+    hiddenInput,
+    commandBarOpen: false,
   };
 
   window.addEventListener('keydown', (e) => {
+    // Prevent Tab from moving focus and Backspace from navigating back
+    if (state.commandBarOpen && (e.key === 'Tab' || e.key === 'Backspace')) {
+      e.preventDefault();
+    }
     state.keysDown.add(e.key);
+    state.keyEvents.push(e.key);
   });
 
   window.addEventListener('keyup', (e) => {
