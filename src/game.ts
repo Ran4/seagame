@@ -100,6 +100,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // --- Command input bar ---
   input.commandBarOpen = world.commandInput !== null;
+  if (world.commandInput) input.commandBarMode = world.commandInput.mode;
   if (world.commandInput) {
     for (const key of input.keyEvents) {
       if (key === 'Escape') {

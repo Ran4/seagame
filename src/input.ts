@@ -9,6 +9,7 @@ export interface InputState {
   scrollY: number; // accumulated scroll in pixels
   hiddenInput: HTMLInputElement;
   commandBarOpen: boolean; // set by game.ts, used to preventDefault in keydown
+  commandBarMode: 'html' | 'manual';
 }
 
 export function createInputHandler(canvas: HTMLCanvasElement): InputState {
@@ -27,12 +28,15 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
     scrollY: 0,
     hiddenInput,
     commandBarOpen: false,
+    commandBarMode: 'html',
   };
 
   window.addEventListener('keydown', (e) => {
-    // Prevent Tab from moving focus and Backspace from navigating back
-    if (state.commandBarOpen && (e.key === 'Tab' || e.key === 'Backspace')) {
-      e.preventDefault();
+    // Prevent Tab from moving focus; prevent Backspace from navigating back (manual mode only —
+    // in html mode the hidden input needs to receive Backspace natively)
+    if (state.commandBarOpen) {
+      if (e.key === 'Tab') e.preventDefault();
+      if (e.key === 'Backspace' && state.commandBarMode === 'manual') e.preventDefault();
     }
     state.keysDown.add(e.key);
     state.keyEvents.push(e.key);
