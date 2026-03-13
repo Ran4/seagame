@@ -293,10 +293,16 @@ export interface Item {
   hungerRestore: number;     // hunger added when consumed (0-255 scale)
 }
 
+export type InputMode = 'html' | 'ingame';
+
 export interface CommandInput {
   text: string;
-  mode: 'html' | 'manual';
+  mode: 'html' | 'ingame';
   cursorPos: number;
+}
+
+export interface GameSettings {
+  inputMode: InputMode;
 }
 
 export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note';
@@ -362,4 +368,6 @@ export interface World {
   mutinyState: 'none' | 'ultimatum' | 'game_over';
   mutinyTimer: number;
   commandInput: CommandInput | null;
+  settingsOpen: boolean;
+  settings: GameSettings;
 }

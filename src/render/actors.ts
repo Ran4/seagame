@@ -98,6 +98,14 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
   } else if (member.state === CrewState.DANCING) {
     ctx.fillText('\u266B', sx + 14, sy - 12);
   }
+}
+
+/** Draw overlays (bubbles, name labels) for an actor — call in a second pass after all actors are drawn */
+export function drawActorOverlays(rc: RenderContext, member: Actor, selected: boolean): void {
+  const ctx = rc.ctx;
+  const camera = rc.camera;
+  const sx = member.pixelX - camera.x;
+  const sy = member.pixelY - camera.y;
 
   // Speech bubble (conversation) — takes priority over thought bubble
   if (member.speechBubbleText) {

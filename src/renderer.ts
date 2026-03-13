@@ -6,10 +6,11 @@ import {
 import { SpriteSheet } from './sprites';
 import {
   RenderContext,
-  drawWater, drawDeck, drawActor,
+  drawWater, drawDeck, drawActor, drawActorOverlays,
   drawUI, drawSoundButton, drawActivityLog, drawCompass,
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
+  drawSettingsButton, drawSettingsPanel,
 } from './render';
 import { drawCommandInput } from './command-input';
 
@@ -141,12 +142,22 @@ export class Renderer {
         drawActor(rc, member, member.id === selectedActorId);
       }
     }
+    // Second pass: draw bubbles and name labels on top of all actors
+    for (const member of crew) {
+      if (member.deck === deckIndex) {
+        drawActorOverlays(rc, member, member.id === selectedActorId);
+      }
+    }
 
     drawUI(rc, deck, deckIndex, crew, selectedActorId, selectedObject, decks, barrelInventory, time);
     if (worldMap) {
       drawCompass(rc, worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }
+    drawSettingsButton(rc, world.settingsOpen);
     drawSoundButton(rc, soundMuted, sfxMuted);
+    if (world.settingsOpen) {
+      drawSettingsPanel(rc, world.settings);
+    }
     if (activityLog.length > 0) {
       drawActivityLog(rc, activityLog, time);
     }

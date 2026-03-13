@@ -1,4 +1,4 @@
-import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World, SKILL_MASTERY } from './types';
+import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World, SKILL_MASTERY, InputMode, GameSettings } from './types';
 import { createSemen, createGrogRation, updateSpoilage } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
@@ -7,6 +7,23 @@ import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SP
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
+
+function loadSettings(): GameSettings {
+  try {
+    const stored = localStorage.getItem('seagame_settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.inputMode === 'html' || parsed.inputMode === 'ingame') {
+        return { inputMode: parsed.inputMode };
+      }
+    }
+  } catch {}
+  return { inputMode: 'html' };
+}
+
+function saveSettings(settings: GameSettings): void {
+  try { localStorage.setItem('seagame_settings', JSON.stringify(settings)); } catch {}
+}
 
 export function createWorld(): World {
   const decks = createShip();
@@ -89,6 +106,8 @@ export function createWorld(): World {
     mutinyState: 'none',
     mutinyTimer: 0,
     commandInput: null,
+    settingsOpen: false,
+    settings: loadSettings(),
   };
 }
 
@@ -125,7 +144,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
             input.hiddenInput.value = match.commandName;
           }
         }
-      } else if (world.commandInput.mode === 'manual') {
+      } else if (world.commandInput.mode === 'ingame') {
         const ci = world.commandInput;
         if (key === 'Backspace') {
           if (ci.cursorPos > 0) {
@@ -161,21 +180,19 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       input.mouseClick = null;
     }
   } else {
-    // Open command input bar (Enter = html mode, Backspace = manual mode)
-    if (world.selectedActorId !== null && !world.contextMenu && !world.mapOverlayOpen) {
-      let openMode: 'html' | 'manual' | null = null;
+    // Open command input bar on Enter (mode from settings)
+    if (world.selectedActorId !== null && !world.contextMenu && !world.mapOverlayOpen && !world.settingsOpen) {
       for (const key of input.keyEvents) {
-        if (key === 'Enter') { openMode = 'html'; break; }
-        if (key === 'Backspace') { openMode = 'manual'; break; }
-      }
-      if (openMode) {
-        world.commandInput = { text: '', mode: openMode, cursorPos: 0 };
-        if (openMode === 'html') {
-          input.hiddenInput.value = '';
-          input.hiddenInput.focus();
+        if (key === 'Enter') {
+          const mode = world.settings.inputMode;
+          world.commandInput = { text: '', mode, cursorPos: 0 };
+          if (mode === 'html') {
+            input.hiddenInput.value = '';
+            input.hiddenInput.focus();
+          }
+          input.keysDown.delete('Enter');
+          break;
         }
-        input.keysDown.delete('Enter');
-        input.keysDown.delete('Backspace');
       }
     }
   }
@@ -212,9 +229,11 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   }
   world.wasNavigating = anyNavigating;
 
-  // Escape closes overlay or context menu
+  // Escape closes overlay, settings, or context menu
   if (input.keysDown.has('Escape')) {
-    if (world.mapOverlayOpen) {
+    if (world.settingsOpen) {
+      world.settingsOpen = false;
+    } else if (world.mapOverlayOpen) {
       world.mapOverlayOpen = false;
     } else {
       world.contextMenu = null;
@@ -263,19 +282,55 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     const mx = input.mouseClick.x;
     const my = input.mouseClick.y;
 
-    // Sound toggle buttons (bottom-left, 24x24 with 8px margin)
+    // Bottom-left buttons: cogwheel (8), music (36), sfx (64) — all 24x24, 4px gap
     const btnSize = 24;
-    const btnX = 8;
     const btnY = CANVAS_HEIGHT - btnSize - 8;
-    if (mx >= btnX && mx <= btnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+
+    // Settings cogwheel
+    if (mx >= 8 && mx <= 8 + btnSize && my >= btnY && my <= btnY + btnSize) {
+      world.settingsOpen = !world.settingsOpen;
+      audio.play('click', world.activeDeck);
+      input.mouseClick = null;
+    }
+    // Music toggle
+    const musicBtnX = 8 + btnSize + 4;
+    if (input.mouseClick && mx >= musicBtnX && mx <= musicBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
       audio.toggleMute();
       input.mouseClick = null;
     }
-    // SFX toggle button (right of music button)
-    const sfxBtnX = btnX + btnSize + 4;
-    if (mx >= sfxBtnX && mx <= sfxBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+    // SFX toggle
+    const sfxBtnX = musicBtnX + btnSize + 4;
+    if (input.mouseClick && mx >= sfxBtnX && mx <= sfxBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
       audio.toggleSfxMute();
       input.mouseClick = null;
+    }
+
+    // Settings panel click handling
+    if (input.mouseClick && world.settingsOpen) {
+      // Panel is drawn above the cogwheel: x=8, y=btnY-panelH-4
+      const panelW = 200;
+      const panelH = 50;
+      const panelX = 8;
+      const panelY = btnY - panelH - 4;
+      if (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH) {
+        // Pill hit detection: pills are at y=panelY+26, "Html" at x=panelX+80, "In-game" at x after
+        const pillY = panelY + 24;
+        const pillH = 18;
+        if (my >= pillY && my <= pillY + pillH) {
+          const htmlPillX = panelX + 78;
+          const htmlPillW = 38;
+          const ingamePillX = htmlPillX + htmlPillW + 4;
+          const ingamePillW = 62;
+          if (mx >= htmlPillX && mx <= htmlPillX + htmlPillW) {
+            world.settings.inputMode = 'html';
+            saveSettings(world.settings);
+          } else if (mx >= ingamePillX && mx <= ingamePillX + ingamePillW) {
+            world.settings.inputMode = 'ingame';
+            saveSettings(world.settings);
+          }
+        }
+        input.mouseClick = null;
+      }
     }
 
     // Check deck selector panel (x:10-170, y:14 + i*22, h:22, 2 entries)

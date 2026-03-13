@@ -2,13 +2,14 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   Item, SECONDS_PER_DAY,
   ActivityLogEntry,
+  GameSettings,
 } from '../../types';
 import { RenderContext } from '../context';
 
 export function drawSoundButton(rc: RenderContext, muted: boolean, sfxMuted: boolean): void {
   const ctx = rc.ctx;
   const size = 24;
-  const x = 8;
+  const x = 8 + size + 4; // shifted right to make room for settings cogwheel
   const y = CANVAS_HEIGHT - size - 8;
 
   // Music button (left)
@@ -247,4 +248,110 @@ export function drawItemSlot(rc: RenderContext, x: number, y: number, size: numb
     ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
     rc.hoveredItem = { item, x: mp.x, y: mp.y };
   }
+}
+
+export function drawSettingsButton(rc: RenderContext, settingsOpen: boolean): void {
+  const ctx = rc.ctx;
+  const size = 24;
+  const x = 8;
+  const y = CANVAS_HEIGHT - size - 8;
+
+  // Button background
+  ctx.fillStyle = settingsOpen ? 'rgba(60,60,60,0.8)' : 'rgba(0,0,0,0.6)';
+  ctx.fillRect(x, y, size, size);
+  ctx.strokeStyle = settingsOpen ? '#888' : '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+  // Cogwheel icon
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const outerR = 8;
+  const innerR = 5;
+  const teeth = 6;
+  ctx.fillStyle = settingsOpen ? '#ddd' : '#aaa';
+  ctx.beginPath();
+  for (let i = 0; i < teeth * 2; i++) {
+    const angle = (i * Math.PI) / teeth - Math.PI / 2;
+    const r = i % 2 === 0 ? outerR : innerR;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Center hole
+  ctx.fillStyle = settingsOpen ? 'rgba(60,60,60,0.8)' : 'rgba(0,0,0,0.6)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function drawSettingsPanel(rc: RenderContext, settings: GameSettings): void {
+  const ctx = rc.ctx;
+  const btnSize = 24;
+  const panelW = 200;
+  const panelH = 50;
+  const panelX = 8;
+  const panelY = CANVAS_HEIGHT - btnSize - 8 - panelH - 4;
+
+  // Panel background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
+
+  // Label
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#999';
+  ctx.fillText('Input mode:', panelX + 8, panelY + 8);
+
+  // Pills
+  const pillY = panelY + 24;
+  const pillH = 18;
+  const pillR = 3;
+
+  const drawPill = (px: number, pw: number, label: string, active: boolean) => {
+    ctx.fillStyle = active ? '#4a7a4a' : 'rgba(255,255,255,0.08)';
+    // Rounded rect
+    ctx.beginPath();
+    ctx.moveTo(px + pillR, pillY);
+    ctx.lineTo(px + pw - pillR, pillY);
+    ctx.arcTo(px + pw, pillY, px + pw, pillY + pillR, pillR);
+    ctx.lineTo(px + pw, pillY + pillH - pillR);
+    ctx.arcTo(px + pw, pillY + pillH, px + pw - pillR, pillY + pillH, pillR);
+    ctx.lineTo(px + pillR, pillY + pillH);
+    ctx.arcTo(px, pillY + pillH, px, pillY + pillH - pillR, pillR);
+    ctx.lineTo(px, pillY + pillR);
+    ctx.arcTo(px, pillY, px + pillR, pillY, pillR);
+    ctx.closePath();
+    ctx.fill();
+
+    if (active) {
+      ctx.strokeStyle = '#6a6';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = active ? '#fff' : '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, px + pw / 2, pillY + pillH / 2);
+  };
+
+  const htmlPillX = panelX + 78;
+  const htmlPillW = 38;
+  drawPill(htmlPillX, htmlPillW, 'Html', settings.inputMode === 'html');
+
+  const ingamePillX = htmlPillX + htmlPillW + 4;
+  const ingamePillW = 62;
+  drawPill(ingamePillX, ingamePillW, 'In-game', settings.inputMode === 'ingame');
+
+  ctx.textBaseline = 'alphabetic';
 }
