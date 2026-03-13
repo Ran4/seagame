@@ -1,7 +1,7 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, WorldMap, SECONDS_PER_DAY } from '../types';
 import { RenderContext } from './context';
 
-export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean, hasHelmsman: boolean): void {
+export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean, hasHelmsman: boolean, hasExpertNavigator?: boolean): void {
   const ctx = rc.ctx;
   const ox = 40, oy = 40, ow = 880, oh = 460;
 
@@ -58,6 +58,7 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
   // Islands
   let hoveredIsland: typeof worldMap.islands[0] | null = null;
   for (const island of worldMap.islands) {
+    if (island.hidden && !hasExpertNavigator) continue;
     const ix = toScreenX(island.x);
     const iy = toScreenY(island.y);
     const radius = 8;

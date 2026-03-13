@@ -1,7 +1,7 @@
 import {
   TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT,
   TileType, CrewState, Item, SECONDS_PER_DAY, NIGHT_BRIGHTNESS,
-  World, getShipBrightness,
+  World, getShipBrightness, SKILL_MASTERY,
 } from './types';
 import { SpriteSheet } from './sprites';
 import {
@@ -44,6 +44,9 @@ export class Renderer {
     const deckIndex = world.activeDeck;
     const hasNavigator = crew.some(c => c.state === CrewState.NAVIGATING);
     const hasHelmsman = crew.some(c => c.state === CrewState.STEERING);
+    const hasExpertNavigator = crew.some(c =>
+      c.state === CrewState.NAVIGATING && (c.skills.navigation ?? 0) >= SKILL_MASTERY
+    );
     const timeOfDay = (time + world.dayTimeOffset) % SECONDS_PER_DAY;
     const brightness = getShipBrightness(timeOfDay);
 
@@ -151,7 +154,7 @@ export class Renderer {
       drawContextMenu(rc, contextMenu, mousePos);
     }
     if (mapOverlayOpen && worldMap) {
-      drawMapOverlay(rc, worldMap, mousePos, time, hasNavigator, hasHelmsman);
+      drawMapOverlay(rc, worldMap, mousePos, time, hasNavigator, hasHelmsman, hasExpertNavigator);
     }
     if (rc.hoveredItem) {
       drawItemTooltip(rc, rc.hoveredItem.item);

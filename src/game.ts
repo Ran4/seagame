@@ -1,4 +1,4 @@
-import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World } from './types';
+import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World, SKILL_MASTERY } from './types';
 import { createSemen, createGrogRation, updateSpoilage } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
@@ -159,7 +159,10 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // Map overlay click interception
   if (input.mouseClick && world.mapOverlayOpen) {
-    const result = handleMapOverlayClick(world.worldMap, input.mouseClick.x, input.mouseClick.y);
+    const hasExpertNavigator = world.actors.some(c =>
+      c.state === CrewState.NAVIGATING && (c.skills.navigation ?? 0) >= SKILL_MASTERY
+    );
+    const result = handleMapOverlayClick(world.worldMap, input.mouseClick.x, input.mouseClick.y, hasExpertNavigator);
     if (result === 'close') {
       world.mapOverlayOpen = false;
     } else if (result === 'click') {

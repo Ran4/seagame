@@ -63,6 +63,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
     },
     statuses: new Map<string, Record<string, any> | null>(),
     conditions: new Set(),
+    skills: {},
     pixelX: spawn.x * TILE_SIZE + TILE_SIZE / 2,
     pixelY: spawn.y * TILE_SIZE + TILE_SIZE / 2,
     facing: 'south',
@@ -157,6 +158,20 @@ export function createActors(humanCount: number, decks: Deck[]): Actor[] {
         attraction: sameSpecies ? Math.floor(Math.random() * 161) : 0,
       });
     }
+  }
+
+  // Initialize skills for humans
+  const SKILL_NAMES = ['sailing', 'gunnery', 'combat', 'cooking', 'navigation', 'singing', 'dancing'];
+  for (const member of actors) {
+    if (member.actorType !== 'human') continue;
+    for (const skill of SKILL_NAMES) {
+      member.skills[skill] = 10 + Math.floor(Math.random() * 51); // 10-60
+    }
+    // Traits via status system
+    if (Math.random() < 0.12) member.statuses.set('eagle_eye', null);
+    if (Math.random() < 0.10) member.statuses.set('iron_stomach', null);
+    if (Math.random() < 0.10) member.statuses.set('sea_legs', null);
+    if (Math.random() < 0.08) member.statuses.set('berserker', null);
   }
 
   const jack = actors.find(c => c.profile.name === 'Jack');

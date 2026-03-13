@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
@@ -291,7 +291,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       case CrewState.EATING:
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
-          member.profile.hunger = Math.min(255, member.profile.hunger + 180);
+          if (member.actorType === 'human') member.skills.cooking = Math.min(255, (member.skills.cooking ?? 0) + 4);
+          const hungerRestore = (member.actorType === 'human' && (member.skills.cooking ?? 0) >= SKILL_MASTERY) ? 270 : 180;
+          member.profile.hunger = Math.min(255, member.profile.hunger + hungerRestore);
           activityLog.push({ text: `${member.profile.name} finished eating`, time: gameTime });
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
@@ -306,8 +308,23 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         }
         break;
       case CrewState.STEERING:
+        if (member.actorType === 'human') member.skills.sailing = Math.min(255, (member.skills.sailing ?? 0) + 0.05 * dt);
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
       case CrewState.MANNING_CANNON:
+        if (member.actorType === 'human') member.skills.gunnery = Math.min(255, (member.skills.gunnery ?? 0) + 0.2 * dt);
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
       case CrewState.NAVIGATING:
+        if (member.actorType === 'human') member.skills.navigation = Math.min(255, (member.skills.navigation ?? 0) + 0.05 * dt);
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
@@ -526,6 +543,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         }
         break;
       case CrewState.SINGING:
+        if (member.actorType === 'human') member.skills.singing = Math.min(255, (member.skills.singing ?? 0) + 0.3 * dt);
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           member.profile.morale = Math.min(255, member.profile.morale + SHANTY_MORALE_GAIN);
@@ -579,11 +597,12 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 }
 
 function checkForIslandSpotting(lookout: Actor, crew: Actor[], worldMap: WorldMap, spottedIslands: Set<number>, activityLog: ActivityLogEntry[], gameTime: number): void {
+  const spotDistance = lookout.conditions.has('eagle_eye') ? 5 : ISLAND_SPOT_DISTANCE;
   for (const island of worldMap.islands) {
     if (spottedIslands.has(island.id)) continue;
     const dx = worldMap.shipX - island.x;
     const dy = worldMap.shipY - island.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= ISLAND_SPOT_DISTANCE) {
+    if (Math.sqrt(dx * dx + dy * dy) <= spotDistance) {
       spottedIslands.add(island.id);
       lookout.speechBubbleText = 'Land ho!';
       lookout.speechBubbleTimer = LAND_HO_SPEECH_DURATION;

@@ -20,6 +20,7 @@ interface ActorDetail extends ActorSummary {
   inventory: { name: string; quantity: number }[];
   hands: { name: string; quantity: number }[];
   statuses: Record<string, any>;
+  skills: Record<string, number>;
   commandQueue: { name: string }[];
   speechBubbleText: string | null;
   thoughtBubble: string | null;
@@ -79,6 +80,7 @@ export function serializeState(world: World): StateSnapshot {
       inventory: a.profile.inventory.map(i => ({ name: i.name, quantity: i.quantity })),
       hands: a.profile.hands.map(i => ({ name: i.name, quantity: i.quantity })),
       statuses,
+      skills: { ...a.skills },
       commandQueue: a.commandQueue.map(c => ({ name: c.name })),
       speechBubbleText: a.speechBubbleText,
       thoughtBubble: a.thoughtBubble,

@@ -14,6 +14,7 @@ export const NIGHT_START = 480;
 
 export const NIGHT_BRIGHTNESS = 0.3;
 export const NIGHT_FEAR_MORALE_THRESHOLD = 192;
+export const SKILL_MASTERY = 192;
 const BRIGHTNESS_RANGE = 1.0 - NIGHT_BRIGHTNESS;
 
 // TODO: when seasons exist, make this change over the seasons!
@@ -215,6 +216,7 @@ export interface Actor {
   profile: ActorProfile;
   statuses: Map<string, Record<string, any> | null>;
   conditions: Set<string>;
+  skills: Record<string, number>;
   pixelX: number;
   pixelY: number;
   facing: 'north' | 'south' | 'east' | 'west';
@@ -262,6 +264,7 @@ export interface Island {
   y: number;
   hasHarbor: boolean;
   description: string;
+  hidden?: boolean;
 }
 
 export interface WorldMap {

@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION, SKILL_MASTERY } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { tryStartConversationWhileWalking, beginConversation } from '../conversation';
 
@@ -64,7 +64,7 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
     } else if (member.state === CrewState.STEERING) {
       member.stateTimer = STEER_DURATION;
     } else if (member.state === CrewState.MANNING_CANNON) {
-      member.stateTimer = CANNON_DURATION;
+      member.stateTimer = (member.actorType === 'human' && (member.skills.gunnery ?? 0) >= SKILL_MASTERY) ? CANNON_DURATION / 2 : CANNON_DURATION;
     } else if (member.state === CrewState.LOOKOUT) {
       member.stateTimer = LOOKOUT_DURATION;
     } else if (member.state === CrewState.NAVIGATING) {

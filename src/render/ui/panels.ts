@@ -2,6 +2,7 @@ import {
   TILE_SIZE, CANVAS_WIDTH,
   TileType, TILE_COLORS, OBJECT_MAX_HP, Actor,
   STATE_NAMES, Item, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS,
+  SKILL_MASTERY,
 } from '../../types';
 import { RenderContext } from '../context';
 import { TILE_NAMES } from '../index';
@@ -45,6 +46,27 @@ function layoutCrewPanel(rc: RenderContext, member: Actor, draw: boolean): numbe
     ctx.textAlign = 'left';
     const typeLabel = member.actorType === 'human' ? p.sex : `${member.actorType} ${p.sex}`;
     ctx.fillText(`${p.name} (${typeLabel})`, px + 35, y + 22);
+
+    // Skills tooltip on name hover (humans only)
+    if (member.actorType === 'human' && Object.keys(member.skills).length > 0) {
+      const nameY = y;
+      if (rc.mousePos.x >= px && rc.mousePos.x <= px + pw &&
+          rc.mousePos.y >= nameY && rc.mousePos.y <= nameY + 32) {
+        const skills: [string, string][] = [
+          ['sailing', 'Sailing'], ['gunnery', 'Gunnery'], ['combat', 'Combat'],
+          ['cooking', 'Cooking'], ['navigation', 'Navigation'],
+          ['singing', 'Singing'], ['dancing', 'Dancing'],
+        ];
+        const lines = ['Skills'];
+        const maxLen = Math.max(...skills.map(([, label]) => label.length));
+        for (const [key, label] of skills) {
+          const val = Math.floor(member.skills[key] ?? 0);
+          const tag = val >= SKILL_MASTERY ? ' ★' : '';
+          lines.push(`${label.padStart(maxLen)}: ${val}${tag}`);
+        }
+        rc.hoveredBarTooltip = lines;
+      }
+    }
   }
   y += 32;
 
