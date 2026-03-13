@@ -568,7 +568,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         const danceAmp = drunk ? 9 : tipsy ? 7 : 5;
         const danceW = drunk ? 4 : 5; // drunk = slower, lurchier
         const danceFacings: Array<Actor['facing']> = ['south', 'east', 'north', 'west'];
-        const moveCycle = 2.5;
+        const moveCycle = 2.9;
         const moveIdx = Math.floor((danceT + dancePhase) / moveCycle) % 3;
         const moveT = ((danceT + dancePhase) % moveCycle); // time within current move
         // Drunk wobble: random perpendicular drift
@@ -577,13 +577,19 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.pixelY += wobble * dt;
         }
         if (moveIdx === 0) {
-          // Spinning: pause 0.5s → spin 1.5s → pause 0.5s
+          // Spinning: pause 0.5s → spin 1.5s → clap + pause 0.5s
           if (moveT < 0.5 || moveT > 2.0) {
             member.facing = 'south'; // stand still facing south
           } else {
             const spinDir = Math.sin(dancePhase) > 0 ? 1 : -1;
             const spinSpeed = drunk ? 5 : 8; // drunk spins slower
             member.facing = danceFacings[((Math.floor((moveT - 0.5) * spinSpeed) * spinDir) % 4 + 4) % 4];
+          }
+          // Clap at the end of the spin (moveT crosses 2.0)
+          const prevMoveT = (((danceT - dt) + dancePhase) % moveCycle);
+          const prevMoveIdx = Math.floor(((danceT - dt) + dancePhase) / moveCycle) % 3;
+          if (prevMoveIdx === 0 && prevMoveT < 2.0 && moveT >= 2.0) {
+            if (audio) audio.play('dance_clap', member.deck);
           }
         } else if (moveIdx === 1) {
           // Moonwalk — move one way, face the other

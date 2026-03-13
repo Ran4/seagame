@@ -67,13 +67,19 @@ export function buildContextMenu(
           items.push({ label: `Go to ${world.decks[d].name}`, targetState: CrewState.WALKING, deckTarget: d });
         }
       }
-      // Drink actions (self-action: right-click on selected crew)
+      // Self-actions (right-click on selected crew)
       if (clickedCrew.id === world.selectedActorId) {
+        // Dance
+        const canDance = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
+        if (clickedCrew.state !== CrewState.DANCING) {
+          items.push({ label: canDance ? 'Dance' : 'Dance (busy)', targetState: CrewState.DANCING, disabled: !canDance });
+        }
+        // Drink
         const seen = new Set<string>();
         for (const inv of clickedCrew.profile.inventory) {
           if (seen.has(inv.name)) continue;
           seen.add(inv.name);
-          const canDrink = clickedCrew.state === CrewState.IDLE || clickedCrew.state === CrewState.WALKING;
+          const canDrink = canDance;
           const drinkLabel = `Drink ${inv.name.toLowerCase()}`;
           items.push({ label: canDrink ? drinkLabel : `${drinkLabel} (busy)`, targetState: CrewState.DRINKING, disabled: !canDrink, itemData: { barrelKey: '', itemName: inv.name } });
         }
@@ -367,6 +373,9 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
     }
     if (menuItem.targetState === CrewState.DRINKING) {
       return { name: 'Drink', itemName: menuItem.itemData?.itemName ?? 'Grog ration' };
+    }
+    if (menuItem.targetState === CrewState.DANCING) {
+      return { name: 'Dance' };
     }
     // Stop action
     return { name: 'Stop' };

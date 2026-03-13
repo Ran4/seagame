@@ -117,6 +117,14 @@ const SOUNDS = [
     duration_seconds: 0.5,
     prompt_influence: 0.8,
   },
+  { name: 'dance_clap',          type: 'procedural', generate: generateDanceClap },
+  {
+    name: 'dance_clap',
+    type: 'elevenlabs',
+    text: 'Three quick sharp handclaps in rapid succession — clap clap clap! Crisp, percussive, on a wooden ship deck. No reverb, dry recording.',
+    duration_seconds: 1,
+    prompt_influence: 0.9,
+  },
 ];
 
 // ── WAV helpers ────────────────────────────────────────────────────────
@@ -481,6 +489,38 @@ function generateLanternExtinguish() {
   }
 
   writeWav(path.join(SFX_DIR, 'lantern_extinguish.wav'), samples);
+}
+
+/**
+ * 6. dance_clap.wav - Single sharp handclap.
+ *    Short noise burst with resonant pop, like clapping hands on a ship deck.
+ */
+function generateDanceClap() {
+  const duration = 0.12;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const progress = t / duration;
+    let sample = 0;
+
+    // Sharp filtered noise burst
+    const env = Math.exp(-progress * 25) * (t < 0.001 ? t / 0.001 : 1);
+    sample += noise() * env * 0.6;
+
+    // Resonant pop at ~1.5kHz
+    const popEnv = Math.exp(-progress * 35);
+    sample += Math.sin(2 * Math.PI * 1500 * t) * popEnv * 0.3;
+
+    // Higher overtone at ~3kHz for snap
+    const snapEnv = Math.exp(-progress * 50);
+    sample += Math.sin(2 * Math.PI * 3000 * t) * snapEnv * 0.15;
+
+    samples[i] = sample * 0.8;
+  }
+
+  writeWav(path.join(SFX_DIR, 'dance_clap.wav'), samples);
 }
 
 // ── Main ───────────────────────────────────────────────────────────────

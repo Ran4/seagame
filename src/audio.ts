@@ -32,6 +32,7 @@ export class AudioManager {
     this.preload('glug_male', '/audio/elevenlabs-generated/glug_male.mp3', 'world', 0.9);
     this.preload('glug_female', '/audio/elevenlabs-generated/glug_female.mp3', 'world', 0.9);
     this.preload('kiss', '/audio/elevenlabs-generated/kiss.mp3', 'world');
+    this.preload('dance_clap', '/audio/elevenlabs-generated/dance_clap.mp3', 'world', 0.5);
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
