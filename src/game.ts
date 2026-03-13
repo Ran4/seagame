@@ -107,6 +107,11 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
         input.hiddenInput.blur();
         break;
       } else if (key === 'Enter') {
+        // Autocomplete partial command name before submitting
+        const match = getAutocomplete(world.commandInput.text);
+        if (match && world.commandInput.text.indexOf(' ') < 0) {
+          world.commandInput.text = match.commandName;
+        }
         submitCommandInput(world);
         input.hiddenInput.blur();
         break;
