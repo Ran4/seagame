@@ -33,23 +33,29 @@ src/
   audio.ts         AudioManager — preloads SFX, handles music loop (starts on first click)
   debug-state.ts   serializeState() — produces JSON snapshot of World for /api/state
 
-scripts/
-  generate-sprites.mjs   Generates tile + crew pixel art via OpenAI gpt-image-1 API
-  generate-music.mjs     Synthesizes sea shanty WAV (procedural, no external deps)
-  generate-sfx.mjs       Generates SFX — procedural, OpenAI TTS, or ElevenLabs
-
 public/
-  sprites/               PNG sprites (32x32 pixel art at 1024x1024, scaled down in-game)
-  audio/                 shanty.wav (music)
-    sfx/                 Procedural/OpenAI-generated SFX (WAV fallbacks)
+  sprites/                 PNG sprites (32x32 pixel art at 1024x1024, scaled down in-game)
+  audio/                   shanty.wav (music)
+    sfx/                   Procedural/OpenAI-generated SFX (WAV fallbacks)
     elevenlabs-generated/  ElevenLabs-generated SFX (MP3, used by default)
+```
 
-architecture/
-  GDD.md                 Game Design Document — full vision including future features
+Folders used during development/debugging:
+
+```
+scripts/
+  generate-sprites.mjs     Generates tile + crew pixel art via OpenAI gpt-image-1 API
+  generate-music.mjs       Synthesizes sea shanty WAV (procedural, no external deps)
+  generate-sfx.mjs         Generates SFX — procedural, OpenAI TTS, or ElevenLabs
+
 
 features/
-  COMMAND_SYSTEM.md      Command system — serializable action queues, external order files
-  LIVE_DEBUGGING.md      Live state inspection via /api/state endpoint
+  implemented/             Completed feature specs (e.g. command system, dog morale etc.)
+      ...
+      2026-03-10_LIVE_DEBUGGING.md Live state inspection via /api/state endpoint
+  planned/                 Planned feature specs (dated, e.g. 2026-03-12_FISHING.md)
+
+issues/                  Known issues and open bugs
 
 orders/
   orders_for_*.jsonl     External order files (one per actor, polled once/sec by Vite plugin)
@@ -136,7 +142,7 @@ Right-click opens a context menu with actions. Two targets:
 Actions defined in `TILE_ACTIONS` in `types.ts`. Menu rendered by `drawContextMenu()` in `renderer.ts`.
 Escape or clicking outside closes the menu.
 
-**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/COMMAND_SYSTEM.md` for the full command reference.
+**Command dispatch:** All context menu actions (except "Open Map") are converted to `Command` objects via `menuItemToCommand()` in `menu.ts` and executed via `issueCommand()` from `crew.ts`. This means right-click UI actions and external order file commands go through the same code path. See `features/implemented/2026-03-10_COMMAND_SYSTEM.md` for the full command reference.
 
 **Live debugging:** Game state is readable via `GET /api/state` (with query filters like `?log`, `?actors`, `?actor=name`, `?barrels`, `?time`). The `World` object is also on `window.__world`. See `features/LIVE_DEBUGGING.md`.
 
