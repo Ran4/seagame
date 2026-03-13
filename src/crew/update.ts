@@ -31,6 +31,15 @@ const SHANTY_FRIENDSHIP_GAIN = 5;
 const SHANTY_COOLDOWN = 120;
 const SHANTY_DEFAULT_DURATION = 30;
 
+// Dancing
+const DANCE_MORALE_THRESHOLD = 140;
+const DANCE_MIN_DANCERS = 2;
+const DANCE_CHANCE = 0.003;
+const DANCE_DURATION = 15;
+const DANCE_MORALE_GAIN = 8;
+const DANCE_FRIENDSHIP_GAIN = 4;
+const DANCE_COOLDOWN = 150;
+
 function getDogMoraleAdj(member: Actor, crew: Actor[]): number {
   if (member.actorType !== 'human') return 0;
   const hasFriendlyDog = crew.some(c =>
@@ -542,6 +551,58 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.copulationTarget = null;
         }
         break;
+      case CrewState.DANCING: {
+        if (member.actorType === 'human') member.skills.dancing = Math.min(255, (member.skills.dancing ?? 0) + 0.3 * dt);
+        member.stateTimer -= dt;
+        // Dance animation: distinct moves cycling every ~2.5s
+        // Each move: stepping, spinning (pause-spin-pause), or moonwalking
+        const danceT = DANCE_DURATION - member.stateTimer;
+        const dancePhase = member.id * 1.7;
+        const danceW = 5;
+        const danceFacings: Array<Actor['facing']> = ['south', 'east', 'north', 'west'];
+        const moveCycle = 2.5;
+        const moveIdx = Math.floor((danceT + dancePhase) / moveCycle) % 3;
+        const moveT = ((danceT + dancePhase) % moveCycle); // time within current move
+        if (moveIdx === 0) {
+          // Spinning: pause 0.5s → spin 1.5s → pause 0.5s
+          if (moveT < 0.5 || moveT > 2.0) {
+            member.facing = 'south'; // stand still facing south
+          } else {
+            const spinDir = Math.sin(dancePhase) > 0 ? 1 : -1;
+            member.facing = danceFacings[((Math.floor((moveT - 0.5) * 8) * spinDir) % 4 + 4) % 4];
+          }
+        } else if (moveIdx === 1) {
+          // Moonwalk — move one way, face the other
+          member.pixelX += 5 * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
+          const vx = Math.cos(danceW * danceT + dancePhase);
+          member.facing = vx > 0 ? 'west' : 'east';
+        } else {
+          // Stepping — move back and forth, face movement direction
+          member.pixelX += 5 * danceW * Math.cos(danceW * danceT + dancePhase) * dt;
+          member.pixelY += 3 * danceW * Math.cos(0.7 * danceW * danceT + dancePhase + 2) * dt;
+          const vx = Math.cos(danceW * danceT + dancePhase);
+          member.facing = vx > 0.3 ? 'east' : vx < -0.3 ? 'west' : 'south';
+        }
+        if (member.stateTimer <= 0) {
+          member.profile.morale = Math.min(255, member.profile.morale + DANCE_MORALE_GAIN);
+          if (member.shantyInitiatorId !== null) {
+            for (const other of crew) {
+              if (other.id === member.id || other.shantyInitiatorId !== member.shantyInitiatorId) continue;
+              const rel = member.relations.find(r => r.actorId === other.id);
+              if (rel) rel.friendship = Math.min(255, rel.friendship + DANCE_FRIENDSHIP_GAIN);
+            }
+            if (member.id === member.shantyInitiatorId) {
+              activityLog.push({ text: `${member.profile.name} led a merry dance`, time: gameTime });
+              if (world) world.danceCooldown = DANCE_COOLDOWN;
+            }
+          }
+          member.shantyInitiatorId = null;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+          member.conversationCooldown = 30;
+        }
+        break;
+      }
       case CrewState.SINGING:
         if (member.actorType === 'human') member.skills.singing = Math.min(255, (member.skills.singing ?? 0) + 0.3 * dt);
         member.stateTimer -= dt;
@@ -742,6 +803,32 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
         }
 
         if (audio) audio.playShanty({ male: maleCount, female: femaleCount }, member.deck);
+        return;
+      }
+    }
+  }
+
+  // Dancing: daytime, high average morale, 2+ idle humans on same deck
+  if (world && brightness > 0.7 && world.danceCooldown <= 0 && member.conversationCooldown <= 0 && Math.random() < DANCE_CHANCE) {
+    const humansForDance = crew.filter(c => c.actorType === 'human');
+    const avgMoraleDance = humansForDance.reduce((sum, c) => sum + c.profile.morale, 0) / humansForDance.length;
+    if (avgMoraleDance >= DANCE_MORALE_THRESHOLD) {
+      const danceCandidates = humansForDance.filter(c =>
+        c.deck === member.deck && c.id !== member.id &&
+        (c.state === CrewState.IDLE || (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE)) &&
+        c.conversationCooldown <= 0
+      );
+      if (danceCandidates.length >= DANCE_MIN_DANCERS - 1) {
+        const dancers = [member, ...danceCandidates.slice(0, 4)];
+        for (const dancer of dancers) {
+          dancer.state = CrewState.DANCING;
+          dancer.stateTimer = DANCE_DURATION;
+          dancer.shantyInitiatorId = member.id;
+          dancer.thoughtBubble = 'music_note';
+          dancer.thoughtBubbleTimer = DANCE_DURATION;
+          dancer.conversationCooldown = 30;
+          dancer.path = [];
+        }
         return;
       }
     }

@@ -258,10 +258,38 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       log('started a sea shanty');
       return true;
     }
+    case 'Dance': {
+      const DANCE_MAX = 5;
+      const DANCE_CMD_DURATION = 15;
+      const dancers: Actor[] = [member];
+      for (const c of crew) {
+        if (dancers.length >= DANCE_MAX) break;
+        if (c.id === member.id || c.actorType !== 'human' || c.deck !== member.deck) continue;
+        if (c.state === CrewState.IDLE || (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE)) {
+          dancers.push(c);
+        }
+      }
+      if (dancers.length < 2) { fail('not enough crew nearby to dance'); return true; }
+      for (const dancer of dancers) {
+        dancer.state = CrewState.DANCING;
+        dancer.stateTimer = DANCE_CMD_DURATION;
+        dancer.shantyInitiatorId = member.id;
+        dancer.thoughtBubble = 'music_note';
+        dancer.thoughtBubbleTimer = DANCE_CMD_DURATION;
+        dancer.conversationCooldown = 30;
+        dancer.path = [];
+      }
+      log('started dancing');
+      return true;
+    }
     case 'Stop': {
       // Free conversation partner
       if (member.state === CrewState.TALKING) {
         stopConversation(member, crew);
+      }
+      // Clear shanty/dance group
+      if (member.state === CrewState.SINGING || member.state === CrewState.DANCING) {
+        member.shantyInitiatorId = null;
       }
       // Free copulation/interaction partner
       if (member.copulationTarget?.type === 'crew') {

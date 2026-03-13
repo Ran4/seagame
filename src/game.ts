@@ -84,6 +84,7 @@ export function createWorld(): World {
     orderPollTimer: 0,
     spottedIslands: new Set(),
     shantyCooldown: 0,
+    danceCooldown: 0,
     mutinyState: 'none',
     mutinyTimer: 0,
   };
@@ -95,8 +96,9 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   // Game over — skip simulation updates, only handle input for restart
   if (world.mutinyState === 'game_over') return;
 
-  // Tick shanty cooldown
+  // Tick shanty/dance cooldowns
   if (world.shantyCooldown > 0) world.shantyCooldown = Math.max(0, world.shantyCooldown - dt);
+  if (world.danceCooldown > 0) world.danceCooldown = Math.max(0, world.danceCooldown - dt);
 
   // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
   const anyNavigating = world.actors.some(c => c.state === CrewState.NAVIGATING);

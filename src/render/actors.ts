@@ -95,6 +95,8 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
     ctx.fillText('...', sx + 14, sy - 12);
   } else if (member.state === CrewState.SINGING) {
     ctx.fillText('\u266A', sx + 14, sy - 12);
+  } else if (member.state === CrewState.DANCING) {
+    ctx.fillText('\u266B', sx + 14, sy - 12);
   }
 
   // Speech bubble (conversation) — takes priority over thought bubble

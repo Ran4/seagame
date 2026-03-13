@@ -131,6 +131,7 @@ export enum CrewState {
   TAKING_ITEM = 'taking_item',
   PETTING = 'petting',
   SINGING = 'singing',
+  DANCING = 'dancing',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -151,6 +152,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.TAKING_ITEM]: 'Taking item',
   [CrewState.PETTING]: 'Petting',
   [CrewState.SINGING]: 'Singing',
+  [CrewState.DANCING]: 'Dancing',
 };
 
 export interface ContextMenuItem {
@@ -317,6 +319,7 @@ export type Command =
   | { name: 'TakeItem';          barrelKey: string; itemName: string }
   | { name: 'Drink';             itemName?: string }
   | { name: 'Sing' }
+  | { name: 'Dance' }
   | { name: 'Stop' }
   | { name: 'Tell';              actorId: number; text?: string }
   | { name: 'Order';             actorId: number; order: Command };
@@ -348,6 +351,7 @@ export interface World {
   orderPollTimer: number;
   spottedIslands: Set<number>;
   shantyCooldown: number;
+  danceCooldown: number;
   mutinyState: 'none' | 'ultimatum' | 'game_over';
   mutinyTimer: number;
 }
