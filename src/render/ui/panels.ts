@@ -198,6 +198,10 @@ function buildMoraleTooltip(member: Actor, brightness: number, lanternOil: Map<s
   else if (avgFriendship < 96) lines.push('Crew: Unpopular  \u2193');
   else lines.push('Crew: Tolerated  \u2192');
 
+  // Dog morale
+  if (member.conditions.has('near_friendly_dog')) lines.push('Dog: Faithful friend  \u2191');
+  if (member.conditions.has('despises_nearby_dog')) lines.push('Dog: Despises hounds  \u2193\u2193');
+
   // Night status
   if (brightness < 0.5) {
     const RADIUS = LANTERN_SAFE_RADIUS;

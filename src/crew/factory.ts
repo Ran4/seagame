@@ -127,6 +127,13 @@ export function createActors(humanCount: number, decks: Deck[]): Actor[] {
     }
   }
 
+  // Rare doghater trait (~1% of humans)
+  for (const member of actors) {
+    if (member.actorType === 'human' && Math.random() < 0.01) {
+      member.statuses.set('doghater', null);
+    }
+  }
+
   // Initialize lust for actors that have it
   for (const member of actors) {
     if (!LUST_ACTOR_TYPES.has(member.actorType)) continue;
