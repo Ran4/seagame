@@ -93,6 +93,8 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
     ctx.fillText('L', sx + 14, sy - 12);
   } else if (member.state === CrewState.TALKING) {
     ctx.fillText('...', sx + 14, sy - 12);
+  } else if (member.state === CrewState.SINGING) {
+    ctx.fillText('\u266A', sx + 14, sy - 12);
   }
 
   // Speech bubble (conversation) — takes priority over thought bubble
@@ -112,10 +114,14 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
       ctx.beginPath();
       ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = member.thoughtBubble === 'heart' ? '#e74c3c' : '#666666';
+      const bubbleColor = member.thoughtBubble === 'heart' ? '#e74c3c'
+        : member.thoughtBubble === 'music_note' ? '#3498db' : '#666666';
+      const bubbleChar = member.thoughtBubble === 'heart' ? '\u2665'
+        : member.thoughtBubble === 'music_note' ? '\u266A' : '\uD83D\uDC94';
+      ctx.fillStyle = bubbleColor;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(member.thoughtBubble === 'heart' ? '\u2665' : '\uD83D\uDC94', bx + bubbleSize / 2, by + bubbleSize / 2 + 5);
+      ctx.fillText(bubbleChar, bx + bubbleSize / 2, by + bubbleSize / 2 + 5);
     }
   }
 

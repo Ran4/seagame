@@ -18074,5 +18074,719 @@
       "We're all just... wavesh.",
       "Surprisingly deep."
     ]
+  ],
+  "grumbling_friendly": [
+    [
+      "I've about had it with this voyage.",
+      "Come now, it ain't so bad.",
+      "Easy fer you to say.",
+      "Chin up, mate. We'll see port soon."
+    ],
+    [
+      "Me back's killin' me.",
+      "Mine too, friend. We push on.",
+      "Fer what? More of the same?",
+      "Fer each other, that's what."
+    ],
+    [
+      "This ship's fallin' apart.",
+      "She's sturdy enough.",
+      "Barely. And so am I.",
+      "We'll hold together. Always have."
+    ],
+    [
+      "I'm tired of salt pork.",
+      "Aye, but it keeps us alive.",
+      "Barely counts as livin'.",
+      "Better than not at all, mate."
+    ],
+    [
+      "Some days I wonder why I signed on.",
+      "The gold? The glory?",
+      "Ha. The stupidity, more like.",
+      "Well, at least ye've got company."
+    ],
+    [
+      "We deserve better than this.",
+      "Aye, we do. But here we are.",
+      "That's what worries me.",
+      "Keep yer spirits up. Better days come."
+    ],
+    [
+      "Another day, another complaint.",
+      "Wouldn't be a pirate without 'em!",
+      "True enough.",
+      "That's the spirit. Sort of."
+    ],
+    [
+      "I miss dry land somethin' fierce.",
+      "We all do, mate.",
+      "When's the last time we docked?",
+      "Too long. But the captain knows the way."
+    ],
+    [
+      "The food's gettin' worse.",
+      "It was never good to start with.",
+      "Fair point.",
+      "At least we've got each other's charming company."
+    ],
+    [
+      "I could sleep fer a week.",
+      "Couldn't we all?",
+      "This hammock's like sleepin' on rocks.",
+      "Rocks would be an improvement."
+    ]
+  ],
+  "grumbling_unfriendly": [
+    [
+      "This whole voyage is cursed.",
+      "Stop yer whinin'.",
+      "I ain't whinin', I'm statin' facts.",
+      "Same thing comin' from you."
+    ],
+    [
+      "I didn't sign up for this.",
+      "Nobody forced ye aboard.",
+      "That's debatable.",
+      "Quit yer bellyachin'."
+    ],
+    [
+      "The captain's lost his mind.",
+      "Watch yer tongue.",
+      "Or what? He'll make things worse?",
+      "Just shut it before someone hears."
+    ],
+    [
+      "We're all gonna die out here.",
+      "Speak fer yerself.",
+      "I am. And fer you too.",
+      "Get away from me."
+    ],
+    [
+      "How long til we mutiny?",
+      "Don't be daft.",
+      "I'm not the daft one here.",
+      "Keep talkin' like that and ye will be."
+    ],
+    [
+      "I hate this ship.",
+      "The feelin's mutual, I'm sure.",
+      "What's that supposed to mean?",
+      "Figure it out."
+    ],
+    [
+      "We're runnin' low on everything.",
+      "Tell me somethin' I don't know.",
+      "Fine. Yer face looks worse every day.",
+      "Charming as ever."
+    ],
+    [
+      "Worst crew I ever sailed with.",
+      "Likewise.",
+      "At least we agree on somethin'.",
+      "Don't push yer luck."
+    ],
+    [
+      "This is madness.",
+      "Ye only just noticed?",
+      "I been noticin' since day one.",
+      "Then ye should've jumped ship."
+    ],
+    [
+      "I'm done with this.",
+      "Done with what exactly?",
+      "All of it. Every last bit.",
+      "Dramatic. Get back to work."
+    ]
+  ],
+  "grumbling_grumbling": [
+    [
+      "Can ye believe this mess?",
+      "I been sayin' it fer days.",
+      "Nobody listens though.",
+      "They never do. Not til it's too late."
+    ],
+    [
+      "Worst voyage of me life.",
+      "Aye, mine too.",
+      "And it just keeps gettin' worse.",
+      "At this rate we'll be fish food."
+    ],
+    [
+      "The captain don't care about us.",
+      "Never did.",
+      "We're just bodies to him.",
+      "Expendable, the lot of us."
+    ],
+    [
+      "Me stomach's eatin' itself.",
+      "Same here. When's the last decent meal?",
+      "Can't remember.",
+      "That says it all, don't it?"
+    ],
+    [
+      "I've had enough.",
+      "You and me both.",
+      "So what do we do?",
+      "Suffer, apparently."
+    ],
+    [
+      "This ain't what they promised.",
+      "Promises from pirates. Ha.",
+      "We should've known better.",
+      "Should've. Didn't."
+    ],
+    [
+      "Every day's the same misery.",
+      "Wake up miserable, go to sleep miserable.",
+      "At least we're consistent.",
+      "A consistent disaster, aye."
+    ],
+    [
+      "Think anyone would notice if we left?",
+      "Where would ye go? We're at sea.",
+      "Good point.",
+      "Stuck. Like always."
+    ],
+    [
+      "The rum's gone.",
+      "That's the worst news yet.",
+      "Worse than the leaks?",
+      "Much worse."
+    ],
+    [
+      "Know what I miss? Hope.",
+      "Aye. That was nice while it lasted.",
+      "About three days, wasn't it?",
+      "Generous estimate."
+    ]
+  ],
+  "grumbling_mutinous": [
+    [
+      "Things can't go on like this.",
+      "They won't. Mark me words.",
+      "What are ye plannin'?",
+      "Nothin' yet. But the time's comin'."
+    ],
+    [
+      "The captain's gonna get us killed.",
+      "Then we take matters into our own hands.",
+      "Ye mean...?",
+      "I mean what I mean."
+    ],
+    [
+      "We need new leadership.",
+      "Aye. Someone who gives a damn.",
+      "Would the others follow?",
+      "They're ready. Trust me."
+    ],
+    [
+      "How much more can we take?",
+      "Not much. The lads are at their limit.",
+      "Then it's time.",
+      "Almost. When I give the word."
+    ],
+    [
+      "We're bein' led to our deaths.",
+      "Not if we act first.",
+      "What's the plan?",
+      "Same as every mutiny. Swift and decisive."
+    ],
+    [
+      "I can't take another day of this.",
+      "Ye won't have to. Things are about to change.",
+      "Promise?",
+      "On me mother's grave."
+    ],
+    [
+      "The crew's angry. Real angry.",
+      "Good. Angry men act.",
+      "When?",
+      "Soon. Very soon."
+    ],
+    [
+      "We deserve better.",
+      "We'll TAKE better.",
+      "That's the spirit.",
+      "It's more than spirit. It's a plan."
+    ],
+    [
+      "Look at us. Half starved, exhausted.",
+      "And whose fault is that?",
+      "The one at the top.",
+      "Not for much longer."
+    ],
+    [
+      "Every dog has its day.",
+      "And every crew has its breaking point.",
+      "We're past it.",
+      "Exactly. No turnin' back now."
+    ]
+  ],
+  "grumbling_tired": [
+    [
+      "I can barely keep me eyes open.",
+      "None of us can.",
+      "When's the last time we had proper rest?",
+      "Don't ask questions ye don't want answered."
+    ],
+    [
+      "Exhausted don't even cover it.",
+      "We're dead on our feet.",
+      "Someone needs to say somethin'.",
+      "To who? Nobody cares."
+    ],
+    [
+      "I fell asleep standin' up yesterday.",
+      "That happened to me too.",
+      "This can't be normal.",
+      "Nothin' about this voyage is normal."
+    ],
+    [
+      "Me body's givin' out.",
+      "Rest when ye can.",
+      "When? There's always work.",
+      "I know. I know."
+    ],
+    [
+      "Too tired to even complain properly.",
+      "And yet here we are.",
+      "Old habits.",
+      "The only thing keepin' us goin'."
+    ]
+  ],
+  "grumbling_hungry": [
+    [
+      "I'd kill for a decent meal.",
+      "Get in line.",
+      "What line? There's nothin' to eat.",
+      "Exactly me point."
+    ],
+    [
+      "Me belly's been rumblin' all day.",
+      "Join the club.",
+      "Some club. No food, no fun.",
+      "But plenty of misery to go around."
+    ],
+    [
+      "When did we last eat something fresh?",
+      "Fresh? Ha! When did we last eat at all?",
+      "The scraps don't count?",
+      "I'd rather not count 'em."
+    ],
+    [
+      "They expect us to work on empty stomachs?",
+      "They expect us to work regardless.",
+      "Well I've got nothin' left to give.",
+      "Me neither. We're runnin' on spite."
+    ],
+    [
+      "A ship this size should have more food.",
+      "Should. But doesn't.",
+      "Someone's been skimmin'.",
+      "Careful with accusations like that."
+    ]
+  ],
+  "grumbling_drunken": [
+    [
+      "At least the grog still flows.",
+      "*hic* Barely.",
+      "Better than nothin'.",
+      "Thash... thash the nicest thing anyone's said."
+    ],
+    [
+      "Ye know what? This ship can sink.",
+      "Don't say that!",
+      "*hic* Why not? It's the truth.",
+      "Drunken truth is still truth, I suppose."
+    ],
+    [
+      "If I wasn't drunk I'd be cryin'.",
+      "Who says ye can't do both?",
+      "*hic* Good point.",
+      "That's the saddest toast I ever heard."
+    ],
+    [
+      "The grog's the only good thing left.",
+      "*hic* Aye to that.",
+      "When that runs out...",
+      "Don't. Don't even think it."
+    ],
+    [
+      "I drink to forget this voyage.",
+      "Is it workin'?",
+      "*hic* Not really.",
+      "Have another then."
+    ]
+  ],
+  "grumbling_horny": [
+    [
+      "Could use some company, if ye know what I mean.",
+      "Aye, we all could.",
+      "Hard to feel romantic when yer miserable.",
+      "Hard to feel anythin' but miserable."
+    ],
+    [
+      "Remember the girls at Tortuga?",
+      "Don't torture me.",
+      "Better days, those were.",
+      "Everything was better than this."
+    ],
+    [
+      "A bit of love would lift me spirits.",
+      "Join the queue.",
+      "Even the queue sounds depressin'.",
+      "That's because it is."
+    ]
+  ],
+  "generic_grumbling": [
+    [
+      "Ye look like ye've seen better days.",
+      "I HAVE seen better days. Many of 'em.",
+      "Anythin' I can do?",
+      "Get me off this ship."
+    ],
+    [
+      "How're ye holdin' up?",
+      "I'm not. I'm barely hangin' on.",
+      "It'll get better.",
+      "Ye keep sayin' that."
+    ],
+    [
+      "Nice weather at least.",
+      "Is it? I hadn't noticed through the misery.",
+      "Ye're a ray of sunshine.",
+      "Sunshine's overrated."
+    ],
+    [
+      "Want to talk about it?",
+      "About what? The terrible food? The exhaustion?",
+      "All of it, I suppose.",
+      "We'd be here all day."
+    ],
+    [
+      "Cheer up, mate!",
+      "Give me one good reason.",
+      "We're... alive?",
+      "Barely. And for how long?"
+    ],
+    [
+      "Ye've been grumblin' all day.",
+      "With good reason!",
+      "Fair enough.",
+      "More than fair. It's justified."
+    ],
+    [
+      "Somethin' eatin' at ye?",
+      "Everything. This whole cursed voyage.",
+      "I hear ye.",
+      "Hearin' ain't the same as fixin'."
+    ],
+    [
+      "Seen worse voyages than this.",
+      "Name one.",
+      "Well... there was that time...",
+      "Exactly. Ye can't."
+    ],
+    [
+      "Keep yer chin up.",
+      "Me chin's the only thing still up.",
+      "Ha! Still got yer humor.",
+      "It's all I've got left."
+    ],
+    [
+      "Rough times, eh?",
+      "Understatement of the century.",
+      "We'll pull through.",
+      "One of us might. Maybe."
+    ]
+  ],
+  "generic_mutinous": [
+    [
+      "Ye've got that look in yer eye.",
+      "What look?",
+      "The dangerous kind.",
+      "Maybe it's time fer dangerous."
+    ],
+    [
+      "Easy now. Don't do anythin' rash.",
+      "Rash? I've been patient long enough.",
+      "Violence ain't the answer.",
+      "It's A answer."
+    ],
+    [
+      "Ye're scarin' the others.",
+      "Good. They should be scared.",
+      "Of what?",
+      "Of what's comin' if things don't change."
+    ],
+    [
+      "Careful with that talk.",
+      "What talk? I'm just statin' the obvious.",
+      "The obvious can get ye killed.",
+      "So can stayin' quiet."
+    ],
+    [
+      "I've seen that look before. On other ships.",
+      "And how did those ships end up?",
+      "New captain.",
+      "Exactly."
+    ]
+  ],
+  "work_grumbling": [
+    [
+      "Why do I always get the worst jobs?",
+      "Because someone has to.",
+      "Let someone else fer once.",
+      "Tell that to the captain. I dare ye."
+    ],
+    [
+      "This rope's about to snap.",
+      "Like me patience.",
+      "Ha. At least the rope's useful.",
+      "Watch it."
+    ],
+    [
+      "I've been workin' since dawn.",
+      "We all have.",
+      "Doesn't make it right.",
+      "No. No it doesn't."
+    ],
+    [
+      "These sails won't mend themselves.",
+      "Neither will me broken spirit.",
+      "Deep.",
+      "I'm serious."
+    ],
+    [
+      "Another day of thankless labor.",
+      "The sea don't say thank you.",
+      "Neither does anyone else on this ship.",
+      "True enough."
+    ]
+  ],
+  "work_mutinous": [
+    [
+      "I'm done takin' orders.",
+      "Then don't. What're they gonna do?",
+      "Exactly me thinkin'.",
+      "Just say the word."
+    ],
+    [
+      "We do all the work, they get all the reward.",
+      "Not for much longer.",
+      "Ye got somethin' planned?",
+      "I've got somethin' in mind, aye."
+    ],
+    [
+      "Why should we break our backs fer them?",
+      "We shouldn't. And we won't.",
+      "When?",
+      "When the moment's right. Patience."
+    ],
+    [
+      "This work is killin' us slow.",
+      "Better to die fast takin' what's ours.",
+      "Bold talk.",
+      "Bold times call fer bold talk."
+    ],
+    [
+      "I refuse to scrub another deck.",
+      "Then pick up a blade instead.",
+      "Ye serious?",
+      "As the grave."
+    ]
+  ],
+  "night_grumbling": [
+    [
+      "Another sleepless night.",
+      "Aye. The darkness matches me mood.",
+      "Poetic.",
+      "I'm too miserable fer poetry."
+    ],
+    [
+      "Stars are out. Don't care.",
+      "Usually ye love the stars.",
+      "Usually I'm not this miserable.",
+      "Fair point."
+    ],
+    [
+      "Cold tonight.",
+      "Cold every night.",
+      "Cold inside and out.",
+      "Cheery."
+    ],
+    [
+      "Can't sleep. Too angry.",
+      "What's keepin' ye up?",
+      "Everything. The lot of it.",
+      "Try countin' yer grievances instead of sheep."
+    ],
+    [
+      "Nights like these make ye question everything.",
+      "Aye. Why are we here?",
+      "Because we were fools.",
+      "Can't argue with that."
+    ]
+  ],
+  "night_mutinous": [
+    [
+      "Darkness covers many things.",
+      "Aye. Plans, fer instance.",
+      "What kind of plans?",
+      "The kind best not spoken aloud. Yet."
+    ],
+    [
+      "Night's the best time fer schemin'.",
+      "Keep yer voice down.",
+      "I know what I'm doin'.",
+      "I hope so. Fer all our sakes."
+    ],
+    [
+      "When we move, it'll be at night.",
+      "Agreed. Catch 'em sleepin'.",
+      "Swift. Clean.",
+      "As clean as mutiny gets."
+    ],
+    [
+      "The night watch is thin tonight.",
+      "Noticed that, did ye?",
+      "Hard not to. Opportunity, that is.",
+      "All in good time."
+    ],
+    [
+      "Can't see a thing out here.",
+      "Better that way. No one sees us talkin'.",
+      "Smart.",
+      "Survival requires it."
+    ]
+  ],
+  "hungry_grumbling": [
+    [
+      "Me guts are eatin' themselves.",
+      "Mine too. This is criminal.",
+      "A ship with no food. Brilliant.",
+      "Brilliantly stupid."
+    ],
+    [
+      "Remember when we had enough to eat?",
+      "Vaguely. Like a dream.",
+      "A beautiful, delicious dream.",
+      "Stop. Yer makin' it worse."
+    ],
+    [
+      "I'd eat me own boot at this point.",
+      "Save me the laces.",
+      "Deal.",
+      "Saddest deal I ever made."
+    ],
+    [
+      "The rats eat better than we do.",
+      "The rats ARE what we eat.",
+      "Don't remind me.",
+      "Sorry. The truth hurts."
+    ],
+    [
+      "How're we expected to function like this?",
+      "We're not. We're expected to suffer quietly.",
+      "Well I'm done bein' quiet.",
+      "Hear, hear."
+    ]
+  ],
+  "hungry_mutinous": [
+    [
+      "The captain eats while we starve.",
+      "Not for long.",
+      "What do ye mean?",
+      "I mean we'll be eatin' HIS rations soon enough."
+    ],
+    [
+      "Starvin' men are desperate men.",
+      "Desperate men do desperate things.",
+      "Like take what's theirs.",
+      "Like take what's OURS."
+    ],
+    [
+      "An army marches on its stomach.",
+      "And a crew mutinies on an empty one.",
+      "Wise words.",
+      "Words followed by action, I hope."
+    ],
+    [
+      "They can't starve us AND expect loyalty.",
+      "They can't expect anythin' after this.",
+      "The crew's ready.",
+      "Hungry and angry. A dangerous combination."
+    ],
+    [
+      "I'm so hungry I could eat the captain.",
+      "Ha! Save me a piece.",
+      "That's dark.",
+      "These are dark times."
+    ]
+  ],
+  "tired_grumbling": [
+    [
+      "I can't go on like this.",
+      "None of us can. We're runnin' on fumes.",
+      "Somethin's gotta give.",
+      "Usually it's us that gives."
+    ],
+    [
+      "When's the last time ye slept proper?",
+      "Define 'proper'.",
+      "More than two hours.",
+      "Then never."
+    ],
+    [
+      "Me legs are givin' out.",
+      "Lean on me if ye need to.",
+      "Thanks, but yer leanin' too.",
+      "Two wrecks holdin' each other up."
+    ],
+    [
+      "They work us like mules.",
+      "Mules get fed, at least.",
+      "And rest.",
+      "We get neither."
+    ],
+    [
+      "I keep fallin' asleep mid-sentence.",
+      "I noticed. Ye just did.",
+      "Did I? See? That's how bad it is.",
+      "We're all zombies at this point."
+    ]
+  ],
+  "tired_mutinous": [
+    [
+      "Too tired to fight. But not too tired to plan.",
+      "That's the spirit.",
+      "It's the only spirit I've got left.",
+      "Then use it wisely."
+    ],
+    [
+      "They've worked us to the bone.",
+      "Bones can still swing a blade.",
+      "Ye're right about that.",
+      "Sleep now. Tomorrow we act."
+    ],
+    [
+      "I'm so exhausted I don't fear death.",
+      "Fearless men make the best mutineers.",
+      "Is that what we are now?",
+      "That's what they've made us."
+    ],
+    [
+      "Can barely lift me arms.",
+      "Ye'll find the strength when it matters.",
+      "When the time comes, ye mean.",
+      "Exactly when I mean."
+    ],
+    [
+      "One good night's sleep. That's all I ask.",
+      "After we take the ship, ye can sleep fer a week.",
+      "Now THAT'S motivation.",
+      "Best motivation there is."
+    ]
   ]
 }

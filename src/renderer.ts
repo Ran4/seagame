@@ -160,6 +160,54 @@ export class Renderer {
       drawBarTooltip(rc, rc.hoveredBarTooltip);
     }
 
+    // Mutiny ultimatum warning banner
+    if (world.mutinyState === 'ultimatum') {
+      const remaining = Math.max(0, world.mutinyTimer);
+      const mins = Math.floor(remaining / 60);
+      const secs = Math.floor(remaining % 60);
+      const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+      const pulse = 0.6 + 0.4 * Math.sin(time * 4);
+
+      ctx.fillStyle = `rgba(180, 20, 20, ${0.7 * pulse})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, 32);
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(`MUTINY THREATENED — ${timeStr} remaining`, CANVAS_WIDTH / 2, 16);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Mutiny game over overlay
+    if (world.mutinyState === 'game_over') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // Skull and crossbones (simple canvas drawing)
+      const cx = CANVAS_WIDTH / 2;
+      const cy = CANVAS_HEIGHT / 2 - 40;
+      ctx.font = '64px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#cc2222';
+      ctx.fillText('\u2620', cx, cy);
+
+      // "MUTINY!" header
+      ctx.font = 'bold 48px serif';
+      ctx.fillStyle = '#cc2222';
+      ctx.fillText('MUTINY!', cx, cy + 60);
+
+      // Subtext
+      ctx.font = '18px serif';
+      ctx.fillStyle = '#cccccc';
+      ctx.fillText('The crew has seized the ship.', cx, cy + 100);
+
+      ctx.font = '14px monospace';
+      ctx.fillStyle = '#888888';
+      ctx.fillText('Refresh to restart', cx, cy + 135);
+      ctx.textBaseline = 'alphabetic';
+    }
+
     this.hoveredItem = rc.hoveredItem;
   }
 }

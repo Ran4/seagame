@@ -39,8 +39,8 @@ fetch('/CONVERSATION_SNIPPETS.json')
   .then(data => { CONVERSATION_SCRIPTS = data; })
   .catch(err => console.warn('Failed to load conversation snippets:', err));
 
-type ContextTag = 'generic' | 'work' | 'night' | 'hungry' | 'tired';
-type MoodTag = 'friendly' | 'unfriendly' | 'tired' | 'hungry' | 'horny' | 'drunken';
+type ContextTag = 'generic' | 'work' | 'night' | 'hungry' | 'tired' | 'grumbling';
+type MoodTag = 'friendly' | 'unfriendly' | 'tired' | 'hungry' | 'horny' | 'drunken' | 'grumbling' | 'mutinous';
 
 function weightedPick<T>(entries: [T, number][]): T {
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -57,6 +57,7 @@ function pickContext(speaker: Actor, brightness: number): ContextTag {
   if (speaker.conditions.has('hungry') || speaker.conditions.has('starving')) w.push(['hungry', 3]);
   if (speaker.conditions.has('tired') || speaker.conditions.has('exhausted')) w.push(['tired', 3]);
   if (brightness < 0.5) w.push(['night', 3]);
+  if (speaker.conditions.has('grumbling') || speaker.conditions.has('miserable') || speaker.conditions.has('mutinous')) w.push(['grumbling', 4]);
   return weightedPick(w);
 }
 
@@ -79,6 +80,8 @@ function pickPartnerMood(speaker: Actor, partner: Actor): MoodTag {
   if (partner.conditions.has('tired') || partner.conditions.has('exhausted')) w.push(['tired', 2]);
   if (partner.conditions.has('hungry') || partner.conditions.has('starving')) w.push(['hungry', 2]);
   if (partner.conditions.has('drunk')) w.push(['drunken', 3]);
+  if (partner.conditions.has('grumbling') || partner.conditions.has('miserable')) w.push(['grumbling', 4]);
+  if (partner.conditions.has('mutinous')) w.push(['mutinous', 6]);
   return weightedPick(w);
 }
 

@@ -83,11 +83,20 @@ export function createWorld(): World {
     activityLog: [],
     orderPollTimer: 0,
     spottedIslands: new Set(),
+    shantyCooldown: 0,
+    mutinyState: 'none',
+    mutinyTimer: 0,
   };
 }
 
 export function update(world: World, input: InputState, audio: AudioManager, hoveredItem: Item | null, dt: number): void {
   audio.activeDeck = world.activeDeck;
+
+  // Game over — skip simulation updates, only handle input for restart
+  if (world.mutinyState === 'game_over') return;
+
+  // Tick shanty cooldown
+  if (world.shantyCooldown > 0) world.shantyCooldown = Math.max(0, world.shantyCooldown - dt);
 
   // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
   const anyNavigating = world.actors.some(c => c.state === CrewState.NAVIGATING);
@@ -341,7 +350,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
   // Crew AI — track state transitions to play sounds
   const prevStates = world.actors.map(c => c.state);
-  updateActors(world.actors, world.decks, dt, world.barrelInventory, world.time, world.lanternOil, brightness, world.activityLog, world.worldMap, world.spottedIslands);
+  updateActors(world.actors, world.decks, dt, world.barrelInventory, world.time, world.lanternOil, brightness, world.activityLog, world.worldMap, world.spottedIslands, world, audio);
   for (let i = 0; i < world.actors.length; i++) {
     const deck = world.actors[i].deck;
     if (prevStates[i] === CrewState.LIGHTING_LANTERN && world.actors[i].state !== CrewState.LIGHTING_LANTERN) {

@@ -129,6 +129,7 @@ export enum CrewState {
   DRINKING = 'drinking',
   TAKING_ITEM = 'taking_item',
   PETTING = 'petting',
+  SINGING = 'singing',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -148,6 +149,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.DRINKING]: 'Drinking',
   [CrewState.TAKING_ITEM]: 'Taking item',
   [CrewState.PETTING]: 'Petting',
+  [CrewState.SINGING]: 'Singing',
 };
 
 export interface ContextMenuItem {
@@ -238,6 +240,7 @@ export interface Actor {
   consumingItem: Item | null;
   lustSeekCooldown: number;
   commandQueue: Command[];
+  shantyInitiatorId: number | null;
 }
 
 export interface Deck {
@@ -285,7 +288,7 @@ export interface Item {
   hungerRestore: number;     // hunger added when consumed (0-255 scale)
 }
 
-export type ThoughtBubble = 'heart' | 'broken_heart';
+export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note';
 
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
@@ -340,4 +343,7 @@ export interface World {
   activityLog: ActivityLogEntry[];
   orderPollTimer: number;
   spottedIslands: Set<number>;
+  shantyCooldown: number;
+  mutinyState: 'none' | 'ultimatum' | 'game_over';
+  mutinyTimer: number;
 }

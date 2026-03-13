@@ -91,6 +91,7 @@ const SPRITES = [
   // Thought bubbles
   ['bubbles', 'heart', `${BUBBLE_STYLE} Inside the bubble is a bright red pixel-art heart symbol. The heart is solid red, classic valentine shape.`],
   ['bubbles', 'broken_heart', `${BUBBLE_STYLE} Inside the bubble is a broken heart symbol — a red heart cracked/split down the middle with a jagged lightning-bolt crack, pieces slightly separated. Dark crack line through the center.`],
+  ['bubbles', 'music_note', `${BUBBLE_STYLE} Inside the bubble is a bright blue musical note symbol — a single eighth note (quaver) with a filled oval notehead and a stem with a flag. Clean pixel-art style.`],
 ];
 
 /** Replace magenta-ish background pixels with transparent.

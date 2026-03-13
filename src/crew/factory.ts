@@ -88,6 +88,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
     consumingItem: null,
     lustSeekCooldown: 0,
     commandQueue: [],
+    shantyInitiatorId: null,
   };
 }
 

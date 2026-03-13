@@ -1,17 +1,5 @@
 # Current Plan
 
-## Quick wins
-
-* DONE: Enforce item spoilage: The infrastructure is already built (spoilAfter, createdAt). Just add a tick check in the game loop. Fish and semen spoil. Log it. Takes 30 minutes.
-
-* DONE: Night fear: Crew with low morale lose extra morale at night if lanterns are unlit. Incentivizes the lantern system, which currently has no gameplay consequence.
-
-* DONE: Lookout shouts: When the lookout crew spots an island approaching, show a speech bubble: "Land ho!" Currently lookout is a state but has no gameplay effect.
-
-* DONE: Dog morale bonus: Crew who are friends with a dog get +5 morale when the dog is on the same deck. Dogs become strategically valuable, not just decoration.
-
-# Later
-
 ### Priority Matrix
 
 Ranked by the ratio of fun generated to implementation effort, considering how much existing infrastructure can be reused.
@@ -29,7 +17,7 @@ Ranked by the ratio of fun generated to implementation effort, considering how m
 
 ### Recommended Implementation Order
 
-**Phase 1 — "The Crew Has Feelings":** Morale system + shanty singing + grog effects. This is low-effort, high-impact, and makes the existing crew AI dramatically more interesting without adding any new entity types or map features.
+DONE: **Phase 1 — "The Crew Has Feelings":** Morale system + shanty singing + grog effects. This is low-effort, high-impact, and makes the existing crew AI dramatically more interesting without adding any new entity types or map features.
 
 **Phase 2 — "Nature Is Cruel":** Storms + ship damage + crew injury/death. This introduces the concept of danger and loss, which gives morale real stakes. Uses existing brightness and wobble systems.
 

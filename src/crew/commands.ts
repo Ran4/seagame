@@ -38,6 +38,14 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
   const cmd = member.commandQueue[0];
   const name = member.profile.name;
 
+  // Order refusal: low morale crew may refuse commands
+  if (member.profile.morale < 64 && cmd.name !== 'Stop' && Math.random() < 0.5) {
+    activityLog.push({ text: `${name} refuses — low morale`, time: gameTime });
+    member.commandQueue.shift();
+    member.commandQueue.length = 0;
+    return true;
+  }
+
   const fail = (reason: string) => {
     activityLog.push({ text: `${name}: ${cmd.name} failed — ${reason}`, time: gameTime });
     member.commandQueue.length = 0; // drop entire chain

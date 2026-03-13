@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
@@ -6,6 +6,7 @@ import { updateWalking, orderCrewBesideTile } from './movement';
 import { tryExecuteCommand } from './commands';
 import { trySeekLustPartner } from './lust';
 import { LUST_ACTOR_TYPES } from './factory';
+import { AudioManager } from '../audio';
 
 // Needs decay
 const HUNGER_RATE = 0.7;
@@ -19,6 +20,16 @@ const DOGHATER_PROXIMITY = 5; // tiles
 
 // Social
 const PET_FRIENDSHIP_GAIN = 2;
+
+// Shanty singing
+const SHANTY_MORALE_THRESHOLD = 160;
+const SHANTY_MIN_SINGERS = 3;
+const SHANTY_MAX_SINGERS = 5;
+const SHANTY_CHANCE = 0.004;
+const SHANTY_MORALE_GAIN = 10;
+const SHANTY_FRIENDSHIP_GAIN = 5;
+const SHANTY_COOLDOWN = 120;
+const SHANTY_DEFAULT_DURATION = 30;
 
 function getDogMoraleAdj(member: Actor, crew: Actor[]): number {
   if (member.actorType !== 'human') return 0;
@@ -161,7 +172,7 @@ function canAccessDeck(member: Actor, deckIndex: number): boolean {
   return true;
 }
 
-export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = [], worldMap?: WorldMap, spottedIslands?: Set<number>): void {
+export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = [], worldMap?: WorldMap, spottedIslands?: Set<number>, world?: World, audio?: AudioManager): void {
   // Reset spotted islands when ship moves far from all spotted islands
   if (worldMap && spottedIslands && spottedIslands.size > 0) {
     let allFar = true;
@@ -212,6 +223,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     }
 
     // Morale tick — drift toward target derived from needs/relations
+    // TODO: combat victory bonus
+    // TODO: harbor visit recency bonus
+    // TODO: storm survival / loot share / idle boredom
     {
       const hungerContrib = member.profile.hunger;
       const energyContrib = member.profile.energy;
@@ -269,7 +283,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 
     switch (member.state) {
       case CrewState.IDLE:
-        updateIdle(member, decks, dt, crew, lanternOil, brightness, activityLog, gameTime);
+        updateIdle(member, decks, dt, crew, lanternOil, brightness, activityLog, gameTime, world, audio);
         break;
       case CrewState.WALKING:
         updateWalking(member, dt, crew, brightness, barrelInventory, decks);
@@ -511,6 +525,55 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.copulationTarget = null;
         }
         break;
+      case CrewState.SINGING:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.profile.morale = Math.min(255, member.profile.morale + SHANTY_MORALE_GAIN);
+          // Friendship gain with all other singers (same shantyInitiatorId)
+          if (member.shantyInitiatorId !== null) {
+            for (const other of crew) {
+              if (other.id === member.id || other.shantyInitiatorId !== member.shantyInitiatorId) continue;
+              const rel = member.relations.find(r => r.actorId === other.id);
+              if (rel) rel.friendship = Math.min(255, rel.friendship + SHANTY_FRIENDSHIP_GAIN);
+            }
+            // Initiator logs
+            if (member.id === member.shantyInitiatorId) {
+              activityLog.push({ text: `${member.profile.name} led the crew in a sea shanty`, time: gameTime });
+              if (world) world.shantyCooldown = SHANTY_COOLDOWN;
+              if (audio) audio.stopShanty();
+            }
+          }
+          member.shantyInitiatorId = null;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+          member.conversationCooldown = 30;
+        }
+        break;
+    }
+  }
+
+  // Mutiny detection (after per-actor loop)
+  if (world) {
+    const humans = crew.filter(c => c.actorType === 'human');
+    const mutinousCount = humans.filter(c => c.conditions.has('mutinous')).length;
+    const threshold = Math.ceil(humans.length * 0.6);
+
+    if (world.mutinyState === 'none') {
+      if (mutinousCount >= threshold && humans.length > 0) {
+        world.mutinyState = 'ultimatum';
+        world.mutinyTimer = 720; // 720 seconds = 1 in-game day
+        activityLog.push({ text: 'The crew issues an ultimatum!', time: gameTime });
+      }
+    } else if (world.mutinyState === 'ultimatum') {
+      world.mutinyTimer -= dt;
+      if (mutinousCount < threshold) {
+        world.mutinyState = 'none';
+        world.mutinyTimer = 0;
+        activityLog.push({ text: 'The crew calms down — mutiny averted.', time: gameTime });
+      } else if (world.mutinyTimer <= 0) {
+        world.mutinyState = 'game_over';
+        activityLog.push({ text: 'MUTINY! The crew has seized the ship.', time: gameTime });
+      }
     }
   }
 }
@@ -533,7 +596,7 @@ function checkForIslandSpotting(lookout: Actor, crew: Actor[], worldMap: WorldMa
   }
 }
 
-function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, activityLog: ActivityLogEntry[] = [], gameTime: number = 0): void {
+function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, activityLog: ActivityLogEntry[] = [], gameTime: number = 0, world?: World, audio?: AudioManager): void {
   // Waiting for copulation partner — don't wander
   if (member.copulationTarget) return;
 
@@ -544,13 +607,13 @@ function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lan
   if (tryExecuteCommand(member, decks, crew, activityLog, gameTime)) return;
 
   if (member.actorType === 'human') {
-    updateIdleHuman(member, decks, dt, crew, lanternOil, brightness);
+    updateIdleHuman(member, decks, dt, crew, lanternOil, brightness, world, audio);
   } else {
     updateIdleAnimal(member, decks, dt, crew, brightness);
   }
 }
 
-function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number): void {
+function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
 
   // Hungry? Go eat
@@ -632,6 +695,38 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
 
   // Try to start a conversation with nearby idle crew
   if (tryStartConversation(member, crew, brightness)) return;
+
+  // Shanty singing: nighttime, high average morale, 3+ idle humans on same deck
+  if (world && brightness < 0.5 && world.shantyCooldown <= 0 && member.conversationCooldown <= 0 && Math.random() < SHANTY_CHANCE) {
+    const humans = crew.filter(c => c.actorType === 'human');
+    const avgMorale = humans.reduce((sum, c) => sum + c.profile.morale, 0) / humans.length;
+    if (avgMorale >= SHANTY_MORALE_THRESHOLD) {
+      const candidates = humans.filter(c =>
+        c.deck === member.deck && c.id !== member.id &&
+        (c.state === CrewState.IDLE || (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE)) &&
+        c.conversationCooldown <= 0
+      );
+      if (candidates.length >= SHANTY_MIN_SINGERS - 1) {
+        const singers = [member, ...candidates.slice(0, SHANTY_MAX_SINGERS - 1)];
+        const duration = audio?.shantyDuration || SHANTY_DEFAULT_DURATION;
+        const maleCount = singers.filter(s => s.profile.sex === 'M').length;
+        const femaleCount = singers.filter(s => s.profile.sex === 'F').length;
+
+        for (const singer of singers) {
+          singer.state = CrewState.SINGING;
+          singer.stateTimer = duration;
+          singer.shantyInitiatorId = member.id;
+          singer.thoughtBubble = 'music_note';
+          singer.thoughtBubbleTimer = duration;
+          singer.conversationCooldown = 30;
+          singer.path = [];
+        }
+
+        if (audio) audio.playShanty({ male: maleCount, female: femaleCount }, member.deck);
+        return;
+      }
+    }
+  }
 
   // Otherwise wander
   wanderRandomly(member, decks);

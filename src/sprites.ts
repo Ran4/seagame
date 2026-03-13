@@ -77,7 +77,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
   ];
 
   const itemNames = ['cutlass', 'semen', 'grog_ration'];
-  const bubbleNames = ['heart', 'broken_heart'];
+  const bubbleNames = ['heart', 'broken_heart', 'music_note'];
 
   // Tile sprites (individually fault-tolerant so missing ones don't break everything)
   const tileLoads = await Promise.all(

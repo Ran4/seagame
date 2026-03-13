@@ -6,6 +6,9 @@ type SoundEntry = {
   category: 'ui' | 'world';
 };
 
+// Known shanty voice track suffixes
+const VOICE_TRACKS = ['male_1', 'male_2', 'female_1', 'female_2'] as const;
+
 export class AudioManager {
   private sounds: Map<string, SoundEntry> = new Map();
   private music: HTMLAudioElement | null = null;
@@ -13,6 +16,9 @@ export class AudioManager {
   private _muted: boolean;
   private _sfxMuted: boolean;
   activeDeck = 0;
+  private availableShanties: string[] = [];
+  private playingShantyTracks: HTMLAudioElement[] = [];
+  shantyDuration = 0; // duration of current shanty in seconds (0 = unknown)
 
   constructor() {
     this._muted = localStorage.getItem(MUSIC_STORAGE_KEY) === '1';
@@ -30,6 +36,8 @@ export class AudioManager {
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
     this.music.volume = 0.4;
+
+    this.discoverShanties();
   }
 
   get muted(): boolean {
@@ -84,5 +92,60 @@ export class AudioManager {
     if (!this._muted) {
       this.music?.play().catch(() => {});
     }
+  }
+
+  /** Discover available shanty folders by probing for the mixed track */
+  private async discoverShanties(): Promise<void> {
+    const knownShanties = ['copper_beacon', 'powderwake', 'riptide_preacher', 'seaghost_steps', 'shiverin_ropes'];
+    for (const name of knownShanties) {
+      try {
+        const resp = await fetch(`/audio/shanties/${name}/${name}__mixed.mp3`, { method: 'HEAD' });
+        if (resp.ok) this.availableShanties.push(name);
+      } catch { /* not available */ }
+    }
+  }
+
+  /** Play a shanty with layered voice tracks based on singer composition */
+  playShanty(singers: { male: number; female: number }, soundDeck: number): void {
+    if (this._sfxMuted || this.availableShanties.length === 0) return;
+    this.stopShanty();
+
+    const shanty = this.availableShanties[Math.floor(Math.random() * this.availableShanties.length)];
+
+    // Select voice tracks based on singer composition
+    const tracks: string[] = [];
+    if (singers.male >= 1) tracks.push('male_1');
+    if (singers.male >= 2) tracks.push('male_2');
+    if (singers.female >= 1) tracks.push('female_1');
+    if (singers.female >= 2) tracks.push('female_2');
+    // Fallback: at least one track
+    if (tracks.length === 0) tracks.push('male_1');
+
+    // Volume attenuation by deck distance
+    const dist = Math.abs(soundDeck - this.activeDeck);
+    const baseVolume = 0.5 * Math.pow(0.4, dist);
+
+    for (const track of tracks) {
+      const audio = new Audio(`/audio/shanties/${shanty}/${shanty}__${track}.mp3`);
+      audio.volume = baseVolume;
+      // Grab duration from first track
+      if (this.shantyDuration === 0) {
+        audio.addEventListener('loadedmetadata', () => {
+          if (this.shantyDuration === 0) this.shantyDuration = audio.duration;
+        });
+      }
+      audio.play().catch(() => {});
+      this.playingShantyTracks.push(audio);
+    }
+  }
+
+  /** Stop all playing shanty tracks */
+  stopShanty(): void {
+    for (const audio of this.playingShantyTracks) {
+      audio.pause();
+      audio.src = '';
+    }
+    this.playingShantyTracks = [];
+    this.shantyDuration = 0;
   }
 }
