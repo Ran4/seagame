@@ -63,6 +63,7 @@ export class AudioManager {
   toggleSfxMute(): void {
     this._sfxMuted = !this._sfxMuted;
     localStorage.setItem(SFX_STORAGE_KEY, this._sfxMuted ? '1' : '0');
+    if (this._sfxMuted) this.stopShanty();
   }
 
   private preload(name: string, src: string, category: 'ui' | 'world', volume = 0.5): void {

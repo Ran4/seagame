@@ -1,7 +1,8 @@
-import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Command, ActivityLogEntry } from '../types';
+import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Command, ActivityLogEntry, World } from '../types';
 import { stopConversation } from '../conversation';
 import { createSemen } from '../items';
 import { orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './movement';
+import { AudioManager } from '../audio';
 
 export const DRINK_DURATION = 5;
 
@@ -32,7 +33,7 @@ function findTileOrRandom(decks: Deck[], type: TileType, pos: { deck?: number; x
   return pickRandom(findTilesOfType(decks, type));
 }
 
-export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activityLog: ActivityLogEntry[], gameTime: number): boolean {
+export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], activityLog: ActivityLogEntry[], gameTime: number, world?: World, audio?: AudioManager): boolean {
   if (member.commandQueue.length === 0) return false;
 
   const cmd = member.commandQueue[0];
@@ -226,6 +227,35 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
         return true;
       }
       log('going to extinguish lantern');
+      return true;
+    }
+    case 'Sing': {
+      // Gather nearby idle/wandering humans on same deck
+      const SING_MAX = 5;
+      const SING_DEFAULT_DURATION = 30;
+      const singers: Actor[] = [member];
+      for (const c of crew) {
+        if (singers.length >= SING_MAX) break;
+        if (c.id === member.id || c.actorType !== 'human' || c.deck !== member.deck) continue;
+        if (c.state === CrewState.IDLE || (c.state === CrewState.WALKING && c.targetState === CrewState.IDLE)) {
+          singers.push(c);
+        }
+      }
+      if (singers.length < 2) { fail('not enough crew nearby to sing'); return true; }
+      const duration = audio?.shantyDuration || SING_DEFAULT_DURATION;
+      const maleCount = singers.filter(s => s.profile.sex === 'M').length;
+      const femaleCount = singers.filter(s => s.profile.sex === 'F').length;
+      for (const singer of singers) {
+        singer.state = CrewState.SINGING;
+        singer.stateTimer = duration;
+        singer.shantyInitiatorId = member.id;
+        singer.thoughtBubble = 'music_note';
+        singer.thoughtBubbleTimer = duration;
+        singer.conversationCooldown = 30;
+        singer.path = [];
+      }
+      if (audio) audio.playShanty({ male: maleCount, female: femaleCount }, member.deck);
+      log('started a sea shanty');
       return true;
     }
     case 'Stop': {

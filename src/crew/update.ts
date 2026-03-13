@@ -604,7 +604,7 @@ function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lan
   if (member.idleTimer > 0) return;
 
   // Process command queue first
-  if (tryExecuteCommand(member, decks, crew, activityLog, gameTime)) return;
+  if (tryExecuteCommand(member, decks, crew, activityLog, gameTime, world, audio)) return;
 
   if (member.actorType === 'human') {
     updateIdleHuman(member, decks, dt, crew, lanternOil, brightness, world, audio);

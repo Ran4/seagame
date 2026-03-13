@@ -313,6 +313,7 @@ export type Command =
   | { name: 'Converse';          actorId: number }
   | { name: 'TakeItem';          barrelKey: string; itemName: string }
   | { name: 'Drink';             itemName?: string }
+  | { name: 'Sing' }
   | { name: 'Stop' }
   | { name: 'Tell';              actorId: number; text?: string }
   | { name: 'Order';             actorId: number; order: Command };
