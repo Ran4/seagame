@@ -70,7 +70,7 @@ const LUST_CYCLE_LENGTH = 6 * 720;   // 6 in-game days = 4320s
  * Game code should read conditions (not statuses) for behaviour checks.
  * Write to statuses when changing state; conditions update next tick.
  */
-export function refreshConditions(member: Actor, crew?: Actor[]): void {
+export function refreshConditions(member: Actor, crew: Actor[]): void {
   member.conditions.clear();
   // Copy raw status keys
   for (const key of member.statuses.keys()) {
@@ -98,7 +98,7 @@ export function refreshConditions(member: Actor, crew?: Actor[]): void {
   else if (member.profile.morale < 64) member.conditions.add('miserable');
   else if (member.profile.morale < 96) member.conditions.add('grumbling');
   // Derived: dog proximity
-  if (crew && member.actorType === 'human') {
+  if (member.actorType === 'human') {
     const hasFriendlyDog = crew.some(c =>
       c.actorType === 'dog' && c.deck === member.deck &&
       (member.relations.find(r => r.actorId === c.id)?.friendship ?? 0) >= 128
