@@ -147,6 +147,27 @@ export function buildContextMenu(
     }
   }
 
+  // Corpse right-click: "Bury X at sea" (requires human selected)
+  if (world.selectedActorId !== null && !clickedCrew) {
+    const selected = world.actors.find(c => c.id === world.selectedActorId);
+    if (selected && selected.actorType === 'human') {
+      for (const corpse of world.corpses) {
+        if (corpse.deck !== world.activeDeck) continue;
+        const cdx = worldX - corpse.pixelX;
+        const cdy = worldY - corpse.pixelY;
+        if (cdx * cdx + cdy * cdy < 14 * 14) {
+          items.push({
+            label: `Bury ${corpse.name} at sea`,
+            targetState: CrewState.IDLE,
+            action: 'bury_at_sea',
+            corpseActorId: corpse.actorId,
+          });
+          break;
+        }
+      }
+    }
+  }
+
   // Tile actions from the tile under the click (or under the crew member)
   let pendingBarrelItems: { items: Item[]; barrelKey: string } | undefined;
   if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
@@ -349,6 +370,11 @@ export function handleMenuClick(contextMenu: ContextMenu, click: { x: number; y:
 
 /** Convert a menu item + context menu state into a Command. */
 export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuItem: ContextMenuItem): Command | null {
+  // Bury corpse at sea
+  if (menuItem.action === 'bury_at_sea' && menuItem.corpseActorId !== undefined) {
+    return { name: 'BuryAtSea', corpseActorId: menuItem.corpseActorId };
+  }
+
   // Take item from barrel
   if (menuItem.action === 'take_item' && menuItem.itemData) {
     return { name: 'TakeItem', barrelKey: menuItem.itemData.barrelKey, itemName: menuItem.itemData.itemName };

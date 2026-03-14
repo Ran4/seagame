@@ -6,11 +6,11 @@ import {
 import { SpriteSheet } from './sprites';
 import {
   RenderContext,
-  drawWater, drawDeck, drawActor, drawActorOverlays,
+  drawWater, drawDeck, drawActor, drawActorOverlays, drawCorpse,
   drawUI, drawSoundButton, drawActivityLog, drawCompass,
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
-  drawSettingsButton, drawSettingsPanel,
+  drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
 } from './render';
 import { drawCommandInput } from './command-input';
 
@@ -74,6 +74,9 @@ export class Renderer {
     // Crow's nest: draw upper deck faintly underneath (tiles + crew)
     if (deckIndex === 0 && decks.length > 1) {
       drawDeck(rc, decks[1], time);
+      for (const corpse of world.corpses) {
+        if (corpse.deck === 1) drawCorpse(rc, corpse, corpse.actorId === world.selectedCorpseId);
+      }
       for (const member of crew) {
         if (member.deck === 1) {
           drawActor(rc, member, member.id === selectedActorId);
@@ -128,6 +131,11 @@ export class Renderer {
       ctx.globalCompositeOperation = prevComp;
     }
 
+    // Corpses (drawn after darkness/glow, before living actors)
+    for (const corpse of world.corpses) {
+      if (corpse.deck === deckIndex) drawCorpse(rc, corpse, corpse.actorId === world.selectedCorpseId);
+    }
+
     // Selected object highlight
     if (selectedObject && selectedObject.deck === deckIndex) {
       const ox = selectedObject.x * TILE_SIZE - camera.x;
@@ -150,6 +158,10 @@ export class Renderer {
     }
 
     drawUI(rc, deck, deckIndex, crew, selectedActorId, selectedObject, decks, barrelInventory, time);
+    if (world.selectedCorpseId !== null) {
+      const corpse = world.corpses.find(c => c.actorId === world.selectedCorpseId);
+      if (corpse) drawCorpsePanel(rc, corpse);
+    }
     if (worldMap) {
       drawCompass(rc, worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
     }

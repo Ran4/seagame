@@ -1,4 +1,4 @@
-import { TILE_SIZE, Actor, Camera, CrewState } from '../types';
+import { TILE_SIZE, Actor, Camera, CrewState, Corpse } from '../types';
 import { DirectionalSprite } from '../sprites';
 import { RenderContext } from './context';
 
@@ -208,4 +208,58 @@ function drawSpeechBubble(rc: RenderContext, text: string, sx: number, sy: numbe
   ctx.textBaseline = 'middle';
   ctx.fillText(text, sx, bubbleY + bubbleH / 2);
   ctx.textBaseline = 'alphabetic';
+}
+
+export function drawCorpse(rc: RenderContext, corpse: Corpse, selected: boolean = false): void {
+  const ctx = rc.ctx;
+  const camera = rc.camera;
+  const sx = corpse.pixelX - camera.x;
+  const sy = corpse.pixelY - camera.y;
+
+  const isAnimal = corpse.actorType !== 'human';
+  const dirSprite = isAnimal
+    ? (rc.sprites?.animals.get(corpse.actorType) ?? null)
+    : (rc.sprites?.crew[corpse.spriteIndex % (rc.sprites?.crew.length ?? 1)] ?? null);
+  const sprite = dirSprite?.south ?? null;
+
+  const sizeScale = corpse.actorType === 'monkey' ? 0.7 : isAnimal ? 0.85 : 1.0;
+  const size = TILE_SIZE * sizeScale;
+
+  ctx.save();
+  ctx.globalAlpha = 0.6;
+  if (sprite) {
+    // Draw south-facing sprite rotated 90° (lying down)
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+  } else {
+    // Fallback: dark ellipse with 'X'
+    ctx.translate(sx, sy);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 12, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Darken the actor's color
+    ctx.fillStyle = corpse.color;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 10, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('X', 0, 0);
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+
+  if (selected) {
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }

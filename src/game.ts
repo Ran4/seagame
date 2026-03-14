@@ -81,12 +81,14 @@ export function createWorld(): World {
   return {
     decks,
     actors,
+    corpses: [],
     camera: {
       x: (deck.width * TILE_SIZE - CANVAS_WIDTH) / 2,
       y: (deck.height * TILE_SIZE - CANVAS_HEIGHT) / 2,
     },
     activeDeck: 1,
     selectedActorId: null,
+    selectedCorpseId: null,
     selectedObject: null,
     contextMenu: null,
     worldMap,
@@ -413,6 +415,22 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   }
 
   if (input.mouseClick) {
+    audio.startMusicOnInteraction();
+
+    // Check corpses first (before handleClick, since corpses sit on walkable tiles)
+    const clickWorldX = input.mouseClick.x + world.camera.x;
+    const clickWorldY = input.mouseClick.y + world.camera.y;
+    let clickedCorpse: typeof world.corpses[0] | null = null;
+    for (const corpse of world.corpses) {
+      if (corpse.deck !== world.activeDeck) continue;
+      const cdx = clickWorldX - corpse.pixelX;
+      const cdy = clickWorldY - corpse.pixelY;
+      if (cdx * cdx + cdy * cdy < 14 * 14) {
+        clickedCorpse = corpse;
+        break;
+      }
+    }
+
     const result = handleClick(
       input.mouseClick,
       world.camera,
@@ -421,20 +439,26 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       world.decks[world.activeDeck],
     );
 
-    audio.startMusicOnInteraction();
-
-    if (result) {
-      if (result.type === 'selectCrew') {
-        world.selectedActorId = result.actorId;
-        world.selectedObject = null;
-        audio.play('click', world.activeDeck);
-      } else if (result.type === 'selectObject') {
+    if (result && result.type === 'selectCrew') {
+      // Crew takes priority over corpse
+      world.selectedActorId = result.actorId;
+      world.selectedCorpseId = null;
+      world.selectedObject = null;
+      audio.play('click', world.activeDeck);
+    } else if (clickedCorpse) {
+      world.selectedCorpseId = clickedCorpse.actorId;
+      world.selectedActorId = null;
+      world.selectedObject = null;
+      world.contextMenu = null;
+      audio.play('click', world.activeDeck);
+    } else if (result) {
+      world.selectedCorpseId = null;
+      if (result.type === 'selectObject') {
         world.selectedObject = result;
         world.selectedActorId = null;
         world.contextMenu = null;
         audio.play('click', world.activeDeck);
       } else if (result.type === 'useStairs') {
-        // Find connected deck — stairs at same (x,y) on adjacent deck
         for (const d of [world.activeDeck - 1, world.activeDeck + 1]) {
           if (d >= 0 && d < world.decks.length) {
             const otherDeck = world.decks[d];
@@ -450,6 +474,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       }
     } else {
       world.selectedActorId = null;
+      world.selectedCorpseId = null;
       world.selectedObject = null;
       world.contextMenu = null;
     }
@@ -494,24 +519,25 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   updateSpoilage(world.barrelInventory, world.actors, world.time, world.activityLog);
 
   // Crew AI — track state transitions to play sounds
-  const prevStates = world.actors.map(c => c.state);
+  const prevStates = new Map(world.actors.map(c => [c.id, c.state]));
   updateActors(world.actors, world.decks, dt, world.barrelInventory, world.time, world.lanternOil, brightness, world.activityLog, world.worldMap, world.spottedIslands, world, audio);
-  for (let i = 0; i < world.actors.length; i++) {
-    const deck = world.actors[i].deck;
-    if (prevStates[i] === CrewState.LIGHTING_LANTERN && world.actors[i].state !== CrewState.LIGHTING_LANTERN) {
+  for (const member of world.actors) {
+    const prev = prevStates.get(member.id);
+    if (prev === undefined) continue; // new actor (shouldn't happen)
+    const deck = member.deck;
+    if (prev === CrewState.LIGHTING_LANTERN && member.state !== CrewState.LIGHTING_LANTERN) {
       audio.play('lantern_light', deck);
-    } else if (prevStates[i] === CrewState.EXTINGUISHING_LANTERN && world.actors[i].state !== CrewState.EXTINGUISHING_LANTERN) {
+    } else if (prev === CrewState.EXTINGUISHING_LANTERN && member.state !== CrewState.EXTINGUISHING_LANTERN) {
       audio.play('lantern_extinguish', deck);
     }
-    if (prevStates[i] !== CrewState.KISSING && world.actors[i].state === CrewState.KISSING) {
+    if (prev !== CrewState.KISSING && member.state === CrewState.KISSING) {
       audio.play('kiss', deck);
     }
-    if (prevStates[i] !== CrewState.DRINKING && world.actors[i].state === CrewState.DRINKING) {
-      audio.play(world.actors[i].profile.sex === 'F' ? 'glug_female' : 'glug_male', deck);
+    if (prev !== CrewState.DRINKING && member.state === CrewState.DRINKING) {
+      audio.play(member.profile.sex === 'F' ? 'glug_female' : 'glug_male', deck);
     }
     // Refresh context menu items if the associated crew member's state changed (stale busy labels)
-    if (world.contextMenu?.actorId === world.actors[i].id && prevStates[i] !== world.actors[i].state) {
-      const member = world.actors[i];
+    if (world.contextMenu?.actorId === member.id && prev !== member.state) {
       const canDrink = member.state === CrewState.IDLE || member.state === CrewState.WALKING;
       for (const item of world.contextMenu.items) {
         if (item.targetState === CrewState.DRINKING && item.itemData) {

@@ -132,6 +132,8 @@ export enum CrewState {
   PETTING = 'petting',
   SINGING = 'singing',
   DANCING = 'dancing',
+  CARRYING_CORPSE = 'carrying_corpse',
+  BURYING_AT_SEA = 'burying_at_sea',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -153,6 +155,8 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.PETTING]: 'Petting',
   [CrewState.SINGING]: 'Singing',
   [CrewState.DANCING]: 'Dancing',
+  [CrewState.CARRYING_CORPSE]: 'Carrying corpse',
+  [CrewState.BURYING_AT_SEA]: 'Burying at sea',
 };
 
 export interface ContextMenuItem {
@@ -164,6 +168,7 @@ export interface ContextMenuItem {
   submenu?: ContextMenuItem[];
   action?: string;           // e.g. 'take_item'
   itemData?: { barrelKey: string; itemName: string };
+  corpseActorId?: number;
 }
 
 export interface ContextMenu {
@@ -216,6 +221,9 @@ export interface Actor {
   id: number;
   actorType: ActorType;
   profile: ActorProfile;
+  health: number;       // 0–255, current
+  maxHealth: number;    // 0–255, cap
+  carryingCorpseId: number | null;
   statuses: Map<string, Record<string, any> | null>;
   conditions: Set<string>;
   skills: Record<string, number>;
@@ -245,6 +253,19 @@ export interface Actor {
   lustSeekCooldown: number;
   commandQueue: Command[];
   shantyInitiatorId: number | null;
+}
+
+export interface Corpse {
+  actorId: number;
+  name: string;
+  actorType: ActorType;
+  pixelX: number;
+  pixelY: number;
+  deck: number;
+  spriteIndex: number;
+  color: string;
+  sex: Sex;
+  inventory: Item[];
 }
 
 export interface Deck {
@@ -333,6 +354,8 @@ export type Command =
   | { name: 'Sing' }
   | { name: 'Dance' }
   | { name: 'GroupDance' }
+  | { name: 'BuryAtSea';         corpseActorId: number }
+  | { name: 'SetHealth';         amount: number }
   | { name: 'Stop' }
   | { name: 'Tell';              actorId: number; text?: string }
   | { name: 'Order';             actorId: number; order: Command };
@@ -346,9 +369,11 @@ export interface ActivityLogEntry {
 export interface World {
   decks: Deck[];
   actors: Actor[];
+  corpses: Corpse[];
   camera: Camera;
   activeDeck: number;
   selectedActorId: number | null;
+  selectedCorpseId: number | null;
   selectedObject: { tileType: TileType; x: number; y: number; deck: number } | null;
   contextMenu: ContextMenu | null;
   worldMap: WorldMap;

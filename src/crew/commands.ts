@@ -1,4 +1,4 @@
-import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Command, ActivityLogEntry, World } from '../types';
+import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Command, ActivityLogEntry, World, Corpse } from '../types';
 import { stopConversation } from '../conversation';
 import { createSemen } from '../items';
 import { orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './movement';
@@ -294,6 +294,25 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       log('started a group dance');
       return true;
     }
+    case 'BuryAtSea': {
+      if (!world) { fail('no world reference'); return true; }
+      const corpse = world.corpses.find(c => c.actorId === cmd.corpseActorId);
+      if (!corpse) { fail('corpse not found'); return true; }
+      member.carryingCorpseId = corpse.actorId;
+      const corpseTile = { x: Math.floor(corpse.pixelX / TILE_SIZE), y: Math.floor(corpse.pixelY / TILE_SIZE), deck: corpse.deck };
+      if (!orderCrewToAdjacentTile(member, corpseTile, decks, CrewState.CARRYING_CORPSE)) {
+        member.carryingCorpseId = null;
+        fail('can\'t reach corpse');
+        return true;
+      }
+      log(`going to bury ${corpse.name} at sea`);
+      return true;
+    }
+    case 'SetHealth': {
+      member.health = Math.max(0, Math.min(member.maxHealth, cmd.amount));
+      log(`health set to ${member.health}`);
+      return true;
+    }
     case 'Stop': {
       // Free conversation partner
       if (member.state === CrewState.TALKING) {
@@ -313,6 +332,24 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
         }
       }
       member.copulationTarget = null;
+      // Drop corpse if carrying one
+      if (member.carryingCorpseId !== null && world) {
+        if (!world.corpses.some(c => c.actorId === member.carryingCorpseId)) {
+          world.corpses.push({
+            actorId: member.carryingCorpseId,
+            name: 'Unknown',
+            actorType: 'human',
+            pixelX: member.pixelX,
+            pixelY: member.pixelY,
+            deck: member.deck,
+            spriteIndex: 0,
+            color: '#888888',
+            sex: 'M',
+            inventory: [],
+          });
+        }
+        member.carryingCorpseId = null;
+      }
       member.state = CrewState.IDLE;
       member.path = [];
       member.idleTimer = 1 + Math.random() * 2;

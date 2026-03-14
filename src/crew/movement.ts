@@ -95,6 +95,10 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
       member.idleTimer = 1 + Math.random() * 2;
     } else if (member.state === CrewState.PETTING) {
       member.stateTimer = PET_DURATION;
+    } else if (member.state === CrewState.CARRYING_CORPSE) {
+      member.stateTimer = 2; // pickup duration
+    } else if (member.state === CrewState.BURYING_AT_SEA) {
+      member.stateTimer = 3; // toss duration
     } else {
       member.idleTimer = 2 + Math.random() * 4;
     }
@@ -146,7 +150,8 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
       }
     }
   } else {
-    const move = CREW_SPEED * dt;
+    const speedMult = member.conditions.has('injured') ? 0.75 : 1.0;
+    const move = CREW_SPEED * speedMult * dt;
     member.pixelX += (dx / dist) * Math.min(move, dist);
     member.pixelY += (dy / dist) * Math.min(move, dist);
   }

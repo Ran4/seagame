@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY, Corpse } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
@@ -6,6 +6,7 @@ import { updateWalking, orderCrewBesideTile } from './movement';
 import { tryExecuteCommand } from './commands';
 import { trySeekLustPartner } from './lust';
 import { LUST_ACTOR_TYPES } from './factory';
+import { checkDeath } from './death';
 import { AudioManager } from '../audio';
 
 // Needs decay
@@ -114,6 +115,8 @@ export function refreshConditions(member: Actor, crew: Actor[]): void {
   else if (member.profile.energy < 60) member.conditions.add('tired');
   if (member.profile.hunger < 15) member.conditions.add('starving');
   else if (member.profile.hunger < 70) member.conditions.add('hungry');
+  // Derived: health
+  if (member.health < 32) member.conditions.add('injured');
   // Derived: morale levels
   if (member.profile.morale >= 192) member.conditions.add('happy');
   else if (member.profile.morale >= 128) member.conditions.add('content');
@@ -202,7 +205,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     if (allFar) spottedIslands.clear();
   }
 
-  for (const member of crew) {
+  for (let ci = crew.length - 1; ci >= 0; ci--) {
+    const member = crew[ci];
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
 
@@ -248,7 +252,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         avgFriendship = sum / member.relations.length;
       }
       const dogMoraleAdj = getDogMoraleAdj(member, crew);
-      const target = Math.min(255, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj);
+      const injuryPenalty = member.conditions.has('injured') ? -40 : 0;
+      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty));
       const diff = target - member.profile.morale;
       const step = MORALE_RATE * dt;
       if (Math.abs(diff) < step) {
@@ -280,7 +285,29 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       }
     }
 
+    // Starvation health drain
+    if (member.conditions.has('starving')) {
+      const starvDmg = (member.maxHealth / 400) * dt;
+      const wasFull = member.health >= member.maxHealth;
+      member.health = Math.max(0, member.health - starvDmg);
+      if (wasFull) {
+        activityLog.push({ text: `${member.profile.name} is losing health due to starvation!`, time: gameTime });
+      }
+      // Occasional complaint (every ~120s on average)
+      if (Math.random() < dt / 120) {
+        const complaints = [
+          'I\'m starving...', 'Need food...', 'So hungry...',
+          'Me belly is empty!', 'I\'ll waste away...', 'Feed me, for pity\'s sake!',
+        ];
+        member.speechBubbleText = complaints[Math.floor(Math.random() * complaints.length)];
+        member.speechBubbleTimer = 3;
+      }
+    }
+
     refreshConditions(member, crew);
+
+    // Death check — remove actor if health <= 0
+    if (world && checkDeath(world, member)) continue;
 
     tickConversationCooldown(member, dt);
 
@@ -668,6 +695,44 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.conversationCooldown = 30;
         }
         break;
+      case CrewState.CARRYING_CORPSE:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          // Remove corpse from world
+          if (member.carryingCorpseId !== null && world) {
+            const cIdx = world.corpses.findIndex(c => c.actorId === member.carryingCorpseId);
+            if (cIdx !== -1) world.corpses.splice(cIdx, 1);
+          }
+          // Find nearest hull-adjacent walkable tile
+          if (world) {
+            const hullTile = findNearestHullAdjacentTile(member, decks);
+            if (hullTile) {
+              const from = currentTile(member);
+              const pathFn = member.conditions.has('flyer') ? findPathFlying : findPath;
+              const path = pathFn(decks, from, hullTile);
+              if (path && path.length > 0) {
+                member.path = path;
+                member.state = CrewState.WALKING;
+                member.targetState = CrewState.BURYING_AT_SEA;
+                break;
+              }
+            }
+          }
+          // No hull tile reachable — drop to idle, re-add corpse
+          dropCorpse(member, world);
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.BURYING_AT_SEA:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          activityLog.push({ text: `${member.profile.name} buried a crewmate at sea`, time: gameTime });
+          member.carryingCorpseId = null;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
     }
   }
 
@@ -1029,4 +1094,62 @@ function wanderRandomly(member: Actor, decks: Deck[]): void {
       member.idleTimer = 1 + Math.random() * 2;
     }
   }
+}
+
+/** Find nearest walkable tile adjacent to hull/water/off-grid on the actor's deck. */
+function findNearestHullAdjacentTile(member: Actor, decks: Deck[]): DeckPoint | null {
+  const deck = decks[member.deck];
+  if (!deck) return null;
+  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+  let best: DeckPoint | null = null;
+  let bestDist = Infinity;
+  for (let y = 0; y < deck.height; y++) {
+    for (let x = 0; x < deck.width; x++) {
+      if (!WALKABLE.has(deck.tiles[y][x])) continue;
+      // Check if adjacent to hull/water/off-grid
+      let nearEdge = false;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= deck.width || ny >= deck.height) {
+          nearEdge = true; break;
+        }
+        const tile = deck.tiles[ny][nx];
+        if (tile === TileType.HULL || tile === TileType.WATER) {
+          nearEdge = true; break;
+        }
+      }
+      if (nearEdge) {
+        const dist = Math.abs(x - mx) + Math.abs(y - my);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = { x, y, deck: member.deck };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** Re-add corpse at actor's current position when bury is interrupted. */
+function dropCorpse(member: Actor, world: World | undefined): void {
+  if (member.carryingCorpseId === null || !world) return;
+  // Only re-add if corpse isn't already in the list
+  if (!world.corpses.some(c => c.actorId === member.carryingCorpseId)) {
+    world.corpses.push({
+      actorId: member.carryingCorpseId,
+      name: 'Unknown',
+      actorType: 'human',
+      pixelX: member.pixelX,
+      pixelY: member.pixelY,
+      deck: member.deck,
+      spriteIndex: 0,
+      color: '#888888',
+      sex: 'M',
+      inventory: [],
+    });
+  }
+  member.carryingCorpseId = null;
 }

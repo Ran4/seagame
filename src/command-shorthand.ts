@@ -27,6 +27,8 @@ export const COMMANDS: Record<string, string[]> = {
   Sing:              [],
   Dance:             [],
   GroupDance:         [],
+  BuryAtSea:         ['corpseActorId'],
+  SetHealth:         ['amount'],
   Stop:              [],
   Tell:              ['actorId', 'text...'],
   Order:             ['actorId', 'order()'],

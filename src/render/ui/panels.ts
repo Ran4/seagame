@@ -1,6 +1,6 @@
 import {
   TILE_SIZE, CANVAS_WIDTH,
-  TileType, TILE_COLORS, OBJECT_MAX_HP, Actor,
+  TileType, TILE_COLORS, OBJECT_MAX_HP, Actor, Corpse,
   STATE_NAMES, Item, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS,
   SKILL_MASTERY,
 } from '../../types';
@@ -77,6 +77,17 @@ function layoutCrewPanel(rc: RenderContext, member: Actor, draw: boolean): numbe
     ctx.fillText(`State: ${STATE_NAMES[member.state]}`, px + 10, y + 10);
   }
   y += 18;
+
+  // Health bar (only show when damaged)
+  if (member.health < member.maxHealth * 0.99) {
+    if (draw) {
+      ctx.fillStyle = '#cccccc';
+      ctx.font = '11px monospace';
+      ctx.fillText('Health', px + 10, y + 10);
+      drawBar(rc, px + 75, y, 115, 12, member.health / member.maxHealth, '#e74c3c');
+    }
+    y += 20;
+  }
 
   // Hunger bar
   if (draw) {
@@ -220,6 +231,9 @@ function buildMoraleTooltip(member: Actor, brightness: number, lanternOil: Map<s
   else if (avgFriendship < 96) lines.push('Crew: Unpopular  \u2193');
   else lines.push('Crew: Tolerated  \u2192');
 
+  // Injured
+  if (member.conditions.has('injured')) lines.push('Health: Injured  \u2193\u2193');
+
   // Dog morale
   if (member.conditions.has('near_friendly_dog')) lines.push('Dog: Faithful friend  \u2191');
   if (member.conditions.has('despises_nearby_dog')) lines.push('Dog: Despises hounds  \u2193\u2193');
@@ -348,5 +362,58 @@ export function drawObjectPanel(
     ctx.textAlign = 'left';
     ctx.fillText('Oil', px + 10, oilY + 12);
     drawBar(rc, px + 35, oilY + 2, 155, 12, oil / 100, '#e6a822');
+  }
+}
+
+export function drawCorpsePanel(rc: RenderContext, corpse: Corpse): void {
+  const ctx = rc.ctx;
+  const px = CANVAS_WIDTH - 210;
+  const py = 10;
+  const pw = 200;
+  const slot = 28;
+  const slotGap = 4;
+  const slotCols = 5;
+  const hasItems = corpse.inventory.length > 0;
+  const rows = hasItems ? Math.ceil(corpse.inventory.length / slotCols) : 0;
+  const ph = 50 + (hasItems ? 14 + rows * (slot + slotGap) + 6 : 0);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+  // Color dot
+  ctx.fillStyle = corpse.color;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.arc(px + 20, py + 25, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+
+  // Name
+  ctx.fillStyle = '#cccccc';
+  ctx.font = '14px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Corpse of ${corpse.name}`, px + 35, py + 30);
+
+  // Type
+  ctx.fillStyle = '#888888';
+  ctx.font = '10px monospace';
+  const typeLabel = corpse.actorType === 'human' ? corpse.sex : `${corpse.actorType} ${corpse.sex}`;
+  ctx.fillText(typeLabel, px + 35, py + 44);
+
+  // Inventory
+  if (hasItems) {
+    let y = py + 50;
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '10px monospace';
+    ctx.fillText('Inventory:', px + 10, y + 10);
+    y += 14;
+    for (let i = 0; i < corpse.inventory.length; i++) {
+      const col = i % slotCols;
+      const row = Math.floor(i / slotCols);
+      drawItemSlot(rc, px + 10 + col * (slot + slotGap), y + row * (slot + slotGap), slot, corpse.inventory[i]);
+    }
   }
 }

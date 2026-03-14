@@ -50,6 +50,7 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
     ? (Math.random() < 0.001 ? 0 : Math.random() < 0.005 ? 1 : 2)
     : 0;
 
+  const hp = actorType === 'human' ? 100 : 50;
   return {
     id,
     actorType,
@@ -61,6 +62,9 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
       inventory: [],
       hands: [],
     },
+    health: hp,
+    maxHealth: hp,
+    carryingCorpseId: null,
     statuses: new Map<string, Record<string, any> | null>(),
     conditions: new Set(),
     skills: {},

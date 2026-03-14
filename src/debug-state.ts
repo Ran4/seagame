@@ -12,6 +12,8 @@ interface ActorSummary {
 
 interface ActorDetail extends ActorSummary {
   sex: string;
+  health: number;
+  maxHealth: number;
   hunger: number;
   energy: number;
   morale: number;
@@ -32,6 +34,7 @@ export interface StateSnapshot {
   actorDetails: Record<string, ActorDetail>;
   time: { gameTime: number; timeOfDay: number; brightness: number; speed: number };
   barrels: Record<string, { name: string; quantity: number }[]>;
+  corpses: { actorId: number; name: string; deck: number; type: string }[];
   spottedIslands: number[];
 }
 
@@ -65,6 +68,8 @@ export function serializeState(world: World): StateSnapshot {
       tile: { x: Math.floor(a.pixelX / TILE_SIZE), y: Math.floor(a.pixelY / TILE_SIZE) },
       conditions: Array.from(a.conditions),
       sex: a.profile.sex,
+      health: a.health,
+      maxHealth: a.maxHealth,
       hunger: a.profile.hunger,
       energy: a.profile.energy,
       morale: a.profile.morale,
@@ -105,6 +110,7 @@ export function serializeState(world: World): StateSnapshot {
       speed: world.worldMap.currentSpeed,
     },
     barrels,
+    corpses: world.corpses.map(c => ({ actorId: c.actorId, name: c.name, deck: c.deck, type: c.actorType })),
     spottedIslands: Array.from(world.spottedIslands),
   };
 }
