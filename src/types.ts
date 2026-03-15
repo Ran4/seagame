@@ -48,6 +48,9 @@ export enum TileType {
   LANTERN,
   RAISED_FLOOR,
   NEST,
+  WHARF,
+  LAND,
+  GANGPLANK,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -61,6 +64,9 @@ export const WALKABLE = new Set<TileType>([
   TileType.LANTERN,
   TileType.RAISED_FLOOR,
   TileType.NEST,
+  TileType.WHARF,
+  TileType.LAND,
+  TileType.GANGPLANK,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -102,6 +108,9 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.LANTERN]: '#c89b3c',
   [TileType.RAISED_FLOOR]: '#b89458',
   [TileType.NEST]: '#8b7355',
+  [TileType.WHARF]: '#8b6f47',
+  [TileType.LAND]: '#7a9b57',
+  [TileType.GANGPLANK]: '#a08050',
 };
 
 export interface Point {
@@ -365,6 +374,22 @@ export interface ActivityLogEntry {
   time: number;  // game time when logged
 }
 
+export interface GangplankConnection {
+  deckA: number; xA: number; yA: number;
+  deckB: number; xB: number; yB: number;
+}
+
+export interface DockingState {
+  phase: 'none' | 'docking' | 'docked' | 'undocking';
+  island: Island | null;
+  harborTiles: TileType[][];
+  harborWidth: number;
+  harborHeight: number;
+  harborAnimOffset: number;       // Y pixel offset during docking/undocking animation
+  originalWidth: number;          // ship deck width before docking expansion
+  originalHeight: number;         // ship deck height before docking expansion
+}
+
 // All game simulation state — the "world" struct that free functions operate on
 export interface World {
   decks: Deck[];
@@ -395,4 +420,7 @@ export interface World {
   commandInput: CommandInput | null;
   settingsOpen: boolean;
   settings: GameSettings;
+  docking: DockingState;
+  gangplanks: GangplankConnection[];
+  nearbyHarborIsland: Island | null;
 }

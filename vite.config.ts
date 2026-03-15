@@ -120,8 +120,31 @@ function ordersPlugin() {
   };
 }
 
+function configPlugin() {
+  return {
+    name: 'config-api',
+    configureServer(server: any) {
+      server.middlewares.use('/api/config', (_req: any, res: any) => {
+        const envPath = path.resolve(__dirname, 'config.env');
+        const vars: Record<string, string> = {};
+        if (fs.existsSync(envPath)) {
+          for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const eq = trimmed.indexOf('=');
+            if (eq < 0) continue;
+            vars[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+          }
+        }
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(vars));
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [statePlugin(), ordersPlugin()],
+  plugins: [statePlugin(), ordersPlugin(), configPlugin()],
   server: {
     port: 7070,
   },

@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION, SKILL_MASTERY } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, CREW_SPEED, Item, LIGHT_LANTERN_DURATION, EXTINGUISH_LANTERN_DURATION, SKILL_MASTERY, GangplankConnection } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { tryStartConversationWhileWalking, beginConversation } from '../conversation';
 
@@ -162,10 +162,10 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
   }
 }
 
-export function orderCrewTo(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE): boolean {
+export function orderCrewTo(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState = CrewState.IDLE, gangplanks?: GangplankConnection[]): boolean {
   const from = currentTile(member);
   const pathFn = member.conditions.has('flyer') ? findPathFlying : findPath;
-  const path = pathFn(decks, from, target);
+  const path = pathFn(decks, from, target, gangplanks);
   if (path && path.length > 0) {
     member.path = path;
     member.state = CrewState.WALKING;
@@ -175,21 +175,21 @@ export function orderCrewTo(member: Actor, target: DeckPoint, decks: Deck[], tar
   return false;
 }
 
-export function orderCrewToAdjacentTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+export function orderCrewToAdjacentTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState, gangplanks?: GangplankConnection[]): boolean {
   // Try direct path first (works for walkable tiles like BED, STOVE, HELM)
-  if (orderCrewTo(member, target, decks, targetState)) return true;
+  if (orderCrewTo(member, target, decks, targetState, gangplanks)) return true;
 
   // Try adjacent walkable tiles (for non-walkable targets like CANNON)
   const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
   for (const [dx, dy] of DIRS) {
     const adj: DeckPoint = { x: target.x + dx, y: target.y + dy, deck: target.deck };
-    if (orderCrewTo(member, adj, decks, targetState)) return true;
+    if (orderCrewTo(member, adj, decks, targetState, gangplanks)) return true;
   }
   return false;
 }
 
 /** Walk to a tile beside the target, preferring the side closest to the member's current position. */
-export function orderCrewBesideTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState): boolean {
+export function orderCrewBesideTile(member: Actor, target: DeckPoint, decks: Deck[], targetState: CrewState, gangplanks?: GangplankConnection[]): boolean {
   const from = currentTile(member);
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   const candidates = DIRS.map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy, deck: target.deck }));
@@ -199,8 +199,8 @@ export function orderCrewBesideTile(member: Actor, target: DeckPoint, decks: Dec
     return da - db;
   });
   for (const adj of candidates) {
-    if (orderCrewTo(member, adj, decks, targetState)) return true;
+    if (orderCrewTo(member, adj, decks, targetState, gangplanks)) return true;
   }
   // Fallback: stand on the same tile if no adjacent tile reachable
-  return orderCrewTo(member, target, decks, targetState);
+  return orderCrewTo(member, target, decks, targetState, gangplanks);
 }

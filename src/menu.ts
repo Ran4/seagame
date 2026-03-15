@@ -215,6 +215,15 @@ export function buildContextMenu(
     if (tileType === TileType.MAP_TABLE && anyNavigating) {
       items.push({ label: 'Open Map', targetState: CrewState.NAVIGATING });
     }
+    // "Leave harbor" on gangplank when docked
+    if (tileType === TileType.GANGPLANK && world.docking.phase === 'docked') {
+      const hasSteerer = world.actors.some(c => c.state === CrewState.STEERING);
+      if (hasSteerer) {
+        items.push({ label: 'Leave harbor', targetState: CrewState.IDLE, action: 'leave_harbor' });
+      } else {
+        items.push({ label: 'Leave harbor (missing helmsman)', targetState: CrewState.IDLE, action: 'leave_harbor', disabled: true });
+      }
+    }
   }
 
   if (items.length > 0 || pendingBarrelItems) {

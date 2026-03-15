@@ -4,6 +4,7 @@ export { drawActor, drawActorOverlays, drawCorpse } from './actors';
 export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel } from './ui';
 export { drawContextMenu } from './menu';
 export { drawMapOverlay } from './map';
+export { drawDockButton, isDockButtonClicked } from './docking';
 
 import { TileType } from '../types';
 
@@ -20,4 +21,7 @@ export const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.LANTERN]: 'Lantern',
   [TileType.RAISED_FLOOR]: 'Quarterdeck',
   [TileType.NEST]: 'Nest',
+  [TileType.WHARF]: 'Wharf',
+  [TileType.LAND]: 'Land',
+  [TileType.GANGPLANK]: 'Gangplank',
 };

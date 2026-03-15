@@ -1,4 +1,4 @@
-import { DeckPoint, Deck, TileType, WALKABLE } from './types';
+import { DeckPoint, Deck, TileType, WALKABLE, GangplankConnection } from './types';
 
 interface Node {
   x: number;
@@ -31,6 +31,7 @@ export function findPath(
   decks: Deck[],
   from: DeckPoint,
   to: DeckPoint,
+  gangplanks?: GangplankConnection[],
 ): DeckPoint[] | null {
   if (!isWalkable(decks, to.x, to.y, to.deck)) return null;
 
@@ -89,7 +90,7 @@ export function findPath(
       });
     }
 
-    // Stairs / Mast: switch deck
+    // Stairs / Mast: switch deck (require matching tile type on other deck)
     const currentTile = decks[current.deck].tiles[current.y][current.x];
     if (currentTile === TileType.STAIRS || currentTile === TileType.MAST) {
       for (let d = 0; d < decks.length; d++) {
@@ -97,8 +98,8 @@ export function findPath(
         const otherDeck = decks[d];
         if (current.y >= otherDeck.height || current.x >= otherDeck.width) continue;
         const otherTile = otherDeck.tiles[current.y][current.x];
-        // Stairs connect to any walkable tile; masts only connect to other masts
-        if (currentTile === TileType.STAIRS ? isWalkable(decks, current.x, current.y, d) : otherTile === TileType.MAST) {
+        // Stairs connect to other stairs; masts connect to other masts
+        if (currentTile === TileType.STAIRS ? otherTile === TileType.STAIRS : otherTile === TileType.MAST) {
           const nk = key(current.x, current.y, d);
           if (closed.has(nk)) continue;
           const g = current.g + 1;
@@ -108,6 +109,28 @@ export function findPath(
             g, h, f: g + h, parent: current,
           });
         }
+      }
+    }
+
+    // Gangplank: connects different positions on different decks
+    if (currentTile === TileType.GANGPLANK && gangplanks) {
+      for (const conn of gangplanks) {
+        let targetDeck: number, targetX: number, targetY: number;
+        if (conn.deckA === current.deck && conn.xA === current.x && conn.yA === current.y) {
+          targetDeck = conn.deckB; targetX = conn.xB; targetY = conn.yB;
+        } else if (conn.deckB === current.deck && conn.xB === current.x && conn.yB === current.y) {
+          targetDeck = conn.deckA; targetX = conn.xA; targetY = conn.yA;
+        } else continue;
+
+        if (!isWalkable(decks, targetX, targetY, targetDeck)) continue;
+        const nk = key(targetX, targetY, targetDeck);
+        if (closed.has(nk)) continue;
+        const g = current.g + 1;
+        const h = heuristic({ x: targetX, y: targetY, deck: targetDeck }, to);
+        open.push({
+          x: targetX, y: targetY, deck: targetDeck,
+          g, h, f: g + h, parent: current,
+        });
       }
     }
   }
@@ -127,6 +150,7 @@ export function findPathFlying(
   decks: Deck[],
   from: DeckPoint,
   to: DeckPoint,
+  gangplanks?: GangplankConnection[],
 ): DeckPoint[] | null {
   // Target must be walkable (need to land there)
   if (!isWalkable(decks, to.x, to.y, to.deck)) return null;
@@ -184,7 +208,7 @@ export function findPathFlying(
       });
     }
 
-    // Stairs / Mast transitions work the same
+    // Stairs / Mast transitions work the same (require matching tile type)
     const currentTile = decks[current.deck].tiles[current.y][current.x];
     if (currentTile === TileType.STAIRS || currentTile === TileType.MAST) {
       for (let d = 0; d < decks.length; d++) {
@@ -192,7 +216,7 @@ export function findPathFlying(
         const otherDeck = decks[d];
         if (current.y >= otherDeck.height || current.x >= otherDeck.width) continue;
         const otherTile = otherDeck.tiles[current.y][current.x];
-        if (currentTile === TileType.STAIRS ? isWithinShip(decks, current.x, current.y, d) : otherTile === TileType.MAST) {
+        if (currentTile === TileType.STAIRS ? otherTile === TileType.STAIRS : otherTile === TileType.MAST) {
           const nk = key(current.x, current.y, d);
           if (closed.has(nk)) continue;
           const g = current.g + 1;
@@ -202,6 +226,28 @@ export function findPathFlying(
             g, h, f: g + h, parent: current,
           });
         }
+      }
+    }
+
+    // Gangplank transitions (flying)
+    if (currentTile === TileType.GANGPLANK && gangplanks) {
+      for (const conn of gangplanks) {
+        let targetDeck: number, targetX: number, targetY: number;
+        if (conn.deckA === current.deck && conn.xA === current.x && conn.yA === current.y) {
+          targetDeck = conn.deckB; targetX = conn.xB; targetY = conn.yB;
+        } else if (conn.deckB === current.deck && conn.xB === current.x && conn.yB === current.y) {
+          targetDeck = conn.deckA; targetX = conn.xA; targetY = conn.yA;
+        } else continue;
+
+        if (!isWithinShip(decks, targetX, targetY, targetDeck)) continue;
+        const nk = key(targetX, targetY, targetDeck);
+        if (closed.has(nk)) continue;
+        const g = current.g + 1;
+        const h = heuristic({ x: targetX, y: targetY, deck: targetDeck }, to);
+        open.push({
+          x: targetX, y: targetY, deck: targetDeck,
+          g, h, f: g + h, parent: current,
+        });
       }
     }
   }

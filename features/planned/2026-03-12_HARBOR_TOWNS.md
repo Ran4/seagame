@@ -4,7 +4,64 @@ Islands currently exist on the world map but do nothing when you arrive. Harbor 
 
 ## Design
 
-**Docking:** Navigate to an island and "dock" (new command). Ship anchors at a pier. Crew can disembark onto a harbor map — a small walkable area with buildings and NPCs. Alternatively, keep it simple: a menu-based interface that opens when docked.
+
+### Docking
+
+**Docking:** When near an island, a menu pops up that allows us to press a button to dock
+(disabled with a "No one is at the helm!" if no one is at the helm).
+
+If clicked, we start a "docking minigame":
+visually the boat just goes straight ahead and drives into the wharf.
+Note: we can currently only see ~3 tiles to the north of the ship; that's fine.
+We essentially can't see the dock until we're near it.
+
+We can't partially dock; we need to go all the way then it'll say "Docking completed!".
+
+**Visualization:**
+
+Before:
+```
+_____WWWWWWWWWW
+_____WWWWWWWWWW
+_____WWW
+_____WWW
+_____WWW
+_____WWW
+_____WWW
+_____WWW
+
+
+
+
+
+        /\
+        ||
+        ||
+```
+
+**After the ship has fully sailed into the wharf:**
+
+```
+_____WWWWWWWWWW
+_____WWWWWWWWWW
+_____WWW
+_____WWW/\
+_____WWW||
+_____WWW||
+_____WWW||
+_____WWW
+```
+
+note: right now the harbor we dock at is just _:s, but we later want that to be some
+other tile type. And we do not add houses before docking is completed and and the dev
+has accepted and tested it out.
+
+
+### Disembarking
+
+Once FULLY DOCKED:
+
+Crew can disembark onto the harbor map — a small walkable area with buildings and NPCs.
 
 **Tavern:** Crew can visit the tavern to drink (grog → drunk status), hear rumors (hints about treasure, storms, enemy ships), and get into bar fights (friendship -50 but +10 combat skill). Tavern visits boost morale significantly.
 
@@ -16,6 +73,8 @@ Islands currently exist on the world map but do nothing when you arrive. Harbor 
 
 **Unique islands:** Each of the 7 islands has a personality: Tortuga is lawless (cheap crew, expensive goods), Port Royal is civilized (good prices, no pirates), Skull Rock has a black market (stolen goods only). This makes navigation strategic.
 
-## Implementation Notes
+### Implementation Notes
 
-Start with a menu-based harbor (no harbor map). When docked, right-clicking shows "Harbor" submenu with Buy/Sell/Recruit/Rumors. This leverages the existing context menu system. A gold/currency counter added to World state. Crew recruitment creates new Actor objects using the existing createActors factory pattern. The item system already supports barrel inventory — buying supplies just adds items to barrels.
+Crew recruitment creates new Actor objects using the existing createActors factory pattern.
+
+The item system already supports barrel inventory for now — buying supplies just adds items to barrels.

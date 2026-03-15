@@ -1,4 +1,5 @@
 import { Island, WorldMap, SECONDS_PER_DAY } from './types';
+import { CONFIG } from './config';
 export { SECONDS_PER_DAY };
 
 const ISLANDS: Island[] = [
@@ -15,10 +16,23 @@ const ISLANDS: Island[] = [
 const LEAGUES_PER_DAY = 70;
 export const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0972 leagues/sec
 
+export const DOCKING_DISTANCE = 3; // leagues
+
 export function createWorldMap(): WorldMap {
+  let shipX = 50;
+  let shipY = 40;
+
+  if (CONFIG.startNearIsland) {
+    const island = ISLANDS[Math.floor(Math.random() * ISLANDS.length)];
+    // Place ship 2 leagues south of the island
+    shipX = island.x;
+    shipY = island.y + 2;
+    console.log(`[config] Starting near ${island.name} (${shipX}, ${shipY})`);
+  }
+
   return {
-    shipX: 50,
-    shipY: 40,
+    shipX,
+    shipY,
     currentHeading: 0,
     currentSpeed: 0,
     targetHeading: null,
@@ -76,6 +90,17 @@ export function stopSailing(map: WorldMap): void {
 
 export function setDestination(map: WorldMap, island: Island): void {
   map.destinationIsland = island;
+}
+
+/** Returns the nearest harbor island within docking distance, or null. */
+export function getNearbyHarborIsland(map: WorldMap): Island | null {
+  for (const island of map.islands) {
+    if (!island.hasHarbor) continue;
+    const dx = island.x - map.shipX;
+    const dy = island.y - map.shipY;
+    if (Math.sqrt(dx * dx + dy * dy) <= DOCKING_DISTANCE) return island;
+  }
+  return null;
 }
 
 // Overlay layout constants (shared with renderer.drawMapOverlay)

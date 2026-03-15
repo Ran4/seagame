@@ -103,7 +103,7 @@ export function updateCamera(camera: Camera, input: InputState, dt: number, ship
   // - we do not want the user to not find the boat...
   camera.x = Math.max(-CANVAS_WIDTH + TILE_SIZE / 2, Math.min(shipWidth * TILE_SIZE - TILE_SIZE / 2, camera.x));
   const maxY = shipHeight * TILE_SIZE - CANVAS_HEIGHT;
-  camera.y = Math.max(-TILE_SIZE * 3, Math.min(maxY + TILE_SIZE * 3, camera.y));
+  camera.y = Math.max(0, Math.min(maxY + TILE_SIZE * 3, camera.y));
 }
 
 export function handleClick(
@@ -135,7 +135,7 @@ export function handleClick(
   // Check tile
   if (tileY >= 0 && tileY < deck.height && tileX >= 0 && tileX < deck.width) {
     const clickedTile = deck.tiles[tileY][tileX];
-    // Stairs → switch deck
+    // Stairs / Mast → switch deck
     if (clickedTile === TileType.STAIRS || clickedTile === TileType.MAST) {
       return {type: 'useStairs', tileX, tileY};
     }

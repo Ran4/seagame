@@ -19,8 +19,9 @@ export function drawUI(
 ): void {
   const ctx = rc.ctx;
 
-  // Deck selector
-  const deckLabels = decks.map((d, i) => `[${i + 1}] ${d.name}`);
+  // Deck selector (only show ship decks, not harbor)
+  const shipDeckCount = Math.min(3, decks.length);
+  const deckLabels = decks.slice(0, shipDeckCount).map((d, i) => `[${i + 1}] ${d.name}`);
   const lineH = 22;
   const panelW = 160;
   const panelH = deckLabels.length * lineH + 8;

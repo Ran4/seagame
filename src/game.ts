@@ -3,10 +3,12 @@ import { createSemen, createGrogRation, updateSpoilage } from './items';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
-import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick } from './worldmap';
+import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick, getNearbyHarborIsland } from './worldmap';
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
+import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END } from './harbor';
+import { isDockButtonClicked } from './render/docking';
 
 function loadSettings(): GameSettings {
   try {
@@ -110,6 +112,18 @@ export function createWorld(): World {
     commandInput: null,
     settingsOpen: false,
     settings: loadSettings(),
+    docking: {
+      phase: 'none',
+      island: null,
+      harborTiles: [],
+      harborWidth: 0,
+      harborHeight: 0,
+      harborAnimOffset: 0,
+      originalWidth: 0,
+      originalHeight: 0,
+    },
+    gangplanks: [],
+    nearbyHarborIsland: null,
   };
 }
 
@@ -204,30 +218,76 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   if (world.shantyCooldown > 0) world.shantyCooldown = Math.max(0, world.shantyCooldown - dt);
   if (world.danceCooldown > 0) world.danceCooldown = Math.max(0, world.danceCooldown - dt);
 
-  // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
-  const anyNavigating = world.actors.some(c => c.state === CrewState.NAVIGATING);
+  // --- Docking state machine ---
   const anySteering = world.actors.some(c => c.state === CrewState.STEERING);
-  world.navTimer += dt;
-  if (anyNavigating && world.navTimer >= 0.5) {
-    updateNavigator(world.worldMap);
-    world.navTimer = 0;
+
+  // Detect nearby harbor island (for dock button)
+  world.nearbyHarborIsland = world.docking.phase === 'none'
+    ? getNearbyHarborIsland(world.worldMap)
+    : null;
+
+  // Dock button click
+  if (world.nearbyHarborIsland && input.mouseClick) {
+    if (isDockButtonClicked(input.mouseClick.x, input.mouseClick.y, anySteering)) {
+      startDocking(world);
+      audio.play('click', world.activeDeck);
+      input.mouseClick = null;
+    }
   }
-  if (anySteering) updateHelmsman(world.worldMap);
-  updateSailing(world.worldMap, dt);
+
+  // Docking animation: harbor slides into position
+  if (world.docking.phase === 'docking') {
+    if (anySteering) {
+      world.docking.harborAnimOffset += DOCKING_SPEED * dt;
+      if (world.docking.harborAnimOffset >= 0) {
+        world.docking.harborAnimOffset = 0;
+        completeDocking(world);
+      }
+    }
+  }
+
+  // Undocking animation: harbor slides away
+  if (world.docking.phase === 'undocking') {
+    if (anySteering) {
+      world.docking.harborAnimOffset -= DOCKING_SPEED * dt;
+      if (world.docking.harborAnimOffset <= UNDOCKING_END) {
+        completeUndocking(world);
+      }
+    }
+  }
+
+  // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
+  // Skip sailing updates during docking
+  const anyNavigating = world.actors.some(c => c.state === CrewState.NAVIGATING);
+  if (world.docking.phase === 'none') {
+    world.navTimer += dt;
+    if (anyNavigating && world.navTimer >= 0.5) {
+      updateNavigator(world.worldMap);
+      world.navTimer = 0;
+    }
+    if (anySteering) updateHelmsman(world.worldMap);
+    updateSailing(world.worldMap, dt);
+  }
 
   // Scroll water downward (always Y-axis only — the ship sprite always faces up,
   // so heading-based scrolling would look wrong and be disorienting)
-  if (world.worldMap.currentSpeed > 0) {
+  if (world.docking.phase === 'none' && world.worldMap.currentSpeed > 0) {
     const WATER_SCROLL_SPEED = 32; // pixels/sec at full speed
     const speedRatio = world.worldMap.currentSpeed / SHIP_SPEED;
     world.waterOffset.y -= WATER_SCROLL_SPEED * speedRatio * dt;
   }
+  // Scroll water upward during undocking (ship going backward)
+  if (world.docking.phase === 'undocking' && anySteering) {
+    world.waterOffset.y += 32 * dt;
+  }
 
   // Auto-open overlay on transition into navigating; auto-close when nobody is
-  if (anyNavigating && !world.wasNavigating) {
-    world.mapOverlayOpen = true;
-  } else if (!anyNavigating && world.mapOverlayOpen) {
-    world.mapOverlayOpen = false;
+  if (world.docking.phase === 'none') {
+    if (anyNavigating && !world.wasNavigating) {
+      world.mapOverlayOpen = true;
+    } else if (!anyNavigating && world.mapOverlayOpen) {
+      world.mapOverlayOpen = false;
+    }
   }
   world.wasNavigating = anyNavigating;
 
@@ -243,17 +303,18 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     input.keysDown.delete('Escape');
   }
 
-  // M key toggles overlay (only when someone is navigating)
+  // M key toggles overlay (only when someone is navigating, not during docking)
   if (input.keysDown.has('m') || input.keysDown.has('M')) {
-    if (anyNavigating) {
+    if (anyNavigating && world.docking.phase === 'none') {
       world.mapOverlayOpen = !world.mapOverlayOpen;
     }
     input.keysDown.delete('m');
     input.keysDown.delete('M');
   }
 
-  // Deck switching (1 = crow's nest, 2 = upper deck, 3 = lower deck)
-  for (let d = 0; d < world.decks.length; d++) {
+  // Deck switching (1 = crow's nest, 2 = upper deck, 3 = lower deck) — harbor only via gangplank click
+  const switchableDeckCount = Math.min(3, world.decks.length);
+  for (let d = 0; d < switchableDeckCount; d++) {
     const key = String(d + 1);
     if (input.keysDown.has(key)) {
       world.activeDeck = d;
@@ -335,10 +396,11 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       }
     }
 
-    // Check deck selector panel (x:10-170, y:14 + i*22, h:22, 2 entries)
-    if (input.mouseClick && mx >= 10 && mx <= 170 && my >= 14 && my < 14 + world.decks.length * 22) {
+    // Check deck selector panel (x:10-170, y:14 + i*22, h:22 — ship decks only)
+    const selectorDeckCount = Math.min(3, world.decks.length);
+    if (input.mouseClick && mx >= 10 && mx <= 170 && my >= 14 && my < 14 + selectorDeckCount * 22) {
       const clicked = Math.floor((my - 14) / 22);
-      if (clicked >= 0 && clicked < world.decks.length && clicked !== world.activeDeck) {
+      if (clicked >= 0 && clicked < selectorDeckCount && clicked !== world.activeDeck) {
         world.activeDeck = clicked;
         audio.play('deck_change', world.activeDeck);
       }
@@ -354,6 +416,11 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       // "Open Map" action — UI-only, not a crew command
       if (menuItem.label === 'Open Map') {
         world.mapOverlayOpen = true;
+        audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'leave_harbor') {
+        startUndocking(world);
         audio.play('click', world.activeDeck);
         world.contextMenu = null;
         input.mouseClick = null;
@@ -459,11 +526,29 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
         world.contextMenu = null;
         audio.play('click', world.activeDeck);
       } else if (result.type === 'useStairs') {
-        for (const d of [world.activeDeck - 1, world.activeDeck + 1]) {
-          if (d >= 0 && d < world.decks.length) {
+        // Check gangplank connections first
+        let switched = false;
+        for (const conn of world.gangplanks) {
+          if (conn.deckA === world.activeDeck && conn.xA === result.tileX && conn.yA === result.tileY) {
+            world.activeDeck = conn.deckB;
+            switched = true;
+            break;
+          }
+          if (conn.deckB === world.activeDeck && conn.xB === result.tileX && conn.yB === result.tileY) {
+            world.activeDeck = conn.deckA;
+            switched = true;
+            break;
+          }
+        }
+        // Regular stair logic (require matching tile type on other deck)
+        if (!switched) {
+          const clickedTile = world.decks[world.activeDeck].tiles[result.tileY]?.[result.tileX];
+          for (let d = 0; d < world.decks.length; d++) {
+            if (d === world.activeDeck) continue;
             const otherDeck = world.decks[d];
-            if (result.tileY < otherDeck.height && result.tileX < otherDeck.width &&
-                (otherDeck.tiles[result.tileY][result.tileX] === TileType.STAIRS || otherDeck.tiles[result.tileY][result.tileX] === TileType.MAST)) {
+            if (result.tileY >= otherDeck.height || result.tileX >= otherDeck.width) continue;
+            const otherTile = otherDeck.tiles[result.tileY][result.tileX];
+            if (clickedTile === TileType.STAIRS ? otherTile === TileType.STAIRS : otherTile === TileType.MAST) {
               world.activeDeck = d;
               break;
             }

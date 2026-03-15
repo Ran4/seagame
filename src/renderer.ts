@@ -11,7 +11,9 @@ import {
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
+  drawDockButton,
 } from './render';
+import { HARBOR_X_TILE_OFFSET, HARBOR_Y_TILE_OFFSET } from './harbor';
 import { drawCommandInput } from './command-input';
 
 const WATER_COLOR_1 = '#1a5276';
@@ -36,6 +38,17 @@ export class Renderer {
 
   getHoveredItem(): Item | null {
     return this.hoveredItem?.item ?? null;
+  }
+
+  /** Create a RenderContext with camera shifted for harbor overlay rendering. */
+  private createHarborRc(rc: RenderContext, animOffset: number): RenderContext {
+    return {
+      ...rc,
+      camera: {
+        x: rc.camera.x - HARBOR_X_TILE_OFFSET * TILE_SIZE,    // + 416
+        y: rc.camera.y - HARBOR_Y_TILE_OFFSET * TILE_SIZE - animOffset,  // + 128 - animOffset
+      },
+    };
   }
 
   render(world: World, mousePos: { x: number; y: number }, soundMuted: boolean, sfxMuted: boolean): void {
@@ -71,9 +84,20 @@ export class Renderer {
 
     drawWater(rc, time, waterOffset);
 
+    // Harbor overlay during docking/undocking animation (before/after tiles are merged into the deck)
+    const dockingApproach = (world.docking.phase === 'docking' || world.docking.phase === 'undocking') && world.docking.harborTiles.length > 0;
+    const harborRc = dockingApproach ? this.createHarborRc(rc, world.docking.harborAnimOffset) : null;
+    const harborDeckObj = dockingApproach ? {
+      name: 'Harbor',
+      tiles: world.docking.harborTiles,
+      width: world.docking.harborWidth,
+      height: world.docking.harborHeight,
+    } : null;
+
     // Crow's nest: draw upper deck faintly underneath (tiles + crew)
     if (deckIndex === 0 && decks.length > 1) {
       drawDeck(rc, decks[1], time);
+      if (harborRc && harborDeckObj) drawDeck(harborRc, harborDeckObj, time);
       for (const corpse of world.corpses) {
         if (corpse.deck === 1) drawCorpse(rc, corpse, corpse.actorId === world.selectedCorpseId);
       }
@@ -87,6 +111,10 @@ export class Renderer {
     }
 
     drawDeck(rc, deck, time);
+    // Harbor tiles alongside upper deck (during docking approach only — once docked, tiles are in the deck)
+    if (harborRc && harborDeckObj && deckIndex === 1) {
+      drawDeck(harborRc, harborDeckObj, time);
+    }
 
     // Combined darkness overlay: night + deck depth, reduced by lit lanterns
     {
@@ -163,7 +191,7 @@ export class Renderer {
       if (corpse) drawCorpsePanel(rc, corpse);
     }
     if (worldMap) {
-      drawCompass(rc, worldMap.currentHeading, worldMap.currentSpeed > 0, decks.length, timeOfDay);
+      drawCompass(rc, worldMap.currentHeading, worldMap.currentSpeed > 0, Math.min(3, decks.length), timeOfDay);
     }
     drawSettingsButton(rc, world.settingsOpen);
     drawSoundButton(rc, soundMuted, sfxMuted);
@@ -188,6 +216,11 @@ export class Renderer {
     }
     if (rc.hoveredBarTooltip) {
       drawBarTooltip(rc, rc.hoveredBarTooltip);
+    }
+
+    // Dock button (approaching harbor island)
+    if (world.nearbyHarborIsland && world.docking.phase === 'none') {
+      drawDockButton(ctx, world.nearbyHarborIsland, hasHelmsman, mousePos);
     }
 
     // Mutiny ultimatum warning banner

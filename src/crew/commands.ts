@@ -167,7 +167,7 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
     }
     case 'GoTo': {
       const deck = cmd.deck ?? member.deck;
-      if (!orderCrewTo(member, { x: cmd.x, y: cmd.y, deck }, decks)) { fail(`can't reach (${cmd.x},${cmd.y},${deck})`); return true; }
+      if (!orderCrewTo(member, { x: cmd.x, y: cmd.y, deck }, decks, CrewState.IDLE, world?.gangplanks)) { fail(`can't reach (${cmd.x},${cmd.y},${deck})`); return true; }
       log(`going to (${cmd.x},${cmd.y},${deck})`);
       return true;
     }
@@ -179,7 +179,7 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       for (let y = 0; y < targetDeck.height && !reached; y++) {
         for (let x = 0; x < targetDeck.width && !reached; x++) {
           if (WALKABLE.has(targetDeck.tiles[y][x])) {
-            if (orderCrewTo(member, { x, y, deck: targetDeckIdx }, decks)) {
+            if (orderCrewTo(member, { x, y, deck: targetDeckIdx }, decks, CrewState.IDLE, world?.gangplanks)) {
               reached = true;
             }
           }

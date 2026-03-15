@@ -58,13 +58,14 @@ export function drawDeck(rc: RenderContext, deck: Deck, time: number): void {
       const sprite = rc.sprites?.tiles.get(tile);
       if (sprite) {
         // Draw floor underneath furniture/objects with transparent backgrounds
-        const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR;
+        const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR && tile !== TileType.GANGPLANK;
         if (needsFloorUnder) {
           const floorSprite = rc.sprites?.tiles.get(TileType.FLOOR);
           if (floorSprite) {
             ctx.drawImage(floorSprite, sx, sy, TILE_SIZE, TILE_SIZE);
           }
         }
+        // Gangplank: no background — water layer shows through transparency
         ctx.drawImage(sprite, sx, sy, TILE_SIZE, TILE_SIZE);
         // Bright glow on lit lantern sprite
         if (tile === TileType.LANTERN) {
@@ -239,6 +240,59 @@ function drawTileIconFallback(rc: RenderContext, tile: TileType, sx: number, sy:
       // Compass circle
       ctx.beginPath();
       ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case TileType.WHARF: {
+      // Brown wooden planks
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+      // Horizontal plank lines
+      ctx.strokeStyle = 'rgba(90, 60, 30, 0.3)';
+      for (let py = 8; py < TILE_SIZE; py += 8) {
+        ctx.beginPath();
+        ctx.moveTo(sx + 1, sy + py);
+        ctx.lineTo(sx + TILE_SIZE - 1, sy + py);
+        ctx.stroke();
+      }
+      break;
+    }
+    case TileType.LAND: {
+      // Green grass with subtle texture
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+      // Grass dots
+      ctx.fillStyle = 'rgba(60, 100, 40, 0.3)';
+      ctx.fillRect(sx + 8, sy + 6, 2, 3);
+      ctx.fillRect(sx + 20, sy + 14, 2, 3);
+      ctx.fillRect(sx + 14, sy + 24, 2, 3);
+      break;
+    }
+    case TileType.GANGPLANK: {
+      // Wooden plank bridge (horizontal)
+      ctx.fillStyle = '#a08050';
+      ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      // Cross-planks (vertical)
+      ctx.strokeStyle = 'rgba(80, 50, 20, 0.3)';
+      for (let px = 6; px < TILE_SIZE - 4; px += 6) {
+        ctx.beginPath();
+        ctx.moveTo(sx + px, sy + 3);
+        ctx.lineTo(sx + px, sy + TILE_SIZE - 3);
+        ctx.stroke();
+      }
+      // Railings (top and bottom)
+      ctx.strokeStyle = 'rgba(100, 70, 30, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy + 2);
+      ctx.lineTo(sx + TILE_SIZE, sy + 2);
+      ctx.moveTo(sx, sy + TILE_SIZE - 2);
+      ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE - 2);
       ctx.stroke();
       break;
     }
