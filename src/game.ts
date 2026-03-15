@@ -276,9 +276,12 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     const speedRatio = world.worldMap.currentSpeed / SHIP_SPEED;
     world.waterOffset.y -= WATER_SCROLL_SPEED * speedRatio * dt;
   }
-  // Scroll water upward during undocking (ship going backward)
+  // Scroll water during docking (forward) / undocking (backward) — match harbor animation speed
+  if (world.docking.phase === 'docking' && anySteering) {
+    world.waterOffset.y -= DOCKING_SPEED * dt;
+  }
   if (world.docking.phase === 'undocking' && anySteering) {
-    world.waterOffset.y += 32 * dt;
+    world.waterOffset.y += DOCKING_SPEED * dt;
   }
 
   // Auto-open overlay on transition into navigating; auto-close when nobody is
