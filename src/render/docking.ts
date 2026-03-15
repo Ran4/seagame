@@ -1,11 +1,11 @@
-import { TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, Island } from '../types';
+import {TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, Island} from '../types';
 
 /** Draw the "Dock at [Island]" popup when approaching a harbor island. */
 export function drawDockButton(
   ctx: CanvasRenderingContext2D,
   island: Island,
   hasHelmsman: boolean,
-  mousePos: { x: number; y: number },
+  mousePos: {x: number; y: number},
 ): void {
   const barY = CANVAS_HEIGHT - 60;
 
@@ -23,7 +23,7 @@ export function drawDockButton(
   ctx.fillStyle = '#aaccee';
   ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(`Approaching ${island.name}`, CANVAS_WIDTH / 2, barY + 18);
+  ctx.fillText(`Near ${island.name}`, CANVAS_WIDTH / 2, barY + 18);
 
   const btnW = 120, btnH = 26;
   const btnX = CANVAS_WIDTH / 2 - btnW / 2;
@@ -31,7 +31,7 @@ export function drawDockButton(
 
   if (hasHelmsman) {
     const hover = mousePos.x >= btnX && mousePos.x <= btnX + btnW &&
-                  mousePos.y >= btnY && mousePos.y <= btnY + btnH;
+      mousePos.y >= btnY && mousePos.y <= btnY + btnH;
     ctx.fillStyle = hover ? 'rgba(60, 140, 60, 0.9)' : 'rgba(40, 100, 40, 0.8)';
     ctx.fillRect(btnX, btnY, btnW, btnH);
     ctx.strokeStyle = '#55aa55';

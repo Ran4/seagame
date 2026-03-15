@@ -53,14 +53,16 @@ function parseHarborLayout(layout: string): TileType[][] {
     .map(row => [...row].map(ch => HARBOR_CHAR_TO_TILE[ch] ?? TileType.WATER));
 }
 
-// Tile offset: harbor tile (hx, hy) appears at ship tile (hx + X_OFFSET, hy + Y_OFFSET) when docked
-// Gangplank sits in the gap at expanded x = DECK_X_SHIFT - 1, between wharf(12) and ship hull(14)
-export const HARBOR_X_TILE_OFFSET = -14;
-export const HARBOR_Y_TILE_OFFSET = -7;
-
-// When docking completes, all decks expand. Ship tiles shift right/down by these amounts.
+// Ship is embedded at this offset within the expanded grid.
+// The grid is always this size — harbor tiles fill in around the ship when docked.
 export const DECK_X_SHIFT = 14;
 export const DECK_Y_SHIFT = 7;
+export const EXPANDED_WIDTH = 26;
+export const EXPANDED_HEIGHT = 33;
+
+// Original ship dimensions (before expansion padding)
+export const SHIP_WIDTH = 11;
+export const SHIP_HEIGHT = 21;
 
 // Docking animation: harborAnimOffset starts negative and increases to 0
 export const HARBOR_ANIM_START = -21 * TILE_SIZE; // -672
@@ -71,11 +73,16 @@ export const DOCKING_SPEED = 80;
 // Undocking ends when harborAnimOffset reaches this (harbor fully off-screen)
 export const UNDOCKING_END = -26 * TILE_SIZE;
 
-// Gangplank positions (in original, pre-expansion coordinates)
-const HARBOR_GANGPLANK_X = 12;
-const HARBOR_GANGPLANK_Y = 15;
-const SHIP_GANGPLANK_X = 0;
-const SHIP_GANGPLANK_Y = 8;
+// Gangplank position in expanded grid coordinates
+const GANGPLANK_X = DECK_X_SHIFT - 1;  // 13
+const GANGPLANK_Y = 8 + DECK_Y_SHIFT;  // 15 (ship row 8 + offset)
+const GANGPLANK_HULL_X = DECK_X_SHIFT; // 14 (hull tile converted to floor for walkability)
+
+/** Check if a tile position is within the ship region of the expanded grid. */
+function isOnShip(tileX: number, tileY: number): boolean {
+  return tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + SHIP_WIDTH &&
+         tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + SHIP_HEIGHT;
+}
 
 /** Create the docking state when initiating docking at an island. */
 export function createDockingState(island: Island): DockingState {
@@ -87,8 +94,6 @@ export function createDockingState(island: Island): DockingState {
     harborWidth: harborTiles[0].length,
     harborHeight: harborTiles.length,
     harborAnimOffset: HARBOR_ANIM_START,
-    originalWidth: 0,
-    originalHeight: 0,
   };
 }
 
@@ -106,66 +111,30 @@ export function startDocking(world: World): void {
   world.docking = createDockingState(island);
 }
 
-/** Complete docking — expand all decks to include harbor tiles as part of upper deck. */
+/** Complete docking — fill harbor tiles into the existing expanded grid. */
 export function completeDocking(world: World): void {
   const docking = world.docking;
-
-  // Save original dimensions before expanding (needed for undocking)
-  docking.originalWidth = world.decks[0].width;
-  docking.originalHeight = world.decks[0].height;
 
   docking.phase = 'docked';
   docking.harborAnimOffset = 0;
 
-  const newWidth = docking.harborWidth;   // 26
-  const newHeight = docking.harborHeight; // 30
-
-  // Expand all decks: ship tiles shift right/down, fill rest with water
-  for (let d = 0; d < world.decks.length; d++) {
-    const oldDeck = world.decks[d];
-    const newTiles: TileType[][] = [];
-    for (let y = 0; y < newHeight; y++) {
-      const row: TileType[] = [];
-      for (let x = 0; x < newWidth; x++) {
-        const oldX = x - DECK_X_SHIFT;
-        const oldY = y - DECK_Y_SHIFT;
-        if (oldX >= 0 && oldX < oldDeck.width && oldY >= 0 && oldY < oldDeck.height) {
-          row.push(oldDeck.tiles[oldY][oldX]);
-        } else {
-          row.push(TileType.WATER);
-        }
+  // Fill harbor tiles on upper deck (d=1) where grid currently has water
+  const upperDeck = world.decks[1];
+  for (let y = 0; y < docking.harborHeight; y++) {
+    for (let x = 0; x < docking.harborWidth; x++) {
+      const tile = docking.harborTiles[y][x];
+      if (tile !== TileType.WATER && upperDeck.tiles[y][x] === TileType.WATER) {
+        upperDeck.tiles[y][x] = tile;
       }
-      newTiles.push(row);
     }
-
-    // Upper deck (d=1): fill harbor tiles where ship has water, then place gangplank
-    if (d === 1) {
-      for (let y = 0; y < docking.harborHeight; y++) {
-        for (let x = 0; x < docking.harborWidth; x++) {
-          const tile = docking.harborTiles[y][x];
-          if (tile !== TileType.WATER && newTiles[y][x] === TileType.WATER) {
-            newTiles[y][x] = tile;
-          }
-        }
-      }
-      // Gangplank in the gap between wharf and ship hull
-      newTiles[SHIP_GANGPLANK_Y + DECK_Y_SHIFT][DECK_X_SHIFT - 1] = TileType.GANGPLANK;
-      // Convert adjacent ship hull to floor so crew can walk onto the gangplank
-      newTiles[SHIP_GANGPLANK_Y + DECK_Y_SHIFT][DECK_X_SHIFT] = TileType.FLOOR;
-    }
-
-    world.decks[d] = {
-      name: oldDeck.name,
-      tiles: newTiles,
-      width: newWidth,
-      height: newHeight,
-    };
   }
 
-  // Shift all actor positions and clear paths
+  // Place gangplank + convert adjacent hull to floor for walkability
+  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_X] = TileType.GANGPLANK;
+  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X] = TileType.FLOOR;
+
+  // Clear actor paths (walkability changed)
   for (const actor of world.actors) {
-    actor.pixelX += DECK_X_SHIFT * TILE_SIZE;
-    actor.pixelY += DECK_Y_SHIFT * TILE_SIZE;
     actor.path = [];
     if (actor.state === CrewState.WALKING) {
       actor.state = CrewState.IDLE;
@@ -173,48 +142,22 @@ export function completeDocking(world: World): void {
     }
   }
 
-  // Shift corpses
-  for (const corpse of world.corpses) {
-    corpse.pixelX += DECK_X_SHIFT * TILE_SIZE;
-    corpse.pixelY += DECK_Y_SHIFT * TILE_SIZE;
-  }
-
-  // Shift camera
-  world.camera.x += DECK_X_SHIFT * TILE_SIZE;
-  world.camera.y += DECK_Y_SHIFT * TILE_SIZE;
-
-  // Shift lantern oil keys (deck-x-y)
-  const newLanternOil = new Map<string, number>();
-  for (const [key, oil] of world.lanternOil) {
-    const [d, x, y] = key.split('-').map(Number);
-    newLanternOil.set(`${d}-${x + DECK_X_SHIFT}-${y + DECK_Y_SHIFT}`, oil);
-  }
-  // Add harbor lanterns (on upper deck, at their harbor-space positions)
+  // Add harbor lantern oil entries
   for (let y = 0; y < docking.harborHeight; y++) {
     for (let x = 0; x < docking.harborWidth; x++) {
       if (docking.harborTiles[y][x] === TileType.LANTERN) {
-        newLanternOil.set(`1-${x}-${y}`, 0);
+        world.lanternOil.set(`1-${x}-${y}`, 0);
       }
     }
   }
-  world.lanternOil = newLanternOil;
-
-  // Shift barrel inventory keys (deck-x-y)
-  const newBarrelInventory = new Map<string, Item[]>();
-  for (const [key, items] of world.barrelInventory) {
-    const [d, x, y] = key.split('-').map(Number);
-    newBarrelInventory.set(`${d}-${x + DECK_X_SHIFT}-${y + DECK_Y_SHIFT}`, items);
-  }
-  world.barrelInventory = newBarrelInventory;
 
   // Restore stranded actors/corpses from this island
   const islandId = docking.island?.id;
   if (islandId != null) {
     const stranded = world.strandedActors.get(islandId);
     if (stranded && stranded.length > 0) {
-      // Stranded actors kept their harbor-space positions — add them back
       for (const actor of stranded) {
-        // Rebuild relations bidirectionally
+        // Rebuild missing relations bidirectionally
         for (const shipActor of world.actors) {
           if (!shipActor.relations.find(r => r.actorId === actor.id)) {
             shipActor.relations.push({ actorId: actor.id, friendship: 128, attraction: 0 });
@@ -238,58 +181,41 @@ export function completeDocking(world: World): void {
   world.activityLog.push({text: `Docked at ${docking.island?.name ?? 'harbor'}`, time: world.time});
 }
 
-/** Start undocking — shrink decks back to original size and begin undocking animation. */
+/** Start undocking — clear harbor tiles and begin undocking animation. */
 export function startUndocking(world: World): void {
   const docking = world.docking;
   if (docking.phase !== 'docked') return;
 
-  const origW = docking.originalWidth;
-  const origH = docking.originalHeight;
-
-  // Shrink all decks back to original dimensions (extract ship-only tiles)
-  for (let d = 0; d < world.decks.length; d++) {
-    const expanded = world.decks[d];
-    const newTiles: TileType[][] = [];
-    for (let y = 0; y < origH; y++) {
-      const row: TileType[] = [];
-      for (let x = 0; x < origW; x++) {
-        row.push(expanded.tiles[y + DECK_Y_SHIFT][x + DECK_X_SHIFT]);
+  // Clear harbor tiles on upper deck — set back to water
+  const upperDeck = world.decks[1];
+  for (let y = 0; y < docking.harborHeight; y++) {
+    for (let x = 0; x < docking.harborWidth; x++) {
+      if (docking.harborTiles[y][x] !== TileType.WATER && !isOnShip(x, y)) {
+        upperDeck.tiles[y][x] = TileType.WATER;
       }
-      newTiles.push(row);
     }
-    // Restore gangplank back to hull on upper deck
-    if (d === 1) {
-      newTiles[SHIP_GANGPLANK_Y][SHIP_GANGPLANK_X] = TileType.HULL;
-    }
-    world.decks[d] = {
-      name: expanded.name,
-      tiles: newTiles,
-      width: origW,
-      height: origH,
-    };
   }
 
-  // Separate actors on ship vs on land — land actors stay on the island
+  // Restore gangplank and hull
+  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_X] = TileType.WATER;
+  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X] = TileType.HULL;
+
+  // Separate actors on ship vs on land
   const islandId = docking.island?.id;
   const shipActors: typeof world.actors = [];
   const landActors: typeof world.actors = [];
   for (const actor of world.actors) {
-    // Check if actor is within ship tile region (expanded coordinates)
     const tileX = Math.floor(actor.pixelX / TILE_SIZE);
     const tileY = Math.floor(actor.pixelY / TILE_SIZE);
-    const onShip = tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + origW &&
-                   tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + origH;
-    if (onShip) {
+    if (isOnShip(tileX, tileY)) {
       shipActors.push(actor);
     } else {
       landActors.push(actor);
     }
   }
 
-  // Shift ship actors back to original coordinates
+  // Clear paths for ship actors (walkability changed)
   for (const actor of shipActors) {
-    actor.pixelX -= DECK_X_SHIFT * TILE_SIZE;
-    actor.pixelY -= DECK_Y_SHIFT * TILE_SIZE;
     actor.path = [];
     if (actor.state === CrewState.WALKING) {
       actor.state = CrewState.IDLE;
@@ -303,7 +229,6 @@ export function startUndocking(world: World): void {
       actor.path = [];
       actor.state = CrewState.IDLE;
       actor.idleTimer = 0;
-      // Break conversations/interactions
       actor.conversationPartnerId = null;
       actor.speechBubbleText = null;
       actor.copulationTarget = null;
@@ -323,7 +248,7 @@ export function startUndocking(world: World): void {
     world.selectedActorId = null;
   }
 
-  // Break conversations where partner was left behind
+  // Break conversations/interactions where partner was left behind
   const landActorIds = new Set(landActors.map(a => a.id));
   for (const actor of shipActors) {
     if (actor.conversationPartnerId != null && landActorIds.has(actor.conversationPartnerId)) {
@@ -345,20 +270,12 @@ export function startUndocking(world: World): void {
   for (const corpse of world.corpses) {
     const tileX = Math.floor(corpse.pixelX / TILE_SIZE);
     const tileY = Math.floor(corpse.pixelY / TILE_SIZE);
-    const onShip = tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + origW &&
-                   tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + origH;
-    if (onShip) {
+    if (isOnShip(tileX, tileY)) {
       shipCorpses.push(corpse);
     } else {
       landCorpses.push(corpse);
     }
   }
-
-  for (const corpse of shipCorpses) {
-    corpse.pixelX -= DECK_X_SHIFT * TILE_SIZE;
-    corpse.pixelY -= DECK_Y_SHIFT * TILE_SIZE;
-  }
-
   if (landCorpses.length > 0 && islandId != null) {
     const existing = world.strandedCorpses.get(islandId) ?? [];
     existing.push(...landCorpses);
@@ -366,33 +283,13 @@ export function startUndocking(world: World): void {
   }
   world.corpses = shipCorpses;
 
-  // Shift camera back
-  world.camera.x -= DECK_X_SHIFT * TILE_SIZE;
-  world.camera.y -= DECK_Y_SHIFT * TILE_SIZE;
-
-  // Shift lanternOil keys back (drop harbor lanterns)
-  const newLanternOil = new Map<string, number>();
-  for (const [key, oil] of world.lanternOil) {
+  // Remove harbor lantern keys
+  for (const key of [...world.lanternOil.keys()]) {
     const [d, x, y] = key.split('-').map(Number);
-    const origX = x - DECK_X_SHIFT;
-    const origY = y - DECK_Y_SHIFT;
-    if (origX >= 0 && origX < origW && origY >= 0 && origY < origH) {
-      newLanternOil.set(`${d}-${origX}-${origY}`, oil);
+    if (d === 1 && !isOnShip(x, y)) {
+      world.lanternOil.delete(key);
     }
   }
-  world.lanternOil = newLanternOil;
-
-  // Shift barrelInventory keys back
-  const newBarrelInventory = new Map<string, Item[]>();
-  for (const [key, items] of world.barrelInventory) {
-    const [d, x, y] = key.split('-').map(Number);
-    const origX = x - DECK_X_SHIFT;
-    const origY = y - DECK_Y_SHIFT;
-    if (origX >= 0 && origX < origW && origY >= 0 && origY < origH) {
-      newBarrelInventory.set(`${d}-${origX}-${origY}`, items);
-    }
-  }
-  world.barrelInventory = newBarrelInventory;
 
   // Clear gangplank connections
   world.gangplanks = [];
@@ -413,7 +310,5 @@ export function completeUndocking(world: World): void {
     harborWidth: 0,
     harborHeight: 0,
     harborAnimOffset: 0,
-    originalWidth: 0,
-    originalHeight: 0,
   };
 }

@@ -1,4 +1,5 @@
 import {TileType, Deck} from './types';
+import {DECK_X_SHIFT, DECK_Y_SHIFT, EXPANDED_WIDTH, EXPANDED_HEIGHT} from './harbor';
 
 const CHAR_TO_TILE: Record<string, TileType> = {
   '.': TileType.WATER,
@@ -94,29 +95,48 @@ const LOWER_DECK = `\
 .#__#____#.
 ..#######..`;
 
+/** Embed ship tiles at (DECK_X_SHIFT, DECK_Y_SHIFT) inside the expanded grid. */
+function expandTiles(shipTiles: TileType[][]): TileType[][] {
+  const expanded: TileType[][] = [];
+  for (let y = 0; y < EXPANDED_HEIGHT; y++) {
+    const row: TileType[] = [];
+    for (let x = 0; x < EXPANDED_WIDTH; x++) {
+      const sx = x - DECK_X_SHIFT;
+      const sy = y - DECK_Y_SHIFT;
+      if (sx >= 0 && sx < shipTiles[0].length && sy >= 0 && sy < shipTiles.length) {
+        row.push(shipTiles[sy][sx]);
+      } else {
+        row.push(TileType.WATER);
+      }
+    }
+    expanded.push(row);
+  }
+  return expanded;
+}
+
 export function createShip(): Deck[] {
-  const crowsNestTiles = parseLayout(CROWS_NEST);
-  const upperTiles = parseLayout(UPPER_DECK);
-  const lowerTiles = parseLayout(LOWER_DECK);
+  const crowsNestTiles = expandTiles(parseLayout(CROWS_NEST));
+  const upperTiles = expandTiles(parseLayout(UPPER_DECK));
+  const lowerTiles = expandTiles(parseLayout(LOWER_DECK));
 
   return [
     {
       name: "Crow's Nest",
       tiles: crowsNestTiles,
-      width: crowsNestTiles[0].length,
-      height: crowsNestTiles.length,
+      width: EXPANDED_WIDTH,
+      height: EXPANDED_HEIGHT,
     },
     {
       name: 'Upper Deck',
       tiles: upperTiles,
-      width: upperTiles[0].length,
-      height: upperTiles.length,
+      width: EXPANDED_WIDTH,
+      height: EXPANDED_HEIGHT,
     },
     {
       name: 'Lower Deck',
       tiles: lowerTiles,
-      width: lowerTiles[0].length,
-      height: lowerTiles.length,
+      width: EXPANDED_WIDTH,
+      height: EXPANDED_HEIGHT,
     },
   ];
 }

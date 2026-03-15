@@ -396,8 +396,6 @@ export interface DockingState {
   harborWidth: number;
   harborHeight: number;
   harborAnimOffset: number;       // Y pixel offset during docking/undocking animation
-  originalWidth: number;          // ship deck width before docking expansion
-  originalHeight: number;         // ship deck height before docking expansion
 }
 
 // All game simulation state — the "world" struct that free functions operate on

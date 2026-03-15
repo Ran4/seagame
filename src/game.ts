@@ -7,7 +7,7 @@ import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SP
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
-import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END } from './harbor';
+import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END, DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from './harbor';
 import { isDockButtonClicked } from './render/docking';
 
 function loadSettings(): GameSettings {
@@ -77,16 +77,14 @@ export function createWorld(): World {
     }
   }
 
-  // Center camera on ship (upper deck)
-  const deck = decks[1];
-
+  // Center camera on ship region within expanded grid
   return {
     decks,
     actors,
     corpses: [],
     camera: {
-      x: (deck.width * TILE_SIZE - CANVAS_WIDTH) / 2,
-      y: (deck.height * TILE_SIZE - CANVAS_HEIGHT) / 2,
+      x: DECK_X_SHIFT * TILE_SIZE + (SHIP_WIDTH * TILE_SIZE - CANVAS_WIDTH) / 2,
+      y: DECK_Y_SHIFT * TILE_SIZE + (SHIP_HEIGHT * TILE_SIZE - CANVAS_HEIGHT) / 2,
     },
     activeDeck: 1,
     selectedActorId: null,
@@ -119,8 +117,6 @@ export function createWorld(): World {
       harborWidth: 0,
       harborHeight: 0,
       harborAnimOffset: 0,
-      originalWidth: 0,
-      originalHeight: 0,
     },
     gangplanks: [],
     nearbyHarborIsland: null,

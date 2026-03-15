@@ -13,7 +13,6 @@ import {
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
   drawDockButton,
 } from './render';
-import { HARBOR_X_TILE_OFFSET, HARBOR_Y_TILE_OFFSET } from './harbor';
 import { drawCommandInput } from './command-input';
 
 const WATER_COLOR_1 = '#1a5276';
@@ -40,13 +39,13 @@ export class Renderer {
     return this.hoveredItem?.item ?? null;
   }
 
-  /** Create a RenderContext with camera shifted for harbor overlay rendering. */
+  /** Create a RenderContext with camera offset for harbor overlay animation. */
   private createHarborRc(rc: RenderContext, animOffset: number): RenderContext {
     return {
       ...rc,
       camera: {
-        x: rc.camera.x - HARBOR_X_TILE_OFFSET * TILE_SIZE,    // + 416
-        y: rc.camera.y - HARBOR_Y_TILE_OFFSET * TILE_SIZE - animOffset,  // + 128 - animOffset
+        x: rc.camera.x,
+        y: rc.camera.y - animOffset,
       },
     };
   }
