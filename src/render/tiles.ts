@@ -58,7 +58,8 @@ export function drawDeck(rc: RenderContext, deck: Deck, time: number): void {
       const sprite = rc.sprites?.tiles.get(tile);
       if (sprite) {
         // Draw floor underneath furniture/objects with transparent backgrounds
-        const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR && tile !== TileType.GANGPLANK;
+        const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR && tile !== TileType.GANGPLANK
+          && tile !== TileType.LAND && tile !== TileType.WHARF;
         if (needsFloorUnder) {
           const floorSprite = rc.sprites?.tiles.get(TileType.FLOOR);
           if (floorSprite) {
