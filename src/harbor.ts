@@ -207,6 +207,34 @@ export function completeDocking(world: World): void {
   }
   world.barrelInventory = newBarrelInventory;
 
+  // Restore stranded actors/corpses from this island
+  const islandId = docking.island?.id;
+  if (islandId != null) {
+    const stranded = world.strandedActors.get(islandId);
+    if (stranded && stranded.length > 0) {
+      // Stranded actors kept their harbor-space positions — add them back
+      for (const actor of stranded) {
+        // Rebuild relations bidirectionally
+        for (const shipActor of world.actors) {
+          if (!shipActor.relations.find(r => r.actorId === actor.id)) {
+            shipActor.relations.push({ actorId: actor.id, friendship: 128, attraction: 0 });
+          }
+          if (!actor.relations.find(r => r.actorId === shipActor.id)) {
+            actor.relations.push({ actorId: shipActor.id, friendship: 128, attraction: 0 });
+          }
+        }
+      }
+      world.actors.push(...stranded);
+      world.strandedActors.delete(islandId);
+    }
+
+    const strandedCorpses = world.strandedCorpses.get(islandId);
+    if (strandedCorpses && strandedCorpses.length > 0) {
+      world.corpses.push(...strandedCorpses);
+      world.strandedCorpses.delete(islandId);
+    }
+  }
+
   world.activityLog.push({text: `Docked at ${docking.island?.name ?? 'harbor'}`, time: world.time});
 }
 
@@ -241,8 +269,25 @@ export function startUndocking(world: World): void {
     };
   }
 
-  // Shift actors back and handle out-of-bounds
+  // Separate actors on ship vs on land — land actors stay on the island
+  const islandId = docking.island?.id;
+  const shipActors: typeof world.actors = [];
+  const landActors: typeof world.actors = [];
   for (const actor of world.actors) {
+    // Check if actor is within ship tile region (expanded coordinates)
+    const tileX = Math.floor(actor.pixelX / TILE_SIZE);
+    const tileY = Math.floor(actor.pixelY / TILE_SIZE);
+    const onShip = tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + origW &&
+                   tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + origH;
+    if (onShip) {
+      shipActors.push(actor);
+    } else {
+      landActors.push(actor);
+    }
+  }
+
+  // Shift ship actors back to original coordinates
+  for (const actor of shipActors) {
     actor.pixelX -= DECK_X_SHIFT * TILE_SIZE;
     actor.pixelY -= DECK_Y_SHIFT * TILE_SIZE;
     actor.path = [];
@@ -250,37 +295,76 @@ export function startUndocking(world: World): void {
       actor.state = CrewState.IDLE;
       actor.idleTimer = 0;
     }
+  }
 
-    // Check if actor is in a valid position
-    const tileX = Math.floor(actor.pixelX / TILE_SIZE);
-    const tileY = Math.floor(actor.pixelY / TILE_SIZE);
-    const deckTiles = world.decks[actor.deck];
-    const valid = tileX >= 0 && tileX < deckTiles.width &&
-                  tileY >= 0 && tileY < deckTiles.height &&
-                  WALKABLE.has(deckTiles.tiles[tileY][tileX]);
+  // Strand land actors on the island
+  if (landActors.length > 0 && islandId != null) {
+    for (const actor of landActors) {
+      actor.path = [];
+      actor.state = CrewState.IDLE;
+      actor.idleTimer = 0;
+      // Break conversations/interactions
+      actor.conversationPartnerId = null;
+      actor.speechBubbleText = null;
+      actor.copulationTarget = null;
+    }
+    const existing = world.strandedActors.get(islandId) ?? [];
+    existing.push(...landActors);
+    world.strandedActors.set(islandId, existing);
 
-    if (!valid) {
-      // Teleport to first floor tile on same deck
-      outer:
-      for (let sy = 0; sy < deckTiles.height; sy++) {
-        for (let sx = 0; sx < deckTiles.width; sx++) {
-          if (deckTiles.tiles[sy][sx] === TileType.FLOOR) {
-            actor.pixelX = sx * TILE_SIZE + TILE_SIZE / 2;
-            actor.pixelY = sy * TILE_SIZE + TILE_SIZE / 2;
-            break outer;
-          }
-        }
-      }
+    for (const actor of landActors) {
+      world.activityLog.push({text: `${actor.profile.name} left behind at ${docking.island?.name ?? 'island'}`, time: world.time});
+    }
+  }
+  world.actors = shipActors;
+
+  // Deselect if selected actor was left behind
+  if (world.selectedActorId != null && landActors.some(a => a.id === world.selectedActorId)) {
+    world.selectedActorId = null;
+  }
+
+  // Break conversations where partner was left behind
+  const landActorIds = new Set(landActors.map(a => a.id));
+  for (const actor of shipActors) {
+    if (actor.conversationPartnerId != null && landActorIds.has(actor.conversationPartnerId)) {
+      actor.conversationPartnerId = null;
+      actor.speechBubbleText = null;
+      actor.state = CrewState.IDLE;
+      actor.idleTimer = 0;
+    }
+    if (actor.copulationTarget?.type === 'crew' && landActorIds.has(actor.copulationTarget.actorId)) {
+      actor.copulationTarget = null;
       actor.state = CrewState.IDLE;
       actor.idleTimer = 0;
     }
   }
 
-  // Shift corpses back
+  // Separate corpses on ship vs on land
+  const shipCorpses: typeof world.corpses = [];
+  const landCorpses: typeof world.corpses = [];
   for (const corpse of world.corpses) {
+    const tileX = Math.floor(corpse.pixelX / TILE_SIZE);
+    const tileY = Math.floor(corpse.pixelY / TILE_SIZE);
+    const onShip = tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + origW &&
+                   tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + origH;
+    if (onShip) {
+      shipCorpses.push(corpse);
+    } else {
+      landCorpses.push(corpse);
+    }
+  }
+
+  for (const corpse of shipCorpses) {
     corpse.pixelX -= DECK_X_SHIFT * TILE_SIZE;
     corpse.pixelY -= DECK_Y_SHIFT * TILE_SIZE;
   }
+
+  if (landCorpses.length > 0 && islandId != null) {
+    const existing = world.strandedCorpses.get(islandId) ?? [];
+    existing.push(...landCorpses);
+    world.strandedCorpses.set(islandId, existing);
+  }
+  world.corpses = shipCorpses;
 
   // Shift camera back
   world.camera.x -= DECK_X_SHIFT * TILE_SIZE;

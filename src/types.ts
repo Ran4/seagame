@@ -433,4 +433,6 @@ export interface World {
   docking: DockingState;
   gangplanks: GangplankConnection[];
   nearbyHarborIsland: Island | null;
+  strandedActors: Map<number, Actor[]>;  // island ID → actors left on that island
+  strandedCorpses: Map<number, Corpse[]>;  // island ID → corpses left on that island
 }

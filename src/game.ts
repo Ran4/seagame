@@ -124,6 +124,8 @@ export function createWorld(): World {
     },
     gangplanks: [],
     nearbyHarborIsland: null,
+    strandedActors: new Map(),
+    strandedCorpses: new Map(),
   };
 }
 
