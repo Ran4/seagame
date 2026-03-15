@@ -1,7 +1,7 @@
 import {
   TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE,
   CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES,
-  Item, World, Command, Deck,
+  Item, World, Command, Deck, computeMenuWidth,
 } from './types';
 
 /** Build a context menu from a right-click. Returns ContextMenu, null (close menu), or undefined (no change). */
@@ -241,12 +241,13 @@ export function buildContextMenu(
 
 /** Process a click on the context menu. Returns item (clicked leaf), null (outside), or undefined (keep open). */
 export function handleMenuClick(contextMenu: ContextMenu, click: { x: number; y: number }): ContextMenuItem | null | undefined {
-  const itemW = 200;
   const itemH = 24;
   const pad = 4;
 
   // Barrel item grid dimensions (must match renderer)
   const bSlot = 28, bGap = 4, bCols = 5, bMargin = 10;
+  const barrelMinW = contextMenu.barrelItems?.items?.length ? bMargin * 2 + bCols * (bSlot + bGap) - bGap : 0;
+  const itemW = computeMenuWidth(contextMenu.items.map(i => i.label), barrelMinW);
   let barrelGridH = 0, barrelSepH = 0;
   const bItems = contextMenu.barrelItems?.items;
   if (bItems && bItems.length > 0) {
@@ -315,6 +316,7 @@ export function handleMenuClick(contextMenu: ContextMenu, click: { x: number; y:
   for (let i = 0; i < contextMenu.items.length; i++) {
     const item = contextMenu.items[i];
     if (!item.submenu) continue;
+    const subW = computeMenuWidth(item.submenu.map(s => s.label));
     const parentY = my + pad + textY0 + i * itemH;
     const subX = mx + itemW;
     const subY = parentY;
@@ -322,13 +324,14 @@ export function handleMenuClick(contextMenu: ContextMenu, click: { x: number; y:
     for (let j = 0; j < item.submenu.length; j++) {
       const subItem = item.submenu[j];
       if (!subItem.submenu) continue;
+      const sub2W = computeMenuWidth(subItem.submenu.map(s => s.label));
       const sjy = subY + pad + j * itemH;
-      let sub2X = subX + itemW;
+      let sub2X = subX + subW;
       const sub2Y = sjy;
       const sub2H = subItem.submenu.length * itemH + pad * 2;
-      if (sub2X + itemW > CANVAS_WIDTH) sub2X = subX - itemW;
+      if (sub2X + sub2W > CANVAS_WIDTH) sub2X = subX - sub2W;
 
-      if (click.x >= sub2X && click.x <= sub2X + itemW &&
+      if (click.x >= sub2X && click.x <= sub2X + sub2W &&
           click.y >= sub2Y && click.y <= sub2Y + sub2H) {
         for (let k = 0; k < subItem.submenu.length; k++) {
           const sky = sub2Y + pad + k * itemH;
@@ -346,12 +349,13 @@ export function handleMenuClick(contextMenu: ContextMenu, click: { x: number; y:
   for (let i = 0; i < contextMenu.items.length; i++) {
     const item = contextMenu.items[i];
     if (!item.submenu) continue;
+    const subW = computeMenuWidth(item.submenu.map(s => s.label));
     const parentY = my + pad + textY0 + i * itemH;
     const subX = mx + itemW;
     const subY = parentY;
     const subH = item.submenu.length * itemH + pad * 2;
 
-    if (click.x >= subX && click.x <= subX + itemW &&
+    if (click.x >= subX && click.x <= subX + subW &&
         click.y >= subY && click.y <= subY + subH) {
       for (let j = 0; j < item.submenu.length; j++) {
         const sjy = subY + pad + j * itemH;

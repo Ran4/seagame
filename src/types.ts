@@ -193,6 +193,16 @@ export interface ContextMenu {
   barrelSlotClickPos?: { x: number; y: number }; // where the slot was clicked
 }
 
+/** Compute menu panel width from label lengths (monospace 12px ≈ 7.2px per char). */
+export function computeMenuWidth(labels: string[], minWidth = 0): number {
+  const charW = 7.22; // 12px monospace character width
+  let maxChars = 0;
+  for (const label of labels) {
+    if (label.length > maxChars) maxChars = label.length;
+  }
+  return Math.max(Math.ceil(maxChars * charW) + 20, minWidth); // 10px padding each side
+}
+
 export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.BED]: [{ label: 'Sleep', targetState: CrewState.SLEEPING }],
   [TileType.STOVE]: [{ label: 'Eat', targetState: CrewState.EATING }],

@@ -54,12 +54,12 @@ function parseHarborLayout(layout: string): TileType[][] {
 }
 
 // Tile offset: harbor tile (hx, hy) appears at ship tile (hx + X_OFFSET, hy + Y_OFFSET) when docked
-// Derived from gangplank junction: harbor(12,15) ↔ ship(0,8) → ship_col = harbor_col - 13, ship_row = harbor_row - 7
-export const HARBOR_X_TILE_OFFSET = -13;
+// Gangplank sits in the gap at expanded x = DECK_X_SHIFT - 1, between wharf(12) and ship hull(14)
+export const HARBOR_X_TILE_OFFSET = -14;
 export const HARBOR_Y_TILE_OFFSET = -7;
 
 // When docking completes, all decks expand. Ship tiles shift right/down by these amounts.
-export const DECK_X_SHIFT = 13;
+export const DECK_X_SHIFT = 14;
 export const DECK_Y_SHIFT = 7;
 
 // Docking animation: harborAnimOffset starts negative and increases to 0
@@ -148,8 +148,10 @@ export function completeDocking(world: World): void {
           }
         }
       }
-      // Gangplank on ship side only (hull → gangplank)
-      newTiles[SHIP_GANGPLANK_Y + DECK_Y_SHIFT][SHIP_GANGPLANK_X + DECK_X_SHIFT] = TileType.GANGPLANK;
+      // Gangplank in the gap between wharf and ship hull
+      newTiles[SHIP_GANGPLANK_Y + DECK_Y_SHIFT][DECK_X_SHIFT - 1] = TileType.GANGPLANK;
+      // Convert adjacent ship hull to floor so crew can walk onto the gangplank
+      newTiles[SHIP_GANGPLANK_Y + DECK_Y_SHIFT][DECK_X_SHIFT] = TileType.FLOOR;
     }
 
     world.decks[d] = {

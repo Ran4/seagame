@@ -1,15 +1,17 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, ContextMenu } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, ContextMenu, computeMenuWidth } from '../types';
 import { RenderContext } from './context';
 import { drawItemSlot } from './ui';
 
 export function drawContextMenu(rc: RenderContext, menu: ContextMenu, mousePos: { x: number; y: number }): void {
   const ctx = rc.ctx;
-  const itemW = 200;
+  ctx.font = '12px monospace';
   const itemH = 24;
   const pad = 4;
 
   // Barrel item grid dimensions
   const bSlot = 28, bGap = 4, bCols = 5, bMargin = 10;
+  const barrelMinW = menu.barrelItems?.items?.length ? bMargin * 2 + bCols * (bSlot + bGap) - bGap : 0;
+  const itemW = computeMenuWidth(menu.items.map(i => i.label), barrelMinW);
   let barrelGridH = 0, barrelSepH = 0;
   const bItems = menu.barrelItems?.items;
   if (bItems && bItems.length > 0) {
@@ -126,6 +128,7 @@ export function drawContextMenu(rc: RenderContext, menu: ContextMenu, mousePos: 
     const item = menu.items[i];
     if (!item.submenu) continue;
 
+    const subW = computeMenuWidth(item.submenu.map(s => s.label));
     const parentY = my + pad + textY0 + i * itemH;
     const subX = mx + itemW;
     const subY = parentY;
@@ -133,38 +136,39 @@ export function drawContextMenu(rc: RenderContext, menu: ContextMenu, mousePos: 
 
     const overParent = mousePos.x >= mx && mousePos.x <= mx + itemW &&
                        mousePos.y >= parentY && mousePos.y <= parentY + itemH;
-    const overSub = mousePos.x >= subX && mousePos.x <= subX + itemW &&
+    const overSub = mousePos.x >= subX && mousePos.x <= subX + subW &&
                     mousePos.y >= subY && mousePos.y <= subY + subH;
     if (!overParent && !overSub) continue;
 
     // Submenu background
     ctx.fillStyle = 'rgba(0,0,0,0.85)';
-    ctx.fillRect(subX, subY, itemW, subH);
+    ctx.fillRect(subX, subY, subW, subH);
     ctx.strokeStyle = '#666';
     ctx.lineWidth = 1;
-    ctx.strokeRect(subX + 0.5, subY + 0.5, itemW - 1, subH - 1);
+    ctx.strokeRect(subX + 0.5, subY + 0.5, subW - 1, subH - 1);
 
     for (let j = 0; j < item.submenu.length; j++) {
       const sjy = subY + pad + j * itemH;
       const subItem = item.submenu[j];
 
-      const overSubItem = mousePos.x >= subX && mousePos.x <= subX + itemW &&
+      const overSubItem = mousePos.x >= subX && mousePos.x <= subX + subW &&
           mousePos.y >= sjy && mousePos.y <= sjy + itemH;
 
       // Check if mouse is over this item's sub-submenu panel
       let overSub2 = false;
       if (subItem.submenu) {
-        let s2x = subX + itemW;
-        if (s2x + itemW > CANVAS_WIDTH) s2x = subX - itemW;
+        const sub2W = computeMenuWidth(subItem.submenu.map(s => s.label));
+        let s2x = subX + subW;
+        if (s2x + sub2W > CANVAS_WIDTH) s2x = subX - sub2W;
         const s2y = sjy;
         const s2h = subItem.submenu.length * itemH + pad * 2;
-        overSub2 = mousePos.x >= s2x && mousePos.x <= s2x + itemW &&
+        overSub2 = mousePos.x >= s2x && mousePos.x <= s2x + sub2W &&
                    mousePos.y >= s2y && mousePos.y <= s2y + s2h;
       }
 
       if (!subItem.disabled && overSubItem) {
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(subX + 1, sjy, itemW - 2, itemH);
+        ctx.fillRect(subX + 1, sjy, subW - 2, itemH);
       }
 
       ctx.fillStyle = subItem.disabled ? '#666666' : '#ffffff';
@@ -174,31 +178,32 @@ export function drawContextMenu(rc: RenderContext, menu: ContextMenu, mousePos: 
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.beginPath();
         ctx.moveTo(subX + 4, sjy + itemH);
-        ctx.lineTo(subX + itemW - 4, sjy + itemH);
+        ctx.lineTo(subX + subW - 4, sjy + itemH);
         ctx.stroke();
       }
 
       // Draw level-3 sub-submenu
       if (subItem.submenu && (overSubItem || overSub2)) {
-        let sub2X = subX + itemW;
-        if (sub2X + itemW > CANVAS_WIDTH) sub2X = subX - itemW;
+        const sub2W = computeMenuWidth(subItem.submenu.map(s => s.label));
+        let sub2X = subX + subW;
+        if (sub2X + sub2W > CANVAS_WIDTH) sub2X = subX - sub2W;
         const sub2Y = sjy;
         const sub2H = subItem.submenu.length * itemH + pad * 2;
 
         ctx.fillStyle = 'rgba(0,0,0,0.85)';
-        ctx.fillRect(sub2X, sub2Y, itemW, sub2H);
+        ctx.fillRect(sub2X, sub2Y, sub2W, sub2H);
         ctx.strokeStyle = '#666';
         ctx.lineWidth = 1;
-        ctx.strokeRect(sub2X + 0.5, sub2Y + 0.5, itemW - 1, sub2H - 1);
+        ctx.strokeRect(sub2X + 0.5, sub2Y + 0.5, sub2W - 1, sub2H - 1);
 
         for (let k = 0; k < subItem.submenu.length; k++) {
           const sky = sub2Y + pad + k * itemH;
           const sub2Item = subItem.submenu[k];
 
-          if (!sub2Item.disabled && mousePos.x >= sub2X && mousePos.x <= sub2X + itemW &&
+          if (!sub2Item.disabled && mousePos.x >= sub2X && mousePos.x <= sub2X + sub2W &&
               mousePos.y >= sky && mousePos.y <= sky + itemH) {
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(sub2X + 1, sky, itemW - 2, itemH);
+            ctx.fillRect(sub2X + 1, sky, sub2W - 2, itemH);
           }
 
           ctx.fillStyle = sub2Item.disabled ? '#666666' : '#ffffff';
@@ -208,7 +213,7 @@ export function drawContextMenu(rc: RenderContext, menu: ContextMenu, mousePos: 
             ctx.strokeStyle = 'rgba(255,255,255,0.1)';
             ctx.beginPath();
             ctx.moveTo(sub2X + 4, sky + itemH);
-            ctx.lineTo(sub2X + itemW - 4, sky + itemH);
+            ctx.lineTo(sub2X + sub2W - 4, sky + itemH);
             ctx.stroke();
           }
         }
