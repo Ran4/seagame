@@ -1,4 +1,5 @@
 import {Camera, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, Actor, Deck, WALKABLE, SELECTABLE_OBJECTS, DeckPoint} from './types';
+import {DECK_X_SHIFT, SHIP_WIDTH} from './harbor';
 
 export interface InputState {
   keysDown: Set<string>;
@@ -85,7 +86,7 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
   return state;
 }
 
-export function updateCamera(camera: Camera, input: InputState, dt: number, shipWidth: number, shipHeight: number): void {
+export function updateCamera(camera: Camera, input: InputState, dt: number, shipWidth: number, shipHeight: number, isDocked = false): void {
   const scrollSpeed = 200;
 
   if (input.keysDown.has('ArrowUp') || input.keysDown.has('w')) camera.y -= scrollSpeed * dt;
@@ -101,7 +102,14 @@ export function updateCamera(camera: Camera, input: InputState, dt: number, ship
 
   // Clamp X so you can scroll until only half of the ship's outermost tile is visible
   // - we do not want the user to not find the boat...
-  camera.x = Math.max(-CANVAS_WIDTH + TILE_SIZE / 2, Math.min(shipWidth * TILE_SIZE - TILE_SIZE / 2, camera.x));
+  // When docked, limit left scroll so at least half of the ship's leftmost tile is visible
+  const minX = isDocked
+    ? DECK_X_SHIFT * TILE_SIZE + TILE_SIZE / 2 - CANVAS_WIDTH
+    : -CANVAS_WIDTH + TILE_SIZE / 2;
+  const maxX = isDocked
+    ? (DECK_X_SHIFT + SHIP_WIDTH) * TILE_SIZE - TILE_SIZE / 2
+    : shipWidth * TILE_SIZE - TILE_SIZE / 2;
+  camera.x = Math.max(minX, Math.min(maxX, camera.x));
   const maxY = shipHeight * TILE_SIZE - CANVAS_HEIGHT;
   camera.y = Math.max(0, Math.min(maxY + TILE_SIZE * 3, camera.y));
 }

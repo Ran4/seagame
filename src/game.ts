@@ -325,7 +325,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   }
 
   // Camera
-  updateCamera(world.camera, input, dt, world.decks[world.activeDeck].width, world.decks[world.activeDeck].height);
+  updateCamera(world.camera, input, dt, world.decks[world.activeDeck].width, world.decks[world.activeDeck].height, world.docking.phase === 'docked');
 
   // Map overlay click interception
   if (input.mouseClick && world.mapOverlayOpen) {
