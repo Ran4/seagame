@@ -11,7 +11,7 @@ import {
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
-  drawDockButton,
+  drawDockButton, drawDockedBar,
 } from './render';
 import { drawCommandInput } from './command-input';
 
@@ -220,6 +220,11 @@ export class Renderer {
     // Dock button (approaching harbor island)
     if (world.nearbyHarborIsland && world.docking.phase === 'none') {
       drawDockButton(ctx, world.nearbyHarborIsland, hasHelmsman, mousePos);
+    }
+
+    // "Leave harbor" button when docked
+    if (world.docking.phase === 'docked') {
+      drawDockedBar(ctx, hasHelmsman, mousePos);
     }
 
     // Mutiny ultimatum warning banner

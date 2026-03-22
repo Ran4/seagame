@@ -8,7 +8,7 @@ import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
 import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END, DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from './harbor';
-import { isDockButtonClicked } from './render/docking';
+import { isDockButtonClicked, isLeaveHarborClicked } from './render/docking';
 
 function loadSettings(): GameSettings {
   try {
@@ -228,6 +228,15 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   if (world.nearbyHarborIsland && input.mouseClick) {
     if (isDockButtonClicked(input.mouseClick.x, input.mouseClick.y, anySteering)) {
       startDocking(world);
+      audio.play('click', world.activeDeck);
+      input.mouseClick = null;
+    }
+  }
+
+  // Leave harbor button click (docked bar)
+  if (world.docking.phase === 'docked' && input.mouseClick) {
+    if (isLeaveHarborClicked(input.mouseClick.x, input.mouseClick.y, anySteering)) {
+      startUndocking(world);
       audio.play('click', world.activeDeck);
       input.mouseClick = null;
     }

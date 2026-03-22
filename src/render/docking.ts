@@ -58,3 +58,52 @@ export function isDockButtonClicked(mx: number, my: number, hasHelmsman: boolean
   const btnY = barY + 26;
   return mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH;
 }
+
+// --- Docked bar: "Docked at X" + "Leave harbor" button ---
+
+const LEAVE_BTN_W = 100;
+const LEAVE_BTN_H = 20;
+const LEAVE_BTN_Y = CANVAS_HEIGHT - LEAVE_BTN_H - 6;
+
+// Position to the left of the activity log (logW=320, 8px margin)
+const LEAVE_BTN_X = CANVAS_WIDTH - LEAVE_BTN_W - 8 - 320 - 8;
+
+/** Draw a small "Leave harbor" button at the bottom of the screen. */
+export function drawDockedBar(
+  ctx: CanvasRenderingContext2D,
+  hasHelmsman: boolean,
+  mousePos: {x: number; y: number},
+): void {
+  const btnX = LEAVE_BTN_X;
+
+  // "Leave harbor" button
+  const hover = hasHelmsman &&
+    mousePos.x >= btnX && mousePos.x <= btnX + LEAVE_BTN_W &&
+    mousePos.y >= LEAVE_BTN_Y && mousePos.y <= LEAVE_BTN_Y + LEAVE_BTN_H;
+
+  if (hasHelmsman) {
+    ctx.fillStyle = hover ? 'rgba(140, 60, 60, 0.9)' : 'rgba(100, 40, 40, 0.8)';
+    ctx.fillRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+    ctx.strokeStyle = '#aa5555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+    ctx.fillStyle = '#ffffff';
+  } else {
+    ctx.fillStyle = 'rgba(60, 60, 60, 0.6)';
+    ctx.fillRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+    ctx.strokeStyle = '#666666';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+    ctx.fillStyle = '#888888';
+  }
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('Leave harbor', btnX + LEAVE_BTN_W / 2, LEAVE_BTN_Y + LEAVE_BTN_H / 2 + 4);
+}
+
+/** Check if a click hits the "Leave harbor" button. Returns true only if helmsman exists. */
+export function isLeaveHarborClicked(mx: number, my: number, hasHelmsman: boolean): boolean {
+  if (!hasHelmsman) return false;
+  return mx >= LEAVE_BTN_X && mx <= LEAVE_BTN_X + LEAVE_BTN_W &&
+    my >= LEAVE_BTN_Y && my <= LEAVE_BTN_Y + LEAVE_BTN_H;
+}

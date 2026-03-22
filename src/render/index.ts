@@ -4,7 +4,7 @@ export { drawActor, drawActorOverlays, drawCorpse } from './actors';
 export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel } from './ui';
 export { drawContextMenu } from './menu';
 export { drawMapOverlay } from './map';
-export { drawDockButton, isDockButtonClicked } from './docking';
+export { drawDockButton, isDockButtonClicked, drawDockedBar, isLeaveHarborClicked } from './docking';
 
 import { TileType } from '../types';
 
