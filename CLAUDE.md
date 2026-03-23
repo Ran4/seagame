@@ -26,6 +26,10 @@ src/
   menu.ts              Context menu — buildContextMenu(), handleMenuClick(), menuItemToCommand()
   types.ts             All shared types, enums, constants (TILE_SIZE=32, CANVAS=960x540), World struct
   ship.ts              Ship layout — two decks defined as ASCII art, parsed to TileType[][]
+  config.ts            Dev/test configuration — overridable defaults (e.g. startNearIsland)
+  harbor.ts            Harbor/docking logic — NPC interactions, buildings, trading
+  notices.ts           In-game notice/event system
+  command-input.ts     In-game command input UI — parses shorthand commands
   crew/                Actor AI module (was crew.ts, split into submodules)
     index.ts           Re-exports public API (updateActors, issueCommand, createActors, movement helpers)
     update.ts          refreshConditions(), updateActors() — needs system, autonomous behavior
@@ -33,6 +37,20 @@ src/
     factory.ts         createActors() — spawns humans + animals with randomized traits/relations
     movement.ts        orderCrewTo/Adjacent/Beside — pathfinding-based movement helpers
     lust.ts            Attraction/copulation logic
+    death.ts           Death/corpse handling
+  render/              Rendering module (split from renderer.ts)
+    index.ts           Main render entry point
+    context.ts         Render context setup
+    tiles.ts           Tile rendering
+    actors.ts          Actor/crew rendering
+    map.ts             World map rendering
+    menu.ts            Context menu rendering
+    docking.ts         Harbor/docking UI rendering
+    ui/                UI overlay components
+      index.ts         UI entry point
+      panels.ts        Info panels (crew details, etc.)
+      tooltips.ts      Hover tooltips
+      widgets.ts       Reusable UI widgets
   conversation.ts      Crew conversations — snippets, proximity trigger, turn-based speech bubbles
   pathfinding.ts       A* on multi-deck tile grid — nodes are (x, y, deck), stairs connect decks
   renderer.ts          Canvas rendering — sprites with colored-rectangle fallback, UI overlays
@@ -45,10 +63,12 @@ src/
   debug-state.ts       serializeState() — produces JSON snapshot of World for /api/state
 
 public/
+  CONVERSATION_SNIPPETS.json  Conversation snippet data
   sprites/                 PNG sprites
   audio/                   Music
     sfx/                   Procedural/OpenAI-generated SFX
     elevenlabs-generated/  ElevenLabs-generated SFX
+    shanties/              Generated sea shanties (per-voice tracks + mixed)
 ```
 
 ### Folders used during development/debugging
