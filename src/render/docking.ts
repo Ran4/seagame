@@ -63,7 +63,7 @@ export function isDockButtonClicked(mx: number, my: number, hasHelmsman: boolean
 
 const LEAVE_BTN_W = 100;
 const LEAVE_BTN_H = 20;
-const LEAVE_BTN_Y = CANVAS_HEIGHT - LEAVE_BTN_H - 6;
+const LEAVE_BTN_Y = CANVAS_HEIGHT - LEAVE_BTN_H - 11;
 
 // Position to the left of the activity log (logW=320, 8px margin)
 const LEAVE_BTN_X = CANVAS_WIDTH - LEAVE_BTN_W - 8 - 320 - 8;
@@ -77,28 +77,35 @@ export function drawDockedBar(
   const btnX = LEAVE_BTN_X;
 
   // "Leave harbor" button
-  const hover = hasHelmsman &&
-    mousePos.x >= btnX && mousePos.x <= btnX + LEAVE_BTN_W &&
+  const inBtn = mousePos.x >= btnX && mousePos.x <= btnX + LEAVE_BTN_W &&
     mousePos.y >= LEAVE_BTN_Y && mousePos.y <= LEAVE_BTN_Y + LEAVE_BTN_H;
+  const hover = hasHelmsman && inBtn;
 
-  if (hasHelmsman) {
-    ctx.fillStyle = hover ? 'rgba(140, 60, 60, 0.9)' : 'rgba(100, 40, 40, 0.8)';
-    ctx.fillRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
-    ctx.strokeStyle = '#aa5555';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
-    ctx.fillStyle = '#ffffff';
-  } else {
-    ctx.fillStyle = 'rgba(60, 60, 60, 0.6)';
-    ctx.fillRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
-    ctx.strokeStyle = '#666666';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
-    ctx.fillStyle = '#888888';
-  }
+  ctx.fillStyle = hasHelmsman
+    ? (hover ? 'rgba(140, 60, 60, 0.9)' : 'rgba(100, 40, 40, 0.8)')
+    : 'rgba(60, 60, 60, 0.6)';
+  ctx.fillRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+  ctx.strokeStyle = hasHelmsman ? '#aa5555' : '#666666';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(btnX, LEAVE_BTN_Y, LEAVE_BTN_W, LEAVE_BTN_H);
+  ctx.fillStyle = hasHelmsman ? '#ffffff' : '#888888';
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'center';
   ctx.fillText('Leave harbor', btnX + LEAVE_BTN_W / 2, LEAVE_BTN_Y + LEAVE_BTN_H / 2 + 4);
+
+  // Tooltip when hovering disabled button
+  if (!hasHelmsman && inBtn) {
+    const tip = '(missing helmsman)';
+    ctx.font = '10px monospace';
+    const tw = ctx.measureText(tip).width;
+    const tx = btnX + (LEAVE_BTN_W - tw) / 2 - 4;
+    const ty = LEAVE_BTN_Y - 18;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(tx, ty, tw + 8, 16);
+    ctx.fillStyle = '#cc6666';
+    ctx.textAlign = 'center';
+    ctx.fillText(tip, btnX + LEAVE_BTN_W / 2, ty + 12);
+  }
 }
 
 /** Check if a click hits the "Leave harbor" button. Returns true only if helmsman exists. */
