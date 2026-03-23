@@ -79,6 +79,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
     [TileType.GANGPLANK, 'gangplank'],
     [TileType.HARBOR_WALL, 'harbor_wall'],
     [TileType.HARBOR_FLOOR, 'harbor_floor'],
+    [TileType.NOTICE_BOARD, 'notice_board'],
   ];
 
   const itemNames = ['cutlass', 'semen', 'grog_ration'];
@@ -99,7 +100,7 @@ export async function loadSprites(): Promise<SpriteSheet> {
   );
 
   // Animal sprites (directional)
-  const animalTypes = ['dog', 'parrot', 'monkey'];
+  const animalTypes = ['dog', 'parrot', 'monkey', 'cat'];
   const animalLoads = Promise.all(
     animalTypes.map(name => loadDirectionalSprite(`/sprites/actors/actor__animal_${name}`)),
   );

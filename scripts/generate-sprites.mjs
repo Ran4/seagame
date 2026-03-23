@@ -76,6 +76,7 @@ const SPRITES = [
   ['tiles', 'gangplank', `${TILE_STYLE} A wide thick wooden gangplank plank seen from directly above. Worn golden-brown wooden boards running left to right. No railings, no ropes, no decorations — just the bare plank. The plank fills 100% of the tile width (edge to edge) and about 80% of the tile height (centered vertically with narrow transparent strips at top and bottom only).`],
   ['tiles', 'harbor_wall', `${TILE_STYLE} Stone brick wall seen from directly above. Tan/brown stone blocks in a brick pattern with mortar lines. Weathered and slightly mossy. Typical medieval harbor town wall. Seamless tileable. No border — art fills edge to edge.`],
   ['tiles', 'harbor_floor', `${TILE_STYLE} Cobblestone floor seen from directly above. Warm tan/beige irregularly shaped cobblestones fitted tightly together with thin dark mortar lines. Clean and well-worn. Typical medieval harbor town floor. Seamless tileable. No border — art fills edge to edge.`],
+  ['tiles', 'notice_board', `${TILE_STYLE} Wooden notice board on a post stuck in the ground, seen from directly above. Vertical dark brown wooden board with a few small paper notices pinned to it. The board is on a short wooden post. Surrounding ground is cobblestone. Medieval harbor town style.`],
 
   // Crew
   ['actors', 'crew_red', `${CREW_STYLE} Small pirate character. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
@@ -87,6 +88,7 @@ const SPRITES = [
   ['actors', 'animal_dog', `${CREW_STYLE} A Bichon Frise dog, taking up about 3/5 of the image, centered. Bright white fluffy fur with a dark pixel outline. Round fluffy head with two small dark eyes and a tiny black nose. Compact oval body. Four small paws.`, { directional: true }],
   ['actors', 'animal_parrot', `${CREW_STYLE} A colorful tropical parrot on a pirate ship deck. Bright green body feathers, red and blue wing accents, curved yellow beak. Tail feathers trailing behind. Perched standing pose.`, { directional: true }],
   ['actors', 'animal_monkey', `${CREW_STYLE} A small cute capuchin monkey on a pirate ship deck. Light brown fur, dark face, small round head, long curled tail. About half the size of a human character. Mischievous-looking.`, { directional: true }],
+  ['actors', 'animal_cat', `${CREW_STYLE} A small ship's cat on a pirate ship deck. Orange tabby with darker stripes, pointed ears, green eyes, long tail held upright. Compact body, about half the size of a human character. Alert and curious pose.`, { directional: true }],
 
   // Items
   ['items', 'cutlass', `${ITEM_STYLE} A pirate's cutlass — short curved steel sword with a brass hand guard and dark wooden grip. Diagonal orientation, blade pointing upper-right.`],

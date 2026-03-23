@@ -588,6 +588,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
               pet.copulationTarget = null;
               pet.idleTimer = 1 + Math.random() * 2;
               activityLog.push({ text: `${member.profile.name} petted ${pet.profile.name}`, time: gameTime });
+              if (pet.actorType === 'cat' && audio) audio.play('cat_meow', member.deck);
             }
           }
           member.thoughtBubble = 'heart';
