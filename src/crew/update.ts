@@ -3,6 +3,7 @@ import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
 import { updateWalking, orderCrewBesideTile } from './movement';
+import { DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from '../harbor';
 import { tryExecuteCommand } from './commands';
 import { trySeekLustPartner } from './lust';
 import { LUST_ACTOR_TYPES } from './factory';
@@ -207,6 +208,10 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 
   for (let ci = crew.length - 1; ci >= 0; ci--) {
     const member = crew[ci];
+    const isNPC = member.statuses.has('npc');
+
+    // NPCs don't decay needs
+    if (!isNPC) {
     member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
 
@@ -240,7 +245,6 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 
     // Morale tick — drift toward target derived from needs/relations
     // TODO: combat victory bonus
-    // TODO: harbor visit recency bonus
     // TODO: storm survival / loot share / idle boredom
     {
       const hungerContrib = member.profile.hunger;
@@ -253,7 +257,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       }
       const dogMoraleAdj = getDogMoraleAdj(member, crew);
       const injuryPenalty = member.conditions.has('injured') ? -40 : 0;
-      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty));
+      // Harbor morale boost: +20 when docked at harbor
+      const harborBonus = (world?.docking?.phase === 'docked') ? 20 : 0;
+      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty + harborBonus));
       const diff = target - member.profile.morale;
       const step = MORALE_RATE * dt;
       if (Math.abs(diff) < step) {
@@ -303,11 +309,12 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         member.speechBubbleTimer = 3;
       }
     }
+    } // end if (!isNPC) — NPCs skip needs decay, morale, starvation
 
     refreshConditions(member, crew);
 
-    // Death check — remove actor if health <= 0
-    if (world && checkDeath(world, member)) continue;
+    // Death check — remove actor if health <= 0 (not NPCs)
+    if (!isNPC && world && checkDeath(world, member)) continue;
 
     tickConversationCooldown(member, dt);
 
@@ -317,6 +324,15 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       if (member.thoughtBubbleTimer <= 0) {
         member.thoughtBubble = null;
         member.thoughtBubbleTimer = 0;
+      }
+    }
+
+    // Tick down non-conversation speech bubbles (NPC ambient lines, starvation complaints)
+    if (member.speechBubbleText && member.state !== CrewState.TALKING) {
+      member.speechBubbleTimer -= dt;
+      if (member.speechBubbleTimer <= 0) {
+        member.speechBubbleText = null;
+        member.speechBubbleTimer = 0;
       }
     }
 
@@ -736,6 +752,50 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     }
   }
 
+  // Tavern brawl: when docked, two drunk idle crew near each other may brawl
+  if (world?.docking?.phase === 'docked' && Math.random() < 0.001 * dt) {
+    const drunkIdle = crew.filter(c =>
+      c.actorType === 'human' && !c.statuses.has('npc') &&
+      c.conditions.has('drunk') &&
+      (c.state === CrewState.IDLE || c.state === CrewState.WALKING) &&
+      !isOnShipCheck(Math.floor(c.pixelX / TILE_SIZE), Math.floor(c.pixelY / TILE_SIZE))
+    );
+    if (drunkIdle.length >= 2) {
+      // Find two drunk crew within 3 tiles of each other
+      outer:
+      for (let i = 0; i < drunkIdle.length; i++) {
+        for (let j = i + 1; j < drunkIdle.length; j++) {
+          const a = drunkIdle[i], b = drunkIdle[j];
+          const dx = a.pixelX - b.pixelX;
+          const dy = a.pixelY - b.pixelY;
+          if (dx * dx + dy * dy < (3 * TILE_SIZE) * (3 * TILE_SIZE)) {
+            // Brawl!
+            const dmg = 5 + Math.floor(Math.random() * 10);
+            a.health = Math.max(1, a.health - dmg);
+            b.health = Math.max(1, b.health - dmg);
+            // Friendship drops
+            const relA = a.relations.find(r => r.actorId === b.id);
+            const relB = b.relations.find(r => r.actorId === a.id);
+            if (relA) relA.friendship = Math.max(0, relA.friendship - 20);
+            if (relB) relB.friendship = Math.max(0, relB.friendship - 20);
+            // But both get morale boost (fun fight!)
+            a.profile.morale = Math.min(255, a.profile.morale + 15);
+            b.profile.morale = Math.min(255, b.profile.morale + 15);
+            // Speech bubbles
+            const brawlLines = ['Take that!', 'Arrr!', 'Fight me!', 'Ye scallywag!', 'Have at ye!'];
+            a.speechBubbleText = brawlLines[Math.floor(Math.random() * brawlLines.length)];
+            a.speechBubbleTimer = 3;
+            b.speechBubbleText = brawlLines[Math.floor(Math.random() * brawlLines.length)];
+            b.speechBubbleTimer = 3;
+            activityLog.push({ text: `${a.profile.name} and ${b.profile.name} got into a tavern brawl!`, time: gameTime });
+            if (audio) audio.play('tavern_brawl', a.deck);
+            break outer;
+          }
+        }
+      }
+    }
+  }
+
   // Mutiny detection (after per-actor loop)
   if (world) {
     const humans = crew.filter(c => c.actorType === 'human');
@@ -791,6 +851,12 @@ function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lan
   // Process command queue first
   if (tryExecuteCommand(member, decks, crew, activityLog, gameTime, world, audio)) return;
 
+  // NPC idle: wander within building, try conversations
+  if (member.statuses.has('npc')) {
+    updateIdleNPC(member, decks, dt, crew, brightness);
+    return;
+  }
+
   if (member.actorType === 'human') {
     updateIdleHuman(member, decks, dt, crew, lanternOil, brightness, world, audio);
   } else {
@@ -798,15 +864,25 @@ function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lan
   }
 }
 
+function isOnShipCheck(tileX: number, tileY: number): boolean {
+  return tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + SHIP_WIDTH &&
+         tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + SHIP_HEIGHT;
+}
+
 function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
 
-  // Hungry? Go eat
+  // Hungry? Go eat (when docked, prefer harbor stoves — tavern food)
   if (member.conditions.has('hungry') || member.conditions.has('starving')) {
-    const stoves = findTilesOfType(decks, TileType.STOVE);
+    let stoves = findTilesOfType(decks, TileType.STOVE);
+    if (world?.docking?.phase === 'docked' && Math.random() < 0.6) {
+      const harborStoves = stoves.filter(s => !isOnShipCheck(s.x, s.y));
+      if (harborStoves.length > 0) stoves = harborStoves;
+    }
+    const gangplanksForPath = world?.gangplanks;
     const target = pickRandom(stoves);
     if (target) {
-      const path = findPath(decks, from, target);
+      const path = findPath(decks, from, target, gangplanksForPath);
       if (path) {
         member.path = path;
         member.state = CrewState.WALKING;
@@ -823,10 +899,16 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
 
   // Tired? Go sleep (daytime restriction: only if dark or exhausted)
   if ((member.conditions.has('tired') || member.conditions.has('exhausted')) && (brightness < 0.7 || member.conditions.has('exhausted'))) {
-    const beds = findTilesOfType(decks, TileType.BED);
+    let beds = findTilesOfType(decks, TileType.BED);
+    // When docked, prefer harbor beds (inn) — they're outside the ship
+    if (world?.docking?.phase === 'docked' && Math.random() < 0.6) {
+      const harborBeds = beds.filter(b => !isOnShipCheck(b.x, b.y));
+      if (harborBeds.length > 0) beds = harborBeds;
+    }
+    const gangplanksForPath = world?.gangplanks;
     const target = pickRandom(beds);
     if (target) {
-      const path = findPath(decks, from, target);
+      const path = findPath(decks, from, target, gangplanksForPath);
       if (path) {
         member.path = path;
         member.state = CrewState.WALKING;
@@ -874,6 +956,39 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
         member.state = CrewState.WALKING;
         member.targetState = CrewState.EXTINGUISHING_LANTERN;
         return;
+      }
+    }
+  }
+
+  // When docked, autonomously drink grog from inventory (relaxing at harbor)
+  if (world?.docking?.phase === 'docked' && Math.random() < 0.08) {
+    const grogIdx = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
+    if (grogIdx !== -1) {
+      const item = member.profile.inventory.splice(grogIdx, 1)[0];
+      member.state = CrewState.DRINKING;
+      member.stateTimer = 5;
+      member.consumingItem = item;
+      member.path = [];
+      return;
+    }
+  }
+
+  // When docked, occasionally take grog from harbor barrels (visit tavern)
+  if (world?.docking?.phase === 'docked' && Math.random() < 0.05) {
+    // Find a harbor barrel with grog (outside the ship)
+    if (world.barrelInventory) {
+      for (const [key, items] of world.barrelInventory) {
+        const [d, bx, by] = key.split('-').map(Number);
+        if (d !== 1 || isOnShipCheck(bx, by)) continue;
+        const grogIdx = items.findIndex(i => i.name === 'Grog ration');
+        if (grogIdx === -1) continue;
+        const target: DeckPoint = { x: bx, y: by, deck: d };
+        member.takeTarget = { barrelKey: key, itemName: 'Grog ration' };
+        if (orderCrewBesideTile(member, target, decks, CrewState.TAKING_ITEM, world.gangplanks)) {
+          return;
+        }
+        member.takeTarget = null;
+        break;
       }
     }
   }
@@ -944,6 +1059,23 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
       }
     }
   }
+  }
+
+  // When docked at harbor, sometimes wander to harbor buildings (explore town)
+  if (world?.docking?.phase === 'docked' && Math.random() < 0.3) {
+    const harborFloorTiles = findTilesOfType(decks, TileType.HARBOR_FLOOR);
+    if (harborFloorTiles.length > 0) {
+      const target = pickRandom(harborFloorTiles);
+      if (target) {
+        const path = findPath(decks, from, target, world.gangplanks);
+        if (path && path.length > 0) {
+          member.path = path;
+          member.state = CrewState.WALKING;
+          member.targetState = CrewState.IDLE;
+          return;
+        }
+      }
+    }
   }
 
   // Otherwise wander
@@ -1093,6 +1225,93 @@ function wanderRandomly(member: Actor, decks: Deck[]): void {
     } else {
       member.idleTimer = 1 + Math.random() * 2;
     }
+  }
+}
+
+const NPC_AMBIENT_LINES: Record<string, string[]> = {
+  bartender: ['*polishes a mug*', '*wipes the counter*', 'Another round?', '*hums a shanty*'],
+  innkeeper: ['*fluffs a pillow*', '*sweeps the floor*', 'Welcome, welcome!', '*checks the ledger*'],
+  merchant: ['*arranges wares*', 'Fine goods here!', '*counts coins*', 'Best prices!'],
+  blacksmith: ['*hammers metal*', '*pumps the bellows*', '*wipes brow*', 'Hot work today!'],
+  townsfolk: ['*whistles*', '*looks at the sea*', 'Nice day...', '*stretches*', '*yawns*', 'Hmm...', '*kicks a pebble*'],
+  cat: ['*purring*', '*licks paw*', 'Mew!', '*stretches*', '*naps in sun*', 'Prrr...'],
+};
+
+const NPC_GREETINGS: Record<string, string[]> = {
+  bartender: ['Welcome!', 'What\'ll it be?', 'Ahoy, sailor!', 'Sit down, have a drink!'],
+  innkeeper: ['Welcome, traveler!', 'Need a bed?', 'Come in, come in!', 'Make yourself at home!'],
+  merchant: ['Browse freely!', 'Ahoy, buyer!', 'Only the finest wares!', 'Looking for something?'],
+  blacksmith: ['Need repairs?', 'Step in!', 'Got steel needs working?', 'Ahoy there!'],
+  townsfolk: ['Ahoy!', 'Morning!', 'Welcome, sailor!', 'Ho there!', 'G\'day!'],
+};
+
+function updateIdleNPC(member: Actor, decks: Deck[], dt: number, crew: Actor[], brightness: number): void {
+  // Try to start a conversation with nearby idle crew
+  if (tryStartConversation(member, crew, brightness)) return;
+
+  // Greet nearby crew who just entered the building
+  const npcInfo = member.statuses.get('npc') as { role: string; homeX: number; homeY: number } | null;
+  if (npcInfo && !member.speechBubbleText && member.conversationCooldown <= 0) {
+    const proximityTiles = 3 * TILE_SIZE;
+    for (const c of crew) {
+      if (c.id === member.id || c.deck !== member.deck || c.statuses.has('npc')) continue;
+      if (c.actorType !== 'human') continue;
+      const dx = c.pixelX - member.pixelX;
+      const dy = c.pixelY - member.pixelY;
+      if (dx * dx + dy * dy < proximityTiles * proximityTiles) {
+        // Only greet if crew is walking (just arrived) and not already greeted recently
+        if (c.state === CrewState.WALKING) {
+          const greetings = NPC_GREETINGS[npcInfo.role] ?? ['Ahoy!'];
+          member.speechBubbleText = greetings[Math.floor(Math.random() * greetings.length)];
+          member.speechBubbleTimer = 3;
+          member.conversationCooldown = 15; // don't greet again for 15s
+          break;
+        }
+      }
+    }
+  }
+
+  // Ambient speech (occasional flavor text)
+  if (npcInfo && !member.speechBubbleText && Math.random() < 0.01) {
+    const lines = NPC_AMBIENT_LINES[npcInfo.role];
+    if (lines) {
+      member.speechBubbleText = lines[Math.floor(Math.random() * lines.length)];
+      member.speechBubbleTimer = 3;
+    }
+  }
+
+  // Wander within building (near home position), townsfolk wander more freely
+  const npcData = member.statuses.get('npc') as { role: string; homeX: number; homeY: number } | null;
+  if (!npcData) return;
+  const from = currentTile(member);
+  const deck = decks[member.deck];
+  if (!deck) return;
+
+  // Townsfolk and cats wander wider (10 tiles), shopkeepers stay close (4 tiles)
+  const isFreeRoaming = npcData.role === 'townsfolk' || npcData.role === 'cat';
+  const radius = isFreeRoaming ? 10 : 4;
+  const candidates: DeckPoint[] = [];
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = npcData.homeX + dx;
+      const ny = npcData.homeY + dy;
+      if (ny >= 0 && ny < deck.height && nx >= 0 && nx < deck.width && WALKABLE.has(deck.tiles[ny][nx])) {
+        candidates.push({ x: nx, y: ny, deck: member.deck });
+      }
+    }
+  }
+  const target = pickRandom(candidates);
+  if (target) {
+    const path = findPath(decks, from, target);
+    if (path && path.length > 0 && path.length <= 8) {
+      member.path = path;
+      member.state = CrewState.WALKING;
+      member.targetState = CrewState.IDLE;
+    } else {
+      member.idleTimer = 2 + Math.random() * 4;
+    }
+  } else {
+    member.idleTimer = 2 + Math.random() * 4;
   }
 }
 

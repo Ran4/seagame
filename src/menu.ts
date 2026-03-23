@@ -57,8 +57,10 @@ export function buildContextMenu(
 
   // Actor actions
   if (clickedCrew) {
+    // NPCs can't be commanded — skip standard crew actions
+    const clickedIsNPCDirect = clickedCrew.statuses.has('npc');
     // Human-only actions: stop, go to deck, drink
-    if (clickedCrew.actorType === 'human') {
+    if (clickedCrew.actorType === 'human' && !clickedIsNPCDirect) {
       if (clickedCrew.state !== CrewState.IDLE) {
         items.push({ label: `Stop ${STATE_NAMES[clickedCrew.state].toLowerCase()}`, targetState: CrewState.IDLE });
       }
@@ -92,17 +94,52 @@ export function buildContextMenu(
         const submenu: ContextMenuItem[] = [];
         const clickedIsAnimal = clickedCrew.actorType !== 'human';
         const selectedIsHuman = selected.actorType === 'human';
+        const clickedIsNPC = clickedCrew.statuses.has('npc');
+        const selectedIsNPC = selected.statuses.has('npc');
 
-        // Pet — human petting an animal
-        if (selectedIsHuman && clickedIsAnimal) {
+        // NPC interactions — simplified: Talk and Buy (for bartender), Pet for animal NPCs
+        if (clickedIsNPC && selectedIsHuman && !selectedIsNPC) {
+          const npcData = clickedCrew.statuses.get('npc') as { role: string } | null;
+          // Animal NPC (cat): Pet
+          if (clickedIsAnimal) {
+            const alreadyPetting = selected.state === CrewState.PETTING && selected.copulationTarget?.type === 'crew' && selected.copulationTarget.actorId === clickedCrew.id;
+            submenu.push(alreadyPetting
+              ? { label: `Pet ${clickedCrew.profile.name} (petting)`, targetState: CrewState.PETTING, targetActorId: clickedCrew.id, disabled: true }
+              : { label: `Pet ${clickedCrew.profile.name}`, targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
+          } else {
+            // Human NPC: Talk
+            const alreadyTalking = selected.state === CrewState.TALKING && selected.conversationPartnerId === clickedCrew.id;
+            submenu.push(alreadyTalking
+              ? { label: `Talk to ${clickedCrew.profile.name} (talking)`, targetState: CrewState.TALKING, targetActorId: clickedCrew.id, disabled: true }
+              : { label: `Talk to ${clickedCrew.profile.name}`, targetState: CrewState.TALKING, targetActorId: clickedCrew.id });
+            // Bartender: buy grog
+            if (npcData?.role === 'bartender') {
+              submenu.push({ label: 'Buy grog', targetState: CrewState.IDLE, action: 'buy_grog', targetActorId: clickedCrew.id });
+            }
+            // Merchant: browse wares
+            if (npcData?.role === 'merchant') {
+              submenu.push({ label: 'Browse wares', targetState: CrewState.IDLE, action: 'browse_wares', targetActorId: clickedCrew.id });
+            }
+            // Innkeeper: recruit sailor
+            if (npcData?.role === 'innkeeper') {
+              const alreadyRecruited = world.actors.some(a => a.statuses.has('recruited_this_visit'));
+              submenu.push(alreadyRecruited
+                ? { label: 'Recruit sailor (already recruited)', targetState: CrewState.IDLE, action: 'recruit_sailor', disabled: true }
+                : { label: 'Recruit sailor', targetState: CrewState.IDLE, action: 'recruit_sailor', targetActorId: clickedCrew.id });
+            }
+          }
+        }
+
+        // Pet — human petting an animal (non-NPC)
+        if (!clickedIsNPC && selectedIsHuman && !selectedIsNPC && clickedIsAnimal) {
           const alreadyPetting = selected.state === CrewState.PETTING && selected.copulationTarget?.type === 'crew' && selected.copulationTarget.actorId === clickedCrew.id;
           submenu.push(alreadyPetting
             ? { label: 'Pet (already petting)', targetState: CrewState.PETTING, targetActorId: clickedCrew.id, disabled: true }
             : { label: 'Pet', targetState: CrewState.PETTING, targetActorId: clickedCrew.id });
         }
 
-        // Human-human (or same-species) interactions
-        if (!clickedIsAnimal && selectedIsHuman) {
+        // Human-human (or same-species) interactions (not NPCs)
+        if (!clickedIsNPC && !selectedIsNPC && !clickedIsAnimal && selectedIsHuman) {
           const selRelation = selected.relations.find(r => r.actorId === clickedCrew!.id);
           const targetRelation = clickedCrew.relations.find(r => r.actorId === selected.id);
           const selFriendship = selRelation?.friendship ?? 0;

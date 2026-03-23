@@ -59,7 +59,8 @@ export function drawDeck(rc: RenderContext, deck: Deck, time: number): void {
       if (sprite) {
         // Draw floor underneath furniture/objects with transparent backgrounds
         const needsFloorUnder = tile !== TileType.HULL && tile !== TileType.FLOOR && tile !== TileType.GANGPLANK
-          && tile !== TileType.LAND && tile !== TileType.WHARF;
+          && tile !== TileType.LAND && tile !== TileType.WHARF
+          && tile !== TileType.HARBOR_WALL && tile !== TileType.HARBOR_FLOOR;
         if (needsFloorUnder) {
           const floorSprite = rc.sprites?.tiles.get(TileType.FLOOR);
           if (floorSprite) {
@@ -294,6 +295,66 @@ function drawTileIconFallback(rc: RenderContext, tile: TileType, sx: number, sy:
       ctx.lineTo(sx + TILE_SIZE, sy + 2);
       ctx.moveTo(sx, sy + TILE_SIZE - 2);
       ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE - 2);
+      ctx.stroke();
+      break;
+    }
+    case TileType.HARBOR_WALL: {
+      // Stone/brick wall
+      ctx.fillStyle = '#8b7765';
+      ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+      // Brick pattern
+      ctx.strokeStyle = 'rgba(60, 40, 30, 0.25)';
+      for (let py = 0; py < TILE_SIZE; py += 8) {
+        const offset = (Math.floor(py / 8) % 2) * 10;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy + py);
+        ctx.lineTo(sx + TILE_SIZE, sy + py);
+        ctx.stroke();
+        for (let px = offset; px < TILE_SIZE; px += 20) {
+          ctx.beginPath();
+          ctx.moveTo(sx + px, sy + py);
+          ctx.lineTo(sx + px, sy + py + 8);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case TileType.NOTICE_BOARD: {
+      // Wooden notice board on a post
+      ctx.fillStyle = '#b0a08a'; // cobblestone base
+      ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+      // Post
+      ctx.fillStyle = '#5a3a1a';
+      ctx.fillRect(cx - 2, sy + 16, 4, 16);
+      // Board
+      ctx.fillStyle = '#8b6914';
+      ctx.fillRect(sx + 4, sy + 2, TILE_SIZE - 8, 16);
+      ctx.strokeStyle = '#3a2a00';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 4, sy + 2, TILE_SIZE - 8, 16);
+      // Paper scraps
+      ctx.fillStyle = '#e8dcc8';
+      ctx.fillRect(sx + 7, sy + 5, 8, 10);
+      ctx.fillRect(sx + 17, sy + 4, 7, 11);
+      break;
+    }
+    case TileType.HARBOR_FLOOR: {
+      // Stone floor tiles
+      ctx.fillStyle = '#b0a08a';
+      ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+      // Cross pattern for stone tiles
+      ctx.strokeStyle = 'rgba(80, 60, 40, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(sx + TILE_SIZE / 2, sy);
+      ctx.lineTo(sx + TILE_SIZE / 2, sy + TILE_SIZE);
+      ctx.moveTo(sx, sy + TILE_SIZE / 2);
+      ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE / 2);
       ctx.stroke();
       break;
     }

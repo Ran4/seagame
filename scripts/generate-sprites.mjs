@@ -74,6 +74,8 @@ const SPRITES = [
   ['tiles', 'land', `${TILE_STYLE} Lush green grass ground tile seen from directly above. Rich vibrant green grass with subtle variation — some darker and lighter green patches, tiny wildflowers, and small clover. Natural and alive-looking. Seamless tileable. No border, no outline — the art fills edge to edge.`],
   ['tiles', 'wharf', `${TILE_STYLE} Weathered wooden harbor wharf/dock planks seen from directly above. Horizontal grey-brown aged timber boards with visible gaps between planks. Slightly worn and salt-stained wood. Subtle rope and iron bolt details. Seamless tileable.`],
   ['tiles', 'gangplank', `${TILE_STYLE} A wide thick wooden gangplank plank seen from directly above. Worn golden-brown wooden boards running left to right. No railings, no ropes, no decorations — just the bare plank. The plank fills 100% of the tile width (edge to edge) and about 80% of the tile height (centered vertically with narrow transparent strips at top and bottom only).`],
+  ['tiles', 'harbor_wall', `${TILE_STYLE} Stone brick wall seen from directly above. Tan/brown stone blocks in a brick pattern with mortar lines. Weathered and slightly mossy. Typical medieval harbor town wall. Seamless tileable. No border — art fills edge to edge.`],
+  ['tiles', 'harbor_floor', `${TILE_STYLE} Cobblestone floor seen from directly above. Warm tan/beige irregularly shaped cobblestones fitted tightly together with thin dark mortar lines. Clean and well-worn. Typical medieval harbor town floor. Seamless tileable. No border — art fills edge to edge.`],
 
   // Crew
   ['actors', 'crew_red', `${CREW_STYLE} Small pirate character. Red bandana on head, red vest over white shirt. Visible round head, shoulders, and feet. Idle standing pose.`, { directional: true }],
@@ -134,7 +136,7 @@ async function generate(category, name, prompt) {
 
   // Opaque tiles get no background treatment; everything else uses a magenta
   // chroma-key background that we replace with transparency via sharp afterward.
-  const opaqueTiles = new Set(['water', 'water2', 'hull', 'floor', 'land', 'wharf']);
+  const opaqueTiles = new Set(['water', 'water2', 'hull', 'floor', 'land', 'wharf', 'harbor_wall', 'harbor_floor']);
   const useChromaKey = !(category === 'tiles' && opaqueTiles.has(name));
 
   // Append chroma-key instruction to prompt if needed

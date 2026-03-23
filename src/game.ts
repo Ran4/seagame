@@ -7,8 +7,108 @@ import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SP
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
+import { readNoticeBoard } from './notices';
 import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END, DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from './harbor';
 import { isDockButtonClicked, isLeaveHarborClicked } from './render/docking';
+import type { Actor, Sex } from './types';
+
+const RECRUIT_NAMES_M = ['Hank', 'Barney', 'Sven', 'Diego', 'Rufus', 'Ollie', 'Claude', 'Finn'];
+const RECRUIT_NAMES_F = ['Rosa', 'Elsa', 'Nora', 'Greta', 'Molly', 'Faye', 'Astrid', 'Lena'];
+const RECRUIT_COLORS = ['#e67e22', '#1abc9c', '#e91e63', '#8e44ad', '#16a085', '#d35400'];
+
+function recruitSailor(world: World): void {
+  let maxId = 0;
+  for (const a of world.actors) { if (a.id > maxId) maxId = a.id; }
+  const id = maxId + 1;
+  const sex: Sex = Math.random() < 0.5 ? 'M' : 'F';
+  const names = sex === 'M' ? RECRUIT_NAMES_M : RECRUIT_NAMES_F;
+  const usedNames = new Set(world.actors.map(a => a.profile.name));
+  let name = names[Math.floor(Math.random() * names.length)];
+  // Avoid duplicate names
+  for (const n of names) { if (!usedNames.has(n)) { name = n; break; } }
+  const color = RECRUIT_COLORS[Math.floor(Math.random() * RECRUIT_COLORS.length)];
+
+  // Spawn on upper deck near the gangplank
+  const spawnX = DECK_X_SHIFT * TILE_SIZE + 2 * TILE_SIZE;
+  const spawnY = (DECK_Y_SHIFT + 8) * TILE_SIZE + TILE_SIZE / 2;
+
+  const recruit: Actor = {
+    id,
+    actorType: 'human',
+    profile: {
+      name, sex, color,
+      spriteIndex: id % 4,
+      numberOfHands: 2,
+      hunger: 200 + Math.random() * 55,
+      energy: 200 + Math.random() * 55,
+      morale: 160 + Math.random() * 40,
+      inventory: [],
+      hands: [],
+    },
+    health: 100,
+    maxHealth: 100,
+    carryingCorpseId: null,
+    statuses: new Map<string, Record<string, any> | null>(),
+    conditions: new Set(),
+    skills: {
+      sailing: 10 + Math.floor(Math.random() * 51),
+      gunnery: 10 + Math.floor(Math.random() * 51),
+      combat: 10 + Math.floor(Math.random() * 51),
+      cooking: 10 + Math.floor(Math.random() * 51),
+      navigation: 10 + Math.floor(Math.random() * 51),
+      singing: 10 + Math.floor(Math.random() * 51),
+      dancing: 10 + Math.floor(Math.random() * 51),
+    },
+    pixelX: spawnX,
+    pixelY: spawnY,
+    facing: 'south',
+    deck: 1,
+    state: CrewState.IDLE,
+    targetState: CrewState.IDLE,
+    path: [],
+    stateTimer: 0,
+    idleTimer: 1 + Math.random() * 2,
+    copulationTarget: null,
+    relations: [],
+    thoughtBubble: null,
+    thoughtBubbleTimer: 0,
+    conversationPartnerId: null,
+    conversationExchangesLeft: 0,
+    conversationPositive: true,
+    conversationScript: [],
+    conversationCooldown: 0,
+    conversationMyTurn: false,
+    speechBubbleText: null,
+    speechBubbleTimer: 0,
+    takeTarget: null,
+    consumingItem: null,
+    lustSeekCooldown: 0,
+    commandQueue: [],
+    shantyInitiatorId: null,
+  };
+
+  // Initialize climber status
+  recruit.statuses.set('climber', { skill: 128 });
+  // Mark as recruited this visit (prevents multiple recruits)
+  recruit.statuses.set('recruited_this_visit', null);
+  // Initialize lust
+  if (sex === 'M') {
+    recruit.statuses.set('lust', { amount: Math.floor(Math.random() * 129) });
+  } else {
+    recruit.statuses.set('lust', { amount: 64 + Math.floor(Math.random() * 65), cycleTimer: Math.floor(Math.random() * 4320) });
+  }
+
+  // Initialize relations with all existing actors
+  for (const actor of world.actors) {
+    if (actor.statuses.has('npc')) continue; // skip NPC relations (temporary)
+    recruit.relations.push({ actorId: actor.id, friendship: 96 + Math.floor(Math.random() * 64), attraction: Math.floor(Math.random() * 80) });
+    actor.relations.push({ actorId: recruit.id, friendship: 96 + Math.floor(Math.random() * 64), attraction: Math.floor(Math.random() * 80) });
+  }
+
+  world.actors.push(recruit);
+  world.activityLog.push({ text: `${name} joined the crew!`, time: world.time });
+}
+
 
 function loadSettings(): GameSettings {
   try {
@@ -249,6 +349,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       if (world.docking.harborAnimOffset >= 0) {
         world.docking.harborAnimOffset = 0;
         completeDocking(world);
+        audio.play('harbor_arrive', world.activeDeck);
       }
     }
   }
@@ -432,6 +533,36 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       } else if (menuItem.action === 'leave_harbor') {
         startUndocking(world);
         audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'buy_grog') {
+        // Buy grog from bartender — give selected crew member a grog ration
+        const member = world.selectedActorId !== null ? world.actors.find(c => c.id === world.selectedActorId) : null;
+        if (member) {
+          member.profile.inventory.push(createGrogRation());
+          world.activityLog.push({ text: `${member.profile.name} bought a grog ration`, time: world.time });
+        }
+        audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'recruit_sailor') {
+        recruitSailor(world);
+        audio.play('recruit', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'browse_wares') {
+        world.activityLog.push({ text: '--- Merchant\'s Wares ---', time: world.time });
+        world.activityLog.push({ text: 'Grog ration — keeps the crew happy', time: world.time });
+        world.activityLog.push({ text: 'Hardtack — cheap but filling', time: world.time });
+        world.activityLog.push({ text: 'Hemp rope — essential for rigging', time: world.time });
+        world.activityLog.push({ text: 'Gunpowder — for the cannons', time: world.time });
+        world.activityLog.push({ text: '(Trading not yet available)', time: world.time });
+        audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'read_notices') {
+        readNoticeBoard(world);
+        audio.play('notice_board', world.activeDeck);
         world.contextMenu = null;
         input.mouseClick = null;
       } else {

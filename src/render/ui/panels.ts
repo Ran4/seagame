@@ -44,7 +44,8 @@ function layoutCrewPanel(rc: RenderContext, member: Actor, draw: boolean): numbe
     ctx.fillStyle = '#ffffff';
     ctx.font = '14px monospace';
     ctx.textAlign = 'left';
-    const typeLabel = member.actorType === 'human' ? p.sex : `${member.actorType} ${p.sex}`;
+    const npcData = member.statuses.get('npc') as { role: string } | null;
+    const typeLabel = npcData ? npcData.role : member.actorType === 'human' ? p.sex : `${member.actorType} ${p.sex}`;
     ctx.fillText(`${p.name} (${typeLabel})`, px + 35, y + 22);
 
     // Skills tooltip on name hover (humans only)

@@ -125,6 +125,41 @@ const SOUNDS = [
     duration_seconds: 1,
     prompt_influence: 0.9,
   },
+  {
+    name: 'harbor_arrive',
+    type: 'elevenlabs',
+    text: 'Wooden ship bumping gently against a dock, creaking wood, a rope being tied, seagulls in background. Harbor arrival.',
+    duration_seconds: 3,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'tavern_brawl',
+    type: 'elevenlabs',
+    text: 'Two men throwing punches in a tavern. A fist hitting flesh, a grunt, something wooden breaking. Short barfight.',
+    duration_seconds: 2,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'recruit',
+    type: 'elevenlabs',
+    text: 'A cheerful "Aye aye!" male pirate voice, enthusiastic and ready to serve. Short exclamation.',
+    duration_seconds: 1,
+    prompt_influence: 0.8,
+  },
+  {
+    name: 'notice_board',
+    type: 'elevenlabs',
+    text: 'Paper rustling, a hand removing a notice from a wooden board. Short crinkle of parchment.',
+    duration_seconds: 1,
+    prompt_influence: 0.7,
+  },
+  {
+    name: 'cat_meow',
+    type: 'elevenlabs',
+    text: 'A cute short cat meow. Single "mew" sound, small cat, friendly.',
+    duration_seconds: 1,
+    prompt_influence: 0.8,
+  },
 ];
 
 // ── WAV helpers ────────────────────────────────────────────────────────

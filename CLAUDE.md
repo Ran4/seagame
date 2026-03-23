@@ -74,42 +74,25 @@ orders/
 
 ## Key concepts
 
-### Ship layout (`ship.ts`)
-Decks are defined as ASCII strings, each char maps to a TileType.
-
-Currently 2 decks (index 0 = upper, 1 = lower). We will plan for up to 4 decks (3+lookout spot)
-
 ### Actor AI (`crew/`)
 Read code for exact details.
 
 All entities are `Actor` with `actorType: 'human' | 'dog' | 'parrot' | 'monkey'`.
 Each actor has hunger/energy/morale (0-255, high = satisfied). Needs tick down over time.
 Morale modifiers include night fear (when dark and morale below `NIGHT_FEAR_MORALE_THRESHOLD` → extra morale drain), lanterns (mitigate night fear), ...
-States: `IDLE, WALKING, EATING, SLEEPING, STEERING, MANNING_CANNON, LOOKOUT, NAVIGATING, COPULATING, KISSING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, TALKING, DRINKING, TAKING_ITEM, PETTING`
+States are like `IDLE, WALKING, EATING, SLEEPING, LIGHTING_LANTERN, EXTINGUISHING_LANTERN, ...`
 When idle (human): if hungry → pathfind to stove, if tired → pathfind to bed, else wander randomly.
 When idle (animal): hungry → stove, tired → nearby bed or sleep in place, dog follows liked entity, wander.
 Player gives orders to humans via right-click context menus (see below) or the command system (see `features/implemented/2026-03-10_COMMAND_SYSTEM.md`). Animals cannot be commanded via menu but can receive commands via order files.
-Sleep restores energy gradually (rate-based, sleeps until full). Eating uses a fixed timer.
 
 **Statuses & Conditions** (`refreshConditions()` in `crew/update.ts`):
-Each crew member has `statuses: Map<string, payload | null>` (raw state) and `conditions: Set<string>` (rebuilt every tick). Statuses hold permanent traits (`'dickless'`, null payload) or tracked values (`'drunkedness'`, `{ amount }` payload). Conditions include every status key plus derived conditions: `'drunk'`, `'tipsy'`, `'exhausted'` (sleeps even in daytime), `'tired'`, `'starving'`, `'hungry'`. Game code reads `conditions` for behaviour; writes go to `statuses`. Drunk effects: wobbly walking, lowered kiss/copulate thresholds. Tipsy: less wobble, slightly lowered thresholds.
+Each crew member has `statuses: Map<string, payload | null>` (raw state) and `conditions: Set<string>` (rebuilt every tick). Statuses hold permanent traits (`'dickless'`, null payload) or tracked values (`'drunkedness'`, `{ amount }` payload). Conditions include every status key plus derived conditions: `'drunk'`, `'tipsy'`, `'exhausted'` (sleeps even in daytime), `'tired'`.... Game code reads `conditions` for behaviour; writes go to `statuses`. Drunk effects: wobbly walking, lowered kiss/copulate thresholds. Tipsy: less wobble, slightly lowered thresholds etc.
 
-**Relations:** Each actor has `relations: ActorRelation[]` with entries for every other actor (including cross-species).
-- `friendship` (0-255): high = friend, low = dislike. Cross-species starts at same range as same-species.
-- `attraction` (0-255): mutual high attraction required for copulation. 0 cross-species.
+**Relations:** Each actor has `relations: ActorRelation[]` mapping to every other actor (including cross-species), including friendship + attraction
 
 **Interactions** (right-click actor with another selected → "Interact ▶" submenu):
-- **Pet** (human→animal only): friendship gain both ways. Heart thought bubble.
-- **Kiss** (human→human): enabled if initiator's friendship or attraction meets threshold. Positive if both attracted, negative otherwise (attraction/friendship penalty).
-- **Copulate** (same species): enabled if both sides have high mutual attraction. Barrel copulation has no attraction check.
 
-**Thought bubbles:** Shown above the initiator after kiss/copulation completes.
-- Kiss (positive) → heart bubble. Kiss (negative) → broken heart bubble.
-- Copulation (crew-crew) → heart bubble.
-Sprites: `bubble_heart.png`, `bubble_broken_heart.png`. Fallback: circle with unicode symbol.
-Stored as `thoughtBubble: ThoughtBubble | null` + `thoughtBubbleTimer` on Actor.
-
-**Conversations** (`conversation.ts`): Idle actors within proximity on the same deck may autonomously start talking (animals attempt at a much lower rate with animal-specific lines like "Woof!", "BRAWWK!", etc.). Conversations have multiple exchanges, with crew alternating speech bubbles containing procedural pirate-themed snippets. Snippet categories (generic, work, hungry, tired, friendly, unfriendly, night) are chosen by weighted random based on context. At conversation end: usually small friendship gain, small chance of friendship loss, rare chance of large friendship loss. Cooldown after each conversation. Player can stop via right-click "Stop talking". Rendered as canvas-drawn white rounded-rect speech bubbles with text (distinct from sprite-based thought bubbles).
+**Conversations** (`conversation.ts`):
 
 ### Pathfinding (`pathfinding.ts`)
 Standard A* with 4-directional movement. Stairs tiles connect decks (same x,y position).

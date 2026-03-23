@@ -24,4 +24,7 @@ export const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.WHARF]: 'Wharf',
   [TileType.LAND]: 'Land',
   [TileType.GANGPLANK]: 'Gangplank',
+  [TileType.HARBOR_WALL]: 'Wall',
+  [TileType.HARBOR_FLOOR]: 'Floor',
+  [TileType.NOTICE_BOARD]: 'Notice Board',
 };

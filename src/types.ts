@@ -51,6 +51,9 @@ export enum TileType {
   WHARF,
   LAND,
   GANGPLANK,
+  HARBOR_WALL,
+  HARBOR_FLOOR,
+  NOTICE_BOARD,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -67,6 +70,7 @@ export const WALKABLE = new Set<TileType>([
   TileType.WHARF,
   TileType.LAND,
   TileType.GANGPLANK,
+  TileType.HARBOR_FLOOR,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -78,6 +82,7 @@ export const SELECTABLE_OBJECTS = new Set<TileType>([
   TileType.TABLE,
   TileType.MAP_TABLE,
   TileType.LANTERN,
+  TileType.NOTICE_BOARD,
 ]);
 
 export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
@@ -111,6 +116,9 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.WHARF]: '#8b6f47',
   [TileType.LAND]: '#7a9b57',
   [TileType.GANGPLANK]: '#a08050',
+  [TileType.HARBOR_WALL]: '#8b7765',
+  [TileType.HARBOR_FLOOR]: '#b0a08a',
+  [TileType.NOTICE_BOARD]: '#6b5b3a',
 };
 
 export interface Point {
@@ -213,9 +221,10 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.MAP_TABLE]: [{ label: 'Navigate', targetState: CrewState.NAVIGATING }],
   [TileType.BARREL]: [{ label: 'Copulate', targetState: CrewState.COPULATING }],
   [TileType.LANTERN]: [],
+  [TileType.NOTICE_BOARD]: [{ label: 'Read notices', targetState: CrewState.IDLE, action: 'read_notices' }],
 };
 
-export type ActorType = 'human' | 'dog' | 'parrot' | 'monkey';
+export type ActorType = 'human' | 'dog' | 'parrot' | 'monkey' | 'cat';
 
 export interface ActorProfile {
   name: string;

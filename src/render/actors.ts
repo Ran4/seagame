@@ -28,7 +28,7 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
     }
   }
   // Animals are drawn slightly smaller (monkey even smaller)
-  const sizeScale = member.actorType === 'monkey' ? 0.7 : isAnimal ? 0.85 : 1.0;
+  const sizeScale = (member.actorType === 'monkey' || member.actorType === 'cat') ? 0.7 : isAnimal ? 0.85 : 1.0;
   const size = TILE_SIZE * sizeScale;
 
   if (sprite) {
@@ -137,14 +137,18 @@ export function drawActorOverlays(rc: RenderContext, member: Actor, selected: bo
 
   // Name label (always show for humans, only when selected for animals)
   if (member.actorType === 'human' || selected) {
+    const npcData = member.statuses.get('npc') as { role: string } | null;
+    const label = npcData
+      ? `${member.profile.name} (${npcData.role})`
+      : member.profile.name;
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
-    ctx.strokeText(member.profile.name, sx, sy - 22);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(member.profile.name, sx, sy - 22);
+    ctx.strokeText(label, sx, sy - 22);
+    ctx.fillStyle = npcData ? '#ffdd88' : '#ffffff';
+    ctx.fillText(label, sx, sy - 22);
     ctx.textBaseline = 'alphabetic';
   }
 }

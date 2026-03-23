@@ -73,8 +73,17 @@ export function drawDockedBar(
   ctx: CanvasRenderingContext2D,
   hasHelmsman: boolean,
   mousePos: {x: number; y: number},
+  islandName?: string,
 ): void {
   const btnX = LEAVE_BTN_X;
+
+  // "Docked at X" label
+  if (islandName) {
+    ctx.fillStyle = '#aaccee';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Docked at ${islandName}`, btnX - 8, LEAVE_BTN_Y + LEAVE_BTN_H / 2 + 3);
+  }
 
   // "Leave harbor" button
   const inBtn = mousePos.x >= btnX && mousePos.x <= btnX + LEAVE_BTN_W &&

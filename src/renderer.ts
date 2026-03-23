@@ -224,7 +224,7 @@ export class Renderer {
 
     // "Leave harbor" button when docked
     if (world.docking.phase === 'docked') {
-      drawDockedBar(ctx, hasHelmsman, mousePos);
+      drawDockedBar(ctx, hasHelmsman, mousePos, world.docking.island?.name);
     }
 
     // Mutiny ultimatum warning banner
