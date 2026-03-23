@@ -152,9 +152,6 @@ A `NOTICE_BOARD` tile in the town square. Right-click with crew selected → "Re
 ## Merchant Wares
 Right-click merchant → "Browse wares" shows a list of available goods in the activity log. Currently display-only (trading not yet implemented).
 
-## Autonomous Harbor Drinking
-When docked and idle, crew with grog in inventory have 8% chance per idle tick to drink it autonomously. This creates a natural flow: crew goes to tavern → takes grog from barrel → drinks it → gets drunk → might start a brawl.
-
 ## Post-Conversation Gossip
 After talking to an NPC, crew gets:
 - +3 morale boost from socializing

@@ -961,8 +961,8 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
     }
   }
 
-  // When docked, autonomously drink grog from inventory (relaxing at harbor)
-  if (world?.docking?.phase === 'docked' && Math.random() < 0.08) {
+  // Autonomously drink grog from inventory when idle
+  if (Math.random() < 0.004) {
     const grogIdx = member.profile.inventory.findIndex(i => i.name === 'Grog ration');
     if (grogIdx !== -1) {
       const item = member.profile.inventory.splice(grogIdx, 1)[0];
