@@ -9,14 +9,18 @@ import {createGrogRation} from './items';
 // l = Lantern (wharf), . = Water
 //
 // Buildings:
-//   Tavern (cols 1-9,  rows 1-6)  — tables, barrels, stove
-//   Inn    (cols 13-21, rows 1-6)  — beds
-//   Market (cols 1-9,  rows 10-15) — barrels, display tables
-//   Smithy (cols 13-21, rows 10-15) — work tables, forge
+//   Tavern (cols 1-9,  rows 5-10)  — tables, barrels, stove
+//   Inn    (cols 13-21, rows 5-10)  — beds
+//   Market (cols 1-9,  rows 14-19) — barrels, display tables
+//   Smithy (cols 13-21, rows 14-19) — work tables, forge
 //
-// Paths connect building doors to a main east-west road (row 8, row 17)
+// Paths connect building doors to a main east-west road (row 12)
 // which leads to the wharf and gangplank.
 const HARBOR_LAYOUT = `\
+LLLLLLLLLLLLLLLLLLLLLLLWWWWWWWWWWWWWWWW..
+LLLLLLLLLLLLLLLLLLLLLLLWWWWWWWWWWWWWWWW..
+LLLLLLLLLLLLLLLLLLLLLLLWWWWWWWWWWWWWWWW..
+LLLLLLLLLLLLLLLLLLLLLLLWWWWWWWWWWWWWWWW..
 LLLLLLLLLLLLLLLLLLLLLLLWWWWWWWWWWWWWWWW..
 L#########LLL#########LWWWWWWWWWWWWWWWW..
 L#P_TT_R_#LLL#P_B__B_#LWWWWWWWWWWWWWWWW..
@@ -42,10 +46,6 @@ LLLLLLLLLLLLLLLLLLLLLLLWWWWW.............
 LLLLLLLLLLLLLLLLLLLLLLL..................
 LLLLLLLLLLLLLLLLLLLLLLL..................
 LLLLLLLLLLLLLLLLLLLLLLL..................
-.........................................
-.........................................
-.........................................
-.........................................
 .........................................
 .........................................
 .........................................
@@ -406,14 +406,14 @@ export interface HarborNPCDef {
 
 const HARBOR_NPCS: HarborNPCDef[] = [
   // Shopkeepers (confined to their buildings)
-  { name: 'Greg',    role: 'bartender',  color: '#cc6633', tileX: 5,  tileY: 4, sex: 'M' },
-  { name: 'Betty',   role: 'innkeeper',  color: '#9966cc', tileX: 17, tileY: 4, sex: 'F' },
-  { name: 'Walter',  role: 'merchant',   color: '#339966', tileX: 5,  tileY: 12, sex: 'M' },
-  { name: 'Ida',     role: 'blacksmith', color: '#cc3333', tileX: 17, tileY: 13, sex: 'F' },
+  { name: 'Greg',    role: 'bartender',  color: '#cc6633', tileX: 5,  tileY: 8, sex: 'M' },
+  { name: 'Betty',   role: 'innkeeper',  color: '#9966cc', tileX: 17, tileY: 8, sex: 'F' },
+  { name: 'Walter',  role: 'merchant',   color: '#339966', tileX: 5,  tileY: 16, sex: 'M' },
+  { name: 'Ida',     role: 'blacksmith', color: '#cc3333', tileX: 17, tileY: 17, sex: 'F' },
   // Townsfolk (wander the harbor freely)
-  { name: 'Old Tom',   role: 'townsfolk', color: '#8b7355', tileX: 8,  tileY: 8, sex: 'M' },
-  { name: 'Maggie',    role: 'townsfolk', color: '#cc9966', tileX: 14, tileY: 8, sex: 'F' },
-  { name: 'Little Jim', role: 'townsfolk', color: '#6699cc', tileX: 11, tileY: 17, sex: 'M' },
+  { name: 'Old Tom',   role: 'townsfolk', color: '#8b7355', tileX: 8,  tileY: 12, sex: 'M' },
+  { name: 'Maggie',    role: 'townsfolk', color: '#cc9966', tileX: 14, tileY: 12, sex: 'F' },
+  { name: 'Little Jim', role: 'townsfolk', color: '#6699cc', tileX: 11, tileY: 21, sex: 'M' },
 ];
 
 function getNextActorId(world: World): number {
@@ -503,7 +503,7 @@ function createHarborCat(id: number): Actor {
     conditions: new Set(),
     skills: {},
     pixelX: 11 * TILE_SIZE + TILE_SIZE / 2,
-    pixelY: 8 * TILE_SIZE + TILE_SIZE / 2,
+    pixelY: 12 * TILE_SIZE + TILE_SIZE / 2,
     facing: 'south',
     deck: 1,
     state: CrewState.IDLE,
@@ -529,7 +529,7 @@ function createHarborCat(id: number): Actor {
     commandQueue: [],
     shantyInitiatorId: null,
   };
-  actor.statuses.set('npc', { role: 'cat', homeX: 11, homeY: 8 });
+  actor.statuses.set('npc', { role: 'cat', homeX: 11, homeY: 12 });
   return actor;
 }
 
