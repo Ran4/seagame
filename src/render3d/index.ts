@@ -1,0 +1,13 @@
+export { createSceneContext, resizeSceneContext } from './scene-setup';
+export type { SceneContext } from './scene-setup';
+export { createWater } from './water';
+export type { WaterPlane } from './water';
+export { buildShip, DECK_HEIGHT, GRID_OFFSET_X, GRID_OFFSET_Z } from './ship-builder';
+export type { ShipScene } from './ship-builder';
+export { createTileMesh } from './tile-meshes';
+export { MAT, GEOM, getActorMaterial } from './materials';
+export { createActorRenderer } from './actor-renderer';
+export type { ActorRenderer } from './actor-renderer';
+export { createLightingSystem } from './lighting';
+export type { LightingSystem } from './lighting';
+export { raycastWorld } from './raycaster';

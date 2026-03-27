@@ -10,6 +10,8 @@ import { getAutocomplete, submitCommandInput } from './command-input';
 import { readNoticeBoard } from './notices';
 import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END, DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from './harbor';
 import { isDockButtonClicked, isLeaveHarborClicked } from './render/docking';
+import { handleClick3D, resolveRightClick3D } from './input3d';
+import type { Renderer3D } from './renderer3d';
 import type { Actor, Sex } from './types';
 
 const RECRUIT_NAMES_M = ['Hank', 'Barney', 'Sven', 'Diego', 'Rufus', 'Ollie', 'Claude', 'Finn'];
@@ -625,36 +627,19 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   if (input.mouseClick) {
     audio.startMusicOnInteraction();
 
-    // Check corpses first (before handleClick, since corpses sit on walkable tiles)
-    const clickWorldX = input.mouseClick.x + world.camera.x;
-    const clickWorldY = input.mouseClick.y + world.camera.y;
-    let clickedCorpse: typeof world.corpses[0] | null = null;
-    for (const corpse of world.corpses) {
-      if (corpse.deck !== world.activeDeck) continue;
-      const cdx = clickWorldX - corpse.pixelX;
-      const cdy = clickWorldY - corpse.pixelY;
-      if (cdx * cdx + cdy * cdy < 14 * 14) {
-        clickedCorpse = corpse;
-        break;
-      }
-    }
-
-    const result = handleClick(
-      input.mouseClick,
-      world.camera,
-      world.actors,
-      world.activeDeck,
-      world.decks[world.activeDeck],
-    );
+    // Use 3D raycasting for world click detection
+    const renderer3d = (window as any).__renderer3d as Renderer3D | undefined;
+    const result = renderer3d
+      ? handleClick3D(input.mouseClick, renderer3d, world.activeDeck)
+      : handleClick(input.mouseClick, world.camera, world.actors, world.activeDeck, world.decks[world.activeDeck]);
 
     if (result && result.type === 'selectCrew') {
-      // Crew takes priority over corpse
       world.selectedActorId = result.actorId;
       world.selectedCorpseId = null;
       world.selectedObject = null;
       audio.play('click', world.activeDeck);
-    } else if (clickedCorpse) {
-      world.selectedCorpseId = clickedCorpse.actorId;
+    } else if (result && (result as any).type === 'selectCorpse') {
+      world.selectedCorpseId = (result as any).corpseActorId;
       world.selectedActorId = null;
       world.selectedObject = null;
       world.contextMenu = null;
@@ -710,12 +695,43 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   // Right-click → open context menu
   if (input.rightClick) {
     audio.startMusicOnInteraction();
-    const result = buildContextMenu(world, input.rightClick, hoveredItem);
-    if (result !== undefined) {
-      world.contextMenu = result;
-    }
-    if (result) {
-      audio.play('click', world.activeDeck);
+    // In 3D mode, resolve the right-click to world coordinates via raycasting,
+    // then build context menu with those resolved coordinates
+    const renderer3d = (window as any).__renderer3d as Renderer3D | undefined;
+    if (renderer3d) {
+      const resolved = resolveRightClick3D(input.rightClick, renderer3d, world.activeDeck);
+      if (resolved) {
+        // Build context menu using resolved tile coordinates
+        // We fake a 2D click that maps to the resolved tile position
+        const fakeClick = {
+          x: resolved.tileX * TILE_SIZE + TILE_SIZE / 2 - world.camera.x,
+          y: resolved.tileY * TILE_SIZE + TILE_SIZE / 2 - world.camera.y,
+        };
+        // If we hit an actor, position the fake click on the actor for crew hit detection
+        if (resolved.clickedActorId !== null) {
+          const actor = world.actors.find(a => a.id === resolved.clickedActorId);
+          if (actor) {
+            fakeClick.x = actor.pixelX - world.camera.x;
+            fakeClick.y = actor.pixelY - world.camera.y;
+          }
+        }
+        const menuResult = buildContextMenu(world, fakeClick, hoveredItem);
+        if (menuResult !== undefined) {
+          // Override screen position with actual click position for menu rendering
+          if (menuResult) {
+            menuResult.screenX = input.rightClick.x;
+            menuResult.screenY = input.rightClick.y;
+          }
+          world.contextMenu = menuResult;
+        }
+        if (menuResult) audio.play('click', world.activeDeck);
+      } else {
+        world.contextMenu = null;
+      }
+    } else {
+      const menuResult = buildContextMenu(world, input.rightClick, hoveredItem);
+      if (menuResult !== undefined) world.contextMenu = menuResult;
+      if (menuResult) audio.play('click', world.activeDeck);
     }
     input.rightClick = null;
   }

@@ -1,5 +1,5 @@
 import { createWorld, update } from './game';
-import { Renderer } from './renderer';
+import { Renderer3D } from './renderer3d';
 import { createInputHandler } from './input';
 import { AudioManager } from './audio';
 import { loadSprites } from './sprites';
@@ -8,8 +8,8 @@ import { loadConfig, CONFIG } from './config';
 import { getNearbyHarborIsland } from './worldmap';
 import { createDockingState, completeDocking } from './harbor';
 
-const canvas = document.getElementById('game') as HTMLCanvasElement;
-if (!canvas) throw new Error('Canvas element not found');
+const container = document.getElementById('game-container') as HTMLDivElement;
+if (!container) throw new Error('Game container not found');
 
 await loadConfig();
 const world = createWorld();
@@ -43,8 +43,13 @@ setInterval(() => {
     }).catch(() => {}); // silent on failure
   } catch {}
 }, 1000);
-const renderer = new Renderer(canvas);
-const input = createInputHandler(canvas);
+
+const renderer = new Renderer3D(container);
+// Expose renderer for 3D raycasting from game.ts
+(window as any).__renderer3d = renderer;
+
+// Input handler binds to the 3D canvas
+const input = createInputHandler(renderer.canvasElement);
 const audio = new AudioManager();
 
 loadSprites().then(sprites => {

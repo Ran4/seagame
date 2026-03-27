@@ -47,46 +47,59 @@ export function createInputHandler(canvas: HTMLCanvasElement): InputState {
     state.keysDown.delete(e.key);
   });
 
-  canvas.addEventListener('click', (e) => {
+  // In 3D mode, map screen coordinates to the overlay canvas dimensions (960x540)
+  // so that 2D UI hit testing works correctly
+  function screenToOverlay(e: MouseEvent): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    state.mouseClick = {
+    // Map to 960x540 overlay space for UI consistency
+    const scaleX = CANVAS_WIDTH / rect.width;
+    const scaleY = CANVAS_HEIGHT / rect.height;
+    return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
     };
+  }
+
+  canvas.addEventListener('click', (e) => {
+    state.mouseClick = screenToOverlay(e);
   });
 
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    state.rightClick = {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
+    state.rightClick = screenToOverlay(e);
   });
 
   canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    state.scrollY += Math.sign(e.deltaY) * TILE_SIZE * 4;
+    // In 3D mode, let OrbitControls handle zoom natively
+    const is3D = !!(window as any).__renderer3d;
+    if (!is3D) {
+      e.preventDefault();
+      state.scrollY += Math.sign(e.deltaY) * TILE_SIZE * 4;
+    }
   }, {passive: false});
 
   canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    state.mousePos = {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
+    state.mousePos = screenToOverlay(e);
   });
 
   return state;
 }
 
 export function updateCamera(camera: Camera, input: InputState, dt: number, shipWidth: number, shipHeight: number, isDocked = false): void {
+  // In 3D mode, WASD pans the OrbitControls target; scroll is handled by OrbitControls natively
+  const renderer3d = (window as any).__renderer3d;
+  if (renderer3d) {
+    const panSpeed = 6 * dt; // world units per second
+    const controls = renderer3d.controls;
+    if (input.keysDown.has('ArrowUp') || input.keysDown.has('w')) controls.target.z -= panSpeed;
+    if (input.keysDown.has('ArrowDown') || input.keysDown.has('s')) controls.target.z += panSpeed;
+    if (input.keysDown.has('ArrowLeft') || input.keysDown.has('a')) controls.target.x -= panSpeed;
+    if (input.keysDown.has('ArrowRight') || input.keysDown.has('d')) controls.target.x += panSpeed;
+    // Consume scroll (OrbitControls handles zoom via its own wheel listener)
+    input.scrollY = 0;
+    return;
+  }
+
   const scrollSpeed = 200;
 
   if (input.keysDown.has('ArrowUp') || input.keysDown.has('w')) camera.y -= scrollSpeed * dt;
