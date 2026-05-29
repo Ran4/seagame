@@ -42,7 +42,7 @@ export interface StateSnapshot {
   contractOffers: { id: number; kind: string; description: string; reward: number }[];
   floodLevel: number;
   gameOverReason: string | null;
-  enemyShip: { name: string; hp: number; maxHp: number; crewCount: number; distance: number; hostile: boolean } | null;
+  enemyShip: { name: string; hp: number; maxHp: number; crewCount: number; x: number; y: number; distance: number; hostile: boolean } | null;
   weather: { state: string; timer: number; intensity: number; lightningFlash: number };
   monster: { phase: string; timer: number; tentaclesSevered: number } | null;
   tentacles: { id: number; deck: number; x: number; y: number; hp: number; maxHp: number; grabbedActorId: number | null; grabTimer: number }[];
@@ -131,7 +131,7 @@ export function serializeState(world: World): StateSnapshot {
     floodLevel: Math.round(world.floodLevel * 10) / 10,
     gameOverReason: world.gameOverReason,
     enemyShip: world.enemyShip
-      ? { name: world.enemyShip.name, hp: Math.round(world.enemyShip.hp), maxHp: world.enemyShip.maxHp, crewCount: world.enemyShip.crewCount, distance: Math.round(world.enemyShip.distance * 10) / 10, hostile: world.enemyShip.hostile }
+      ? { name: world.enemyShip.name, hp: Math.round(world.enemyShip.hp), maxHp: world.enemyShip.maxHp, crewCount: world.enemyShip.crewCount, x: Math.round(world.enemyShip.x * 10) / 10, y: Math.round(world.enemyShip.y * 10) / 10, distance: Math.round(world.enemyShip.distance * 10) / 10, hostile: world.enemyShip.hostile }
       : null,
     weather: {
       state: world.weather.state,

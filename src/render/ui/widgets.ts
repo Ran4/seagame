@@ -331,7 +331,7 @@ export function drawCombatHud(rc: RenderContext, enemy: { name: string; hp: numb
   ctx.fillStyle = '#bbaa88';
   ctx.font = '9px monospace';
   ctx.textAlign = 'center';
-  const hint = enemy.distance <= 1.2 ? 'Right-click: Board' : 'Man cannons to fire • sail off to flee';
+  const hint = enemy.distance <= 1.2 ? 'Right-click: Board' : 'Cannons to fire • Map: click ☠ to chase / sail off to flee';
   ctx.fillText(hint, x + w / 2, y + h - 4);
   ctx.textAlign = 'left';
 }

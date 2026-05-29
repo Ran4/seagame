@@ -359,6 +359,7 @@ export interface WorldMap {
   targetHeading: number | null; // navigator's orders (null = no order)
   targetSpeed: 'full' | 'stop';  // navigator's orders
   destinationIsland: Island | null;
+  chaseEnemy: boolean;      // when true, the helm steers straight at the current enemy ship instead of an island
   islands: Island[];
 }
 
@@ -369,7 +370,10 @@ export interface EnemyShip {
   hp: number;
   maxHp: number;
   crewCount: number;
-  distance: number;       // leagues to the player ship (0 = adjacent / boardable)
+  x: number;              // world-map position (leagues), same coordinate space as the player ship
+  y: number;
+  heading: number;        // radians — direction it's moving (toward the player while hunting; frozen on cripple so a wreck coasts)
+  distance: number;       // leagues to the player ship — DERIVED from positions each tick (0 = adjacent / boardable)
   hostile: boolean;
   fireTimer: number;      // seconds until the enemy fires its next volley
 }

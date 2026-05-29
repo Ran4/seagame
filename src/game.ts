@@ -1,6 +1,6 @@
 import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World, SKILL_MASTERY, InputMode, GameSettings } from './types';
 import { createSemen, createGrogRation, createWood, createCannonball, updateSpoilage } from './items';
-import { updateFlooding, hasIntactMast, hasIntactHelm, fireFriendlyVolley, enemyVolley, CANNON_RANGE } from './combat';
+import { updateFlooding, hasIntactMast, hasIntactHelm, fireFriendlyVolley, enemyVolley, CANNON_RANGE, BOARD_RANGE } from './combat';
 import { isInDeepWater } from './worldmap';
 import { updateWeather, WEATHER_CLEAR_DURATION } from './weather';
 import { updateMonster } from './monster';
@@ -9,7 +9,7 @@ import type { EnemyShip } from './types';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
-import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick, getNearbyHarborIsland } from './worldmap';
+import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick, getNearbyHarborIsland, stopSailing } from './worldmap';
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
 import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
@@ -125,11 +125,15 @@ const ENCOUNTER_TICK = 4;             // seconds between encounter rolls while s
 const ENCOUNTER_BASE_CHANCE = 0.012;  // per roll in normal waters
 const ENCOUNTER_DEEP_CHANCE = 0.05;   // per roll in deep water
 const ENCOUNTER_PIRATE_CHANCE = 0.09; // per roll near pirate islands (Tortuga / Skull Rock)
-const ENEMY_APPROACH_SPEED = 0.9;     // leagues/sec the enemy closes when chasing & player slow/stopped
-const ENEMY_CHASE_WHILE_SAILING = 0.25; // leagues/sec the enemy still closes while player is at full sail
-const ENEMY_WRECK_DRIFT = 0.18;       // leagues/sec a crippled (hp 0) wreck drifts away if not boarded
+// Movement is now positional: the enemy has real (x,y) coords and these are its real
+// map speeds (leagues/sec), tuned relative to the player's SHIP_SPEED so that sailing
+// toward it closes the gap, sailing away opens it, and standing still lets it run you down.
+const ENEMY_PURSUIT_SPEED = SHIP_SPEED * 0.8; // slightly slower than the player, so a full-sail flee slowly opens the gap
+const ENEMY_WRECK_DRIFT = SHIP_SPEED * 0.3;   // a crippled (hp 0) wreck only coasts — easily run down to board
+const ENCOUNTER_MIN_RANGE = 7;        // leagues — closest an enemy appears
+const ENCOUNTER_MAX_RANGE = 11;       // leagues — farthest an enemy appears
 const ESCAPE_DISTANCE = 14;           // leagues — beyond this the enemy gives up
-const ESCAPE_CHANCE = 0.06;           // per encounter tick while sailing & out of cannon range
+const ESCAPE_CHANCE = 0.06;           // per encounter tick while fleeing (sailing, not chasing) & out of cannon range
 const ENEMY_FIRE_INTERVAL = 6;        // seconds between enemy volleys
 const CANNON_RELOAD = 5;              // seconds between auto-fired friendly volleys
 const PIRATE_ISLAND_IDS = new Set([0, 3]); // Tortuga, Skull Rock
@@ -166,12 +170,20 @@ function maybeSpawnEnemy(world: World, audio: AudioManager): void {
   const name = (huntTargets.length > 0 && Math.random() < 0.4)
     ? huntTargets[Math.floor(Math.random() * huntTargets.length)]
     : ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
+  // Place the enemy at a real map position: a random bearing, ENCOUNTER_MIN..MAX leagues off.
+  const bearing = Math.random() * Math.PI * 2;
+  const range = ENCOUNTER_MIN_RANGE + Math.random() * (ENCOUNTER_MAX_RANGE - ENCOUNTER_MIN_RANGE);
+  const ex = Math.max(0, Math.min(100, map.shipX + Math.cos(bearing) * range));
+  const ey = Math.max(0, Math.min(80, map.shipY + Math.sin(bearing) * range));
   const enemy: EnemyShip = {
     name,
     hp,
     maxHp: hp,
     crewCount: 2 + Math.floor(Math.random() * 5), // 2..6
-    distance: 8 + Math.random() * 4,              // appears 8..12 leagues off
+    x: ex,
+    y: ey,
+    heading: Math.atan2(map.shipY - ey, map.shipX - ex), // initially bearing down on the player
+    distance: Math.hypot(map.shipX - ex, map.shipY - ey),
     hostile: true,
     fireTimer: ENEMY_FIRE_INTERVAL,
   };
@@ -197,38 +209,45 @@ function updateCombat(world: World, audio: AudioManager, dt: number): void {
 
   const crippled = enemy.hp <= 0;
 
-  // A hostile enemy chases: it closes fast when the player is slow/stopped (standing to
-  // fight), and slowly even while the player is at full sail (the player can outrun it
-  // over time — see the escape roll below).
+  // --- Positional movement ---------------------------------------------------------------
+  // The player ship has already moved this frame (updateSailing ran before us). Now move the
+  // enemy in the SAME real map space, then DERIVE the distance from the two positions. This
+  // is what makes the chase coherent: sail toward the enemy and the gap closes, sail away and
+  // it opens, sit still and the hunter runs you down. No more "moving == fleeing" guesswork.
   if (enemy.hostile && !crippled) {
-    const closeRate = moving ? ENEMY_CHASE_WHILE_SAILING : ENEMY_APPROACH_SPEED;
-    enemy.distance = Math.max(0, enemy.distance - closeRate * dt);
-  }
-
-  // A crippled (hp 0) wreck is dead in the water: it drifts away under its own momentum
-  // unless the player deliberately sails up to board it for loot. This drift runs at ANY
-  // distance (not just beyond cannon range) so a mid-range kill can never freeze in place
-  // and soft-lock the encounter — it will eventually drift off and clear via the escape
-  // path below. The player can still close the gap to board while it lingers.
-  if (crippled) {
+    // A hostile ship hunts the player — it steers straight at us, a touch slower than we sail.
+    enemy.heading = Math.atan2(map.shipY - enemy.y, map.shipX - enemy.x);
+    enemy.x += Math.cos(enemy.heading) * ENEMY_PURSUIT_SPEED * dt;
+    enemy.y += Math.sin(enemy.heading) * ENEMY_PURSUIT_SPEED * dt;
+  } else if (crippled) {
+    // A wreck is dead in the water — it only coasts along its last heading, slow enough to run down.
     enemy.hostile = false;
-    enemy.distance += ENEMY_WRECK_DRIFT * dt;
+    enemy.x += Math.cos(enemy.heading) * ENEMY_WRECK_DRIFT * dt;
+    enemy.y += Math.sin(enemy.heading) * ENEMY_WRECK_DRIFT * dt;
+  }
+  enemy.x = Math.max(0, Math.min(100, enemy.x));
+  enemy.y = Math.max(0, Math.min(80, enemy.y));
+  enemy.distance = Math.hypot(map.shipX - enemy.x, map.shipY - enemy.y);
+
+  // Fleeing: if the player is actively sailing AWAY (not chasing) and out of cannon range,
+  // there's a chance each tick to slip the pursuer in open sea. Chasing never triggers this.
+  if (moving && !map.chaseEnemy && !crippled && enemy.distance > CANNON_RANGE) {
+    if (Math.random() < ESCAPE_CHANCE * dt) {
+      world.activityLog.push({ text: `Lost the ${enemy.name} in our wake — we've escaped!`, time: world.time });
+      world.enemyShip = null;
+      map.chaseEnemy = false;
+      return;
+    }
   }
 
-  // Fleeing: while under full sail and out of cannon range, a chance each encounter tick
-  // to shake the enemy. Distance also slowly grows past the escape threshold over time.
-  if (moving && !crippled && enemy.distance > CANNON_RANGE) {
-    enemy.distance += ENEMY_CHASE_WHILE_SAILING * 1.5 * dt; // net outpace while running
-    if (Math.random() < ESCAPE_CHANCE * dt) enemy.distance = ESCAPE_DISTANCE; // clean getaway
-  }
-
-  // Escaped / wreck drifted off?
+  // Out of contact entirely — drifted or sailed beyond the horizon.
   if (enemy.distance >= ESCAPE_DISTANCE) {
     const text = crippled
       ? `The wreck of the ${enemy.name} drifts away on the current.`
       : `Lost the ${enemy.name} in our wake — we've escaped!`;
     world.activityLog.push({ text, time: world.time });
     world.enemyShip = null;
+    map.chaseEnemy = false;
     return;
   }
 
@@ -562,6 +581,26 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       updateNavigator(world.worldMap);
       world.navTimer = 0;
     }
+    // Combat pursuit overrides island navigation: steer at the enemy's live position. Once
+    // inside engagement range we hold station (stop) so we settle into a broadside duel —
+    // or come alongside a wreck to board — rather than circling a moving point at full sail.
+    if (world.worldMap.chaseEnemy) {
+      const e = world.enemyShip;
+      if (e) {
+        const m = world.worldMap;
+        m.destinationIsland = null;
+        const holdRange = e.hp > 0 ? CANNON_RANGE * 0.7 : BOARD_RANGE;
+        if (e.distance > holdRange) {
+          m.targetHeading = Math.atan2(e.y - m.shipY, e.x - m.shipX);
+          m.targetSpeed = 'full';
+        } else {
+          m.targetSpeed = 'stop';
+        }
+      } else {
+        stopSailing(world.worldMap); // enemy gone — don't keep barreling toward nothing
+      }
+    }
+
     // A destroyed helm/mast disables steering / caps sailing.
     const canSteer = hasIntactHelm(world);
     const canSail = hasIntactMast(world);
@@ -652,7 +691,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     const hasExpertNavigator = world.actors.some(c =>
       c.state === CrewState.NAVIGATING && (c.skills.navigation ?? 0) >= SKILL_MASTERY
     );
-    const result = handleMapOverlayClick(world.worldMap, input.mouseClick.x, input.mouseClick.y, hasExpertNavigator);
+    const result = handleMapOverlayClick(world.worldMap, input.mouseClick.x, input.mouseClick.y, hasExpertNavigator, world.enemyShip);
     if (result === 'close') {
       world.mapOverlayOpen = false;
     } else if (result === 'click') {

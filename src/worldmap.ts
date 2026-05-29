@@ -1,4 +1,4 @@
-import { Island, WorldMap, SECONDS_PER_DAY } from './types';
+import { Island, WorldMap, EnemyShip, SECONDS_PER_DAY } from './types';
 import { CONFIG } from './config';
 export { SECONDS_PER_DAY };
 
@@ -61,6 +61,7 @@ export function createWorldMap(): WorldMap {
     targetHeading: null,
     targetSpeed: 'stop',
     destinationIsland: null,
+    chaseEnemy: false,
     islands: ISLANDS,
   };
 }
@@ -107,12 +108,14 @@ export function updateSailing(map: WorldMap, dt: number): void {
 
 export function stopSailing(map: WorldMap): void {
   map.destinationIsland = null;
+  map.chaseEnemy = false;
   map.targetSpeed = 'stop';
   map.targetHeading = null;
 }
 
 export function setDestination(map: WorldMap, island: Island): void {
   map.destinationIsland = island;
+  map.chaseEnemy = false;
 }
 
 /** Distance (leagues) from the ship to the nearest island. Infinity if no islands. */
@@ -147,7 +150,7 @@ export function getNearbyHarborIsland(map: WorldMap): Island | null {
 const OVL_X = 40, OVL_Y = 40, OVL_W = 880, OVL_H = 460;
 
 /** Handle a click on the map overlay. Returns: 'click' (play sound), 'close' (close overlay), or null (no action). */
-export function handleMapOverlayClick(map: WorldMap, mx: number, my: number, hasExpertNavigator?: boolean): 'click' | 'close' | null {
+export function handleMapOverlayClick(map: WorldMap, mx: number, my: number, hasExpertNavigator?: boolean, enemyShip?: EnemyShip | null): 'click' | 'close' | null {
   // Close button (top-right X)
   const closeX = OVL_X + OVL_W - 28;
   const closeY = OVL_Y + 8;
@@ -157,8 +160,9 @@ export function handleMapOverlayClick(map: WorldMap, mx: number, my: number, has
   }
 
   if (mx >= OVL_X && mx <= OVL_X + OVL_W && my >= OVL_Y && my <= OVL_Y + OVL_H) {
-    // Stop Sailing button (bottom-right of overlay)
-    if (map.destinationIsland) {
+    // Stop Sailing button (bottom-right of overlay) — shown while heading anywhere
+    // (toward an island OR chasing the enemy).
+    if (map.destinationIsland || map.chaseEnemy) {
       const btnW = 100, btnH = 22;
       const btnX = OVL_X + OVL_W - btnW - 10;
       const btnY = OVL_Y + OVL_H - btnH - 8;
@@ -167,9 +171,21 @@ export function handleMapOverlayClick(map: WorldMap, mx: number, my: number, has
         return 'click';
       }
     }
-    // Check if clicked on an island
     const toScreenX = (wx: number) => OVL_X + (wx / 100) * OVL_W;
     const toScreenY = (wy: number) => OVL_Y + 30 + ((wy / 80) * (OVL_H - 50));
+    // Clicking the enemy marker orders an intercept: steer straight at it (overrides any
+    // island destination). This is how you close on a fleeing ship or run down a drifting wreck.
+    if (enemyShip) {
+      const ex = toScreenX(enemyShip.x);
+      const ey = toScreenY(enemyShip.y);
+      const edx = mx - ex, edy = my - ey;
+      if (edx * edx + edy * edy < 16 * 16) {
+        map.destinationIsland = null;
+        map.chaseEnemy = true;
+        return 'click';
+      }
+    }
+    // Check if clicked on an island
     for (const island of map.islands) {
       // Keep the hidden-island gate in sync with render/map.ts: a treasure-marked
       // island is clickable as a destination even if otherwise hidden (FEATURE 8).

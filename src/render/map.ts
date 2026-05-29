@@ -139,16 +139,11 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
   ctx.stroke();
   ctx.restore();
 
-  // Enemy ship marker (red skull) — positioned near the player at its current distance.
-  // The enemy has no fixed world coords; place it offset from the ship by its distance
-  // (in leagues, scaled to the map), clamped inside the overlay.
+  // Enemy ship marker (red skull) — drawn at its real world position, same projection as
+  // islands and the player ship, so "sail toward the skull" actually closes the gap.
   if (enemyShip) {
-    const lgScaleX = ow / 100;       // screen px per league (x)
-    const off = Math.max(6, enemyShip.distance * lgScaleX);
-    let ex = shipSX + off * 0.7;
-    let ey = shipSY - off * 0.5;
-    ex = Math.max(ox + 12, Math.min(ox + ow - 12, ex));
-    ey = Math.max(oy + 36, Math.min(oy + oh - 24, ey));
+    const ex = toScreenX(enemyShip.x);
+    const ey = toScreenY(enemyShip.y);
     // Dashed line ship → enemy
     ctx.strokeStyle = '#cc4444';
     ctx.lineWidth = 1;
@@ -158,6 +153,14 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
     ctx.lineTo(ex, ey);
     ctx.stroke();
     ctx.setLineDash([]);
+    // Chase highlight — a red ring when we're actively running it down.
+    if (worldMap.chaseEnemy) {
+      ctx.strokeStyle = '#ff5555';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 11, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     // Marker
     ctx.fillStyle = '#cc2222';
     ctx.font = 'bold 14px serif';
@@ -246,8 +249,13 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
     }
     ctx.fillStyle = '#aabbcc';
     ctx.fillText(`Sailing to ${worldMap.destinationIsland.name} — ${Math.round(dist)} leagues — ETA: ${etaStr}`, ox + ow / 2, oy + oh - 22);
+  } else if (worldMap.chaseEnemy && enemyShip) {
+    ctx.fillStyle = '#ffbbaa';
+    ctx.fillText(`Chasing the ${enemyShip.name} — ${enemyShip.distance.toFixed(1)} leagues`, ox + ow / 2, oy + oh - 22);
+  }
 
-    // Stop Sailing button
+  // Stop button — shown whenever the ship is under orders to head somewhere.
+  if (worldMap.destinationIsland || worldMap.chaseEnemy) {
     const btnW = 100;
     const btnH = 22;
     const btnX = ox + ow - btnW - 10;
