@@ -1,4 +1,4 @@
-import { Camera, Item } from '../types';
+import { Camera, Item, WeatherState } from '../types';
 import { SpriteSheet } from '../sprites';
 
 export interface RenderContext {
@@ -11,4 +11,5 @@ export interface RenderContext {
   deckIndex: number;
   hoveredItem: { item: Item; x: number; y: number } | null;
   hoveredBarTooltip: string[] | null;
+  weather: WeatherState;            // FEATURE 5 — storm darkening / rain / flash + HUD
 }

@@ -2,7 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   Item, SECONDS_PER_DAY,
   ActivityLogEntry,
-  GameSettings,
+  GameSettings, WeatherState,
 } from '../../types';
 import { RenderContext } from '../context';
 
@@ -280,6 +280,68 @@ export function drawCombatHud(rc: RenderContext, enemy: { name: string; hp: numb
   const hint = enemy.distance <= 1.2 ? 'Right-click: Board' : 'Man cannons to fire • sail off to flee';
   ctx.fillText(hint, x + w / 2, y + h - 4);
   ctx.textAlign = 'left';
+}
+
+// --- FEATURE 5: Storms & Weather ---
+
+const RAIN_DROPS = 220;  // streak count at full intensity
+
+/**
+ * Animated rain overlay — diagonal streaks scaled by storm intensity. Screen-space
+ * (ignores camera) so the rain sheets across the whole view. Cheap pseudo-random
+ * placement seeded per-drop so streaks fall steadily instead of flickering randomly.
+ */
+export function drawRainOverlay(rc: RenderContext, time: number): void {
+  const intensity = rc.weather.intensity;
+  if (rc.weather.state !== 'storm' && intensity <= 0.02) return;
+  const ctx = rc.ctx;
+  const count = Math.floor(RAIN_DROPS * intensity);
+  if (count <= 0) return;
+
+  ctx.save();
+  ctx.strokeStyle = `rgba(180, 200, 230, ${0.25 + 0.25 * intensity})`;
+  ctx.lineWidth = 1;
+  const len = 14 + 8 * intensity;     // streak length
+  const slant = 4;                    // horizontal drift (wind)
+  const fall = (CANVAS_HEIGHT + 40);
+  ctx.beginPath();
+  for (let i = 0; i < count; i++) {
+    // Per-drop deterministic phase so each streak falls smoothly.
+    const seedX = (i * 73) % 100 / 100;
+    const speed = 320 + (i % 5) * 80;
+    const px = (seedX * (CANVAS_WIDTH + 60) - 30 + (time * slant * 10) % (CANVAS_WIDTH + 60));
+    const py = ((i * 137 + time * speed) % fall) - 20;
+    const x = px % CANVAS_WIDTH;
+    ctx.moveTo(x, py);
+    ctx.lineTo(x + slant, py + len);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Small weather indicator in the HUD (top-left, below the gold counter). */
+export function drawWeatherIndicator(rc: RenderContext, weather: WeatherState): void {
+  const ctx = rc.ctx;
+  // Below the gold counter (which sits under the deck selector).
+  const x = 10, y = 14 + 3 * 22 + 6 + 20 + 4;
+  const w = 92, h = 20;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(x, y, w, h);
+  const border = weather.state === 'storm' ? '#4466aa' : weather.state === 'cloudy' ? '#666' : '#665522';
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+  const icon = weather.state === 'storm' ? '⛈' : weather.state === 'cloudy' ? '☁' : '☀';
+  const label = weather.state === 'storm' ? 'Storm' : weather.state === 'cloudy' ? 'Cloudy' : 'Clear';
+  ctx.fillStyle = weather.state === 'storm' ? '#aaccff' : weather.state === 'cloudy' ? '#cccccc' : '#ffe9a8';
+  ctx.font = '13px serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(icon, x + 6, y + h / 2 + 1);
+  ctx.font = '11px monospace';
+  ctx.fillText(label, x + 26, y + h / 2 + 1);
+  ctx.textBaseline = 'alphabetic';
 }
 
 export function drawItemSlot(rc: RenderContext, x: number, y: number, size: number, item: Item | null): void {

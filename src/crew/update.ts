@@ -2,6 +2,8 @@ import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen, createFish, FishKind } from '../items';
 import { repairObject, getObjectHp, getObjectMaxHp } from '../combat';
+import { tryStormReaction } from '../weather';
+import { tryMonsterReaction, animalMonsterFlavor, hitTentacle, tentacleAt } from '../monster';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
 import { updateWalking, orderCrewBesideTile } from './movement';
 import { DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from '../harbor';
@@ -771,6 +773,12 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       member.statuses.delete('bruised');
     }
 
+    // Wet expiry — storm soaking dries off a while after the rain stops.
+    const wetStatus = member.statuses.get('wet') as { until: number } | undefined;
+    if (wetStatus && gameTime >= wetStatus.until) {
+      member.statuses.delete('wet');
+    }
+
     // Sick expiry — pufferfish poisoning clears ~1 in-game day after eating it
     const sickStatus = member.statuses.get('sick') as { since: number } | undefined;
     if (sickStatus && gameTime - sickStatus.since >= SICK_DURATION) {
@@ -827,7 +835,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       const injuryPenalty = member.conditions.has('injured') ? -40 : 0;
       // Harbor morale boost: +20 when docked at harbor
       const harborBonus = (world?.docking?.phase === 'docked') ? 20 : 0;
-      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty + harborBonus));
+      // Kraken Slayer (FEATURE 6): a permanent swagger from having bested the deep's horror.
+      const slayerBonus = member.conditions.has('kraken_slayer') ? 15 : 0;
+      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty + harborBonus + slayerBonus));
       const diff = target - member.profile.morale;
       const step = MORALE_RATE * dt;
       if (Math.abs(diff) < step) {
@@ -883,6 +893,13 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     if (!isNPC) updateBreeding(member, crew, decks, gameTime, activityLog, world);
 
     refreshConditions(member, crew);
+
+    // Storm-tossed: in a storm, crew on an exposed deck lurch about (reuses the drunk
+    // wobble in movement.ts). Derived here because conditions don't see World.
+    if (world && world.weather.state === 'storm' && world.weather.intensity >= 0.4 &&
+        member.deck < decks.length - 1) {
+      member.conditions.add('storm_tossed');
+    }
 
     // Death check — remove actor if health <= 0 (not NPCs)
     if (!isNPC && world && checkDeath(world, member)) continue;
@@ -1410,8 +1427,70 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         }
         break;
       case CrewState.FIGHTING:
-        // Brief melee flavor (boarding duels are resolved abstractly in combat.ts).
+        // Hack a kraken tentacle each tick; if none adjacent, this is just brief melee
+        // flavour (boarding duels are resolved abstractly in combat.ts).
         member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          // Find the tentacle we're attacking: the remembered target tile, else any
+          // tentacle on an adjacent/under tile.
+          let target: { deck: number; x: number; y: number } | null = null;
+          if (world) {
+            const tt = member.copulationTarget;
+            if (tt?.type === 'barrel' && tentacleAt(world, tt.deck, tt.x, tt.y)) {
+              target = { deck: tt.deck, x: tt.x, y: tt.y };
+            } else {
+              const mx = Math.floor(member.pixelX / TILE_SIZE);
+              const my = Math.floor(member.pixelY / TILE_SIZE);
+              const DIRS = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
+              for (const [dx, dy] of DIRS) {
+                if (tentacleAt(world, member.deck, mx + dx, my + dy)) {
+                  target = { deck: member.deck, x: mx + dx, y: my + dy };
+                  break;
+                }
+              }
+            }
+          }
+          if (world && target) {
+            const tentacle = tentacleAt(world, target.deck, target.x, target.y);
+            // Face the tentacle for a bit of flavour.
+            const mx = Math.floor(member.pixelX / TILE_SIZE);
+            const my = Math.floor(member.pixelY / TILE_SIZE);
+            if (target.x < mx) member.facing = 'west';
+            else if (target.x > mx) member.facing = 'east';
+            else if (target.y < my) member.facing = 'north';
+            else member.facing = 'south';
+            if (tentacle) {
+              if (member.actorType === 'human') member.skills.combat = Math.min(255, (member.skills.combat ?? 0) + 0.3);
+              const severed = hitTentacle(world, tentacle, member, audio);
+              if (!severed) {
+                member.stateTimer = 1.2; // keep hacking
+                break;
+              }
+              // Severed — small morale bump for the kill, then back to idle.
+              member.profile.morale = Math.min(255, member.profile.morale + 8);
+            }
+          }
+          member.copulationTarget = null;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.FLEEING:
+        // Defensive: FLEEING is normally a WALKING targetState that resolves to PRAYING
+        // on arrival. If we ever sit in it directly, just drop to idle.
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.PRAYING:
+        // Cower and pray through the storm. Tick the prayer bubble + occasional plea.
+        member.stateTimer -= dt;
+        if (member.speechBubbleTimer > 0) {
+          member.speechBubbleTimer -= dt;
+          if (member.speechBubbleTimer <= 0) { member.speechBubbleText = null; member.speechBubbleTimer = 0; }
+        }
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
@@ -1614,6 +1693,66 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
         if (orderCrewBesideTile(member, breach, decks, CrewState.REPAIRING, world.gangplanks)) return;
       }
     }
+  }
+
+  // KRAKEN: an attack is underway. Grabbed crew struggle; brave crew charge the nearest
+  // tentacle to Fight it; cowardly crew flee below. Uses the shared helper from monster.ts.
+  if (world && world.monster?.phase === 'attacking' && !isSick) {
+    const fightNearest = (m: Actor): boolean => {
+      // Pick the nearest tentacle not already being hacked by a clutch of crew.
+      let best: { deck: number; x: number; y: number } | null = null;
+      let bestScore = Infinity;
+      const mx = Math.floor(m.pixelX / TILE_SIZE);
+      const my = Math.floor(m.pixelY / TILE_SIZE);
+      for (const t of world.tentacles) {
+        // Prefer the tentacle gripping a grabbed mate (rescue!), else the closest.
+        const rescue = t.grabbedActorId !== null ? -500 : 0;
+        const deckPenalty = t.deck === m.deck ? 0 : 1000;
+        const score = rescue + deckPenalty + Math.abs(t.x - mx) + Math.abs(t.y - my);
+        if (score < bestScore) { bestScore = score; best = { deck: t.deck, x: t.x, y: t.y }; }
+      }
+      if (!best) return false;
+      const ok = orderCrewBesideTile(m, best, decks, CrewState.FIGHTING, world.gangplanks);
+      if (ok) m.copulationTarget = { type: 'barrel', x: best.x, y: best.y, deck: best.deck };
+      return ok;
+    };
+    const fleeBelow = (m: Actor, deckIdx: number): boolean => {
+      const deck = decks[deckIdx];
+      if (!deck) return false;
+      const targets = getWalkableTiles(deck, deckIdx).filter(t =>
+        deck.tiles[t.y][t.x] === TileType.FLOOR || deck.tiles[t.y][t.x] === TileType.BED);
+      const target = pickRandom(targets.length > 0 ? targets : getWalkableTiles(deck, deckIdx));
+      if (!target) return false;
+      const path = findPath(decks, currentTile(m), target, world?.gangplanks);
+      if (!path || path.length === 0) return false;
+      m.path = path;
+      m.state = CrewState.WALKING;
+      m.targetState = CrewState.FLEEING;
+      return true;
+    };
+    if (tryMonsterReaction(member, world, fightNearest, fleeBelow)) return;
+  }
+
+  // Storm panic: low-morale crew may flee below deck or pray (high-morale stay at posts).
+  // Uses the shared helper from weather.ts; the order-below callback pathfinds to the
+  // lowest (sheltered) deck and starts a FLEEING walk.
+  if (world && !isSick) {
+    const orderBelow = (m: Actor, deckIdx: number): boolean => {
+      const deck = decks[deckIdx];
+      if (!deck) return false;
+      // Pick a sheltered walkable tile on the lowest deck, away from the open sky.
+      const targets = getWalkableTiles(deck, deckIdx).filter(t =>
+        deck.tiles[t.y][t.x] === TileType.FLOOR || deck.tiles[t.y][t.x] === TileType.BED);
+      const target = pickRandom(targets.length > 0 ? targets : getWalkableTiles(deck, deckIdx));
+      if (!target) return false;
+      const path = findPath(decks, currentTile(m), target, world?.gangplanks);
+      if (!path || path.length === 0) return false;
+      m.path = path;
+      m.state = CrewState.WALKING;
+      m.targetState = CrewState.FLEEING;
+      return true;
+    };
+    if (tryStormReaction(member, world, orderBelow)) return;
   }
 
   // Injured? Prefer bed rest to recover (heals faster while sleeping).
@@ -1877,6 +2016,9 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
 
 function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: Actor[], brightness: number, gameTime: number = 0, activityLog: ActivityLogEntry[] = [], world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
+
+  // Kraken attack: dogs bark, parrots squawk (cosmetic). Doesn't stop normal behaviour.
+  if (world) animalMonsterFlavor(member, world);
 
   // Hungry? Go eat at stove
   if (member.conditions.has('hungry') || member.conditions.has('starving')) {

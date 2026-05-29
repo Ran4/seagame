@@ -3,6 +3,12 @@ import { stopConversation } from '../conversation';
 import { orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './movement';
 import { AudioManager } from '../audio';
 import { fireFriendlyVolley, resolveBoarding, BOARD_RANGE, CANNON_RANGE } from '../combat';
+import { refusesOrderInStorm } from '../weather';
+import { tentacleAt } from '../monster';
+
+// Topside work that fearful crew may refuse to do in a raging storm (it means going
+// up into the weather). Below-deck / personal actions are not gated.
+const STORM_RISKY_ORDERS = new Set(['Steer', 'Lookout', 'ManCannon', 'Navigate', 'Fish']);
 
 export const DRINK_DURATION = 5;
 
@@ -39,9 +45,23 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
   const cmd = member.commandQueue[0];
   const name = member.profile.name;
 
+  // Seized by a kraken tentacle — can't obey anything but Stop until cut free.
+  if (member.conditions.has('grabbed') && cmd.name !== 'Stop') {
+    activityLog.push({ text: `${name} can't — held fast by a tentacle!`, time: gameTime });
+    return true; // keep the order queued; they'll act once freed
+  }
+
   // Order refusal: low morale crew may refuse commands
   if (member.profile.morale < 64 && cmd.name !== 'Stop' && Math.random() < 0.5) {
     activityLog.push({ text: `${name} refuses — low morale`, time: gameTime });
+    member.commandQueue.shift();
+    member.commandQueue.length = 0;
+    return true;
+  }
+
+  // Storm refusal: a frightened crew won't man the rigging in a raging storm.
+  if (world && STORM_RISKY_ORDERS.has(cmd.name) && refusesOrderInStorm(member, world)) {
+    activityLog.push({ text: `${name} refuses to brave the storm`, time: gameTime });
     member.commandQueue.shift();
     member.commandQueue.length = 0;
     return true;
@@ -134,6 +154,18 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
         fail('can\'t reach the damage'); return true;
       }
       log('going to repair');
+      return true;
+    }
+    case 'Fight': {
+      // Hack a kraken tentacle: walk beside it, then FIGHTING strikes it each tick.
+      if (!world || !tentacleAt(world, cmd.deck, cmd.x, cmd.y)) { fail('no tentacle there'); return true; }
+      const target = { x: cmd.x, y: cmd.y, deck: cmd.deck };
+      if (!orderCrewBesideTile(member, target, decks, CrewState.FIGHTING, world.gangplanks)) {
+        fail('can\'t reach the tentacle'); return true;
+      }
+      // Remember which tentacle tile we're attacking (reuse copulationTarget as a tile ref).
+      member.copulationTarget = { type: 'barrel', x: cmd.x, y: cmd.y, deck: cmd.deck };
+      log('charging a tentacle');
       return true;
     }
     // FireCannon / BoardEnemy are immediate-effect orders: issueCommand() forces the
@@ -350,6 +382,16 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
     case 'SetHealth': {
       member.health = Math.max(0, Math.min(member.maxHealth, cmd.amount));
       log(`health set to ${member.health}`);
+      return true;
+    }
+    case 'Pray': {
+      // Drop to knees and pray in place (also used autonomously during storms).
+      member.state = CrewState.PRAYING;
+      member.stateTimer = 8 + Math.random() * 6;
+      member.path = [];
+      member.thoughtBubble = 'prayer';
+      member.thoughtBubbleTimer = member.stateTimer;
+      log('began to pray');
       return true;
     }
     case 'Stop': {

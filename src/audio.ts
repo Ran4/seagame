@@ -43,6 +43,13 @@ export class AudioManager {
     this.preload('cannon_fire', '/audio/elevenlabs-generated/cannon_fire.mp3', 'world', 0.8);
     this.preload('ship_hit', '/audio/elevenlabs-generated/ship_hit.mp3', 'world', 0.7);
     this.preload('repair', '/audio/elevenlabs-generated/repair.mp3', 'world', 0.5);
+    // Storm SFX (FEATURE 5). Files may not exist yet — play() tolerates missing sounds.
+    this.preload('rain', '/audio/elevenlabs-generated/rain.mp3', 'world', 0.4);
+    this.preload('thunder', '/audio/elevenlabs-generated/thunder.mp3', 'world', 0.8);
+    this.preload('lightning', '/audio/elevenlabs-generated/lightning.mp3', 'world', 0.9);
+    // Sea-monster SFX (FEATURE 6). Files may not exist yet — play() tolerates missing sounds.
+    this.preload('kraken_warning', '/audio/elevenlabs-generated/kraken_warning.mp3', 'world', 0.8);
+    this.preload('kraken_attack', '/audio/elevenlabs-generated/kraken_attack.mp3', 'world', 0.9);
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;

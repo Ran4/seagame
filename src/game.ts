@@ -2,6 +2,8 @@ import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewS
 import { createSemen, createGrogRation, createWood, createCannonball, updateSpoilage } from './items';
 import { updateFlooding, hasIntactMast, hasIntactHelm, fireFriendlyVolley, enemyVolley, CANNON_RANGE } from './combat';
 import { isInDeepWater } from './worldmap';
+import { updateWeather, WEATHER_CLEAR_DURATION } from './weather';
+import { updateMonster } from './monster';
 import { CONFIG } from './config';
 import type { EnemyShip } from './types';
 import { createShip } from './ship';
@@ -363,6 +365,9 @@ export function createWorld(): World {
     gameOverReason: null,
     enemyShip: null,
     gold: 100,
+    weather: { state: 'clear', timer: WEATHER_CLEAR_DURATION, intensity: 0, lightningFlash: 0 },
+    monster: null,
+    tentacles: [],
   };
 }
 
@@ -526,6 +531,12 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
 
     // Ship-to-ship combat only runs at sea (not docked).
     updateCombat(world, audio, dt);
+
+    // Weather state machine + storm effects (FEATURE 5) — only at sea.
+    updateWeather(world, dt, audio);
+
+    // Sea-monster / kraken encounters (FEATURE 6) — only at sea, deep water.
+    updateMonster(world, dt, audio);
   }
 
   // Hull flooding always ticks: at sea breaches let water rise; in port the bilge

@@ -76,6 +76,35 @@ export function createMedicine(gameTime: number = 0): Item {
   };
 }
 
+// --- FEATURE 6: Sea Monster / Kraken loot ---
+
+/** Kraken ink — a prized trade good (sells high at harbour). Stackable, never spoils. */
+export function createKrakenInk(gameTime: number = 0): Item {
+  return {
+    name: 'Kraken ink', createdAt: gameTime, weight: 600,
+    description: 'A jar of inky black fluid wrung from a slain kraken. Worth a fortune to scribes and dyers.',
+    stackable: true, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** Kraken tooth — a legendary weapon trophy. Non-stackable, never spoils. */
+export function createKrakenTooth(gameTime: number = 0): Item {
+  return {
+    name: 'Kraken tooth', createdAt: gameTime, weight: 1100,
+    description: 'A curved, serrated tooth as long as a forearm. Lashed to a haft it makes a fearsome blade.',
+    stackable: false, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** Tentacle meat — a hearty (if rubbery) meal. Spoils fast like fish. */
+export function createTentacleMeat(gameTime: number = 0): Item {
+  return {
+    name: 'Tentacle meat', createdAt: gameTime, weight: 1800,
+    description: 'A thick slab of kraken tentacle. Chewy, briny, and astonishingly filling.',
+    stackable: false, quantity: 1, spoilAfter: 600, hungerRestore: 60,
+  };
+}
+
 export function createSemen(gameTime: number): Item {
   return {
     name: 'Semen', createdAt: gameTime, weight: 5,

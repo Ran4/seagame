@@ -4,6 +4,7 @@ import {
   Item, World, Command, Deck, computeMenuWidth,
 } from './types';
 import { getObjectHp, getObjectMaxHp, CANNON_RANGE, BOARD_RANGE } from './combat';
+import { tentacleAt } from './monster';
 
 /** Build a context menu from a right-click. Returns ContextMenu, null (close menu), or undefined (no change). */
 export function buildContextMenu(
@@ -255,6 +256,25 @@ export function buildContextMenu(
       if (world.enemyShip && world.enemyShip.distance <= BOARD_RANGE) {
         items.push({ label: `Board the ${world.enemyShip.name}`, targetState: CrewState.IDLE, action: 'board_enemy' });
       }
+      // Fight the tentacle — when a kraken tentacle is on, or adjacent to, the clicked tile.
+      {
+        let tentacleTile: { x: number; y: number } | null = null;
+        const DIRS = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
+        for (const [dx, dy] of DIRS) {
+          if (tentacleAt(world, world.activeDeck, tileX + dx, tileY + dy)) {
+            tentacleTile = { x: tileX + dx, y: tileY + dy };
+            break;
+          }
+        }
+        if (tentacleTile) {
+          items.push({
+            label: 'Fight the tentacle',
+            targetState: CrewState.FIGHTING,
+            action: 'fight_tentacle',
+            itemData: { barrelKey: `${world.activeDeck}-${tentacleTile.x}-${tentacleTile.y}`, itemName: '' },
+          });
+        }
+      }
       // Repair — BREACH tiles, or damaged HULL / objects (current HP < max).
       const isBreach = tileType === TileType.BREACH;
       const isDamaged = getObjectMaxHp(tileType) > 0 &&
@@ -456,6 +476,11 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
   }
   if (menuItem.action === 'board_enemy') {
     return { name: 'BoardEnemy' };
+  }
+  // Fight a kraken tentacle — coords carried in itemData.barrelKey ("deck-x-y").
+  if (menuItem.action === 'fight_tentacle' && menuItem.itemData) {
+    const [d, tx, ty] = menuItem.itemData.barrelKey.split('-').map(Number);
+    return { name: 'Fight', deck: d, x: tx, y: ty };
   }
 
   // Crew-crew interactions (Kiss, Copulate, Converse, Pet)

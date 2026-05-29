@@ -104,6 +104,10 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
     ctx.fillText('\u2692', sx + 14, sy - 12); // hammer & pick
   } else if (member.state === CrewState.FIGHTING) {
     ctx.fillText('\u2694', sx + 14, sy - 12); // crossed swords
+  } else if (member.state === CrewState.FLEEING) {
+    ctx.fillText('\u203c', sx + 14, sy - 12); // double exclamation (panic)
+  } else if (member.state === CrewState.PRAYING) {
+    ctx.fillText('\u271d', sx + 14, sy - 12); // latin cross (prayer)
   }
 }
 
@@ -133,10 +137,12 @@ export function drawActorOverlays(rc: RenderContext, member: Actor, selected: bo
       ctx.fill();
       const bubbleColor = member.thoughtBubble === 'heart' ? '#e74c3c'
         : member.thoughtBubble === 'music_note' ? '#3498db'
-        : member.thoughtBubble === 'mischief' ? '#d4a017' : '#666666';
+        : member.thoughtBubble === 'mischief' ? '#d4a017'
+        : member.thoughtBubble === 'prayer' ? '#d9c98a' : '#666666';
       const bubbleChar = member.thoughtBubble === 'heart' ? '\u2665'
         : member.thoughtBubble === 'music_note' ? '\u266A'
-        : member.thoughtBubble === 'mischief' ? '\u263A' : '\uD83D\uDC94'; // \u263A cheeky grin
+        : member.thoughtBubble === 'mischief' ? '\u263A'
+        : member.thoughtBubble === 'prayer' ? '\u271D' : '\uD83D\uDC94'; // \u271D latin cross (prayer), \u263A cheeky grin
       ctx.fillStyle = bubbleColor;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';

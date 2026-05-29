@@ -1,8 +1,9 @@
 export type { RenderContext } from './context';
 export { drawWater, drawDeck } from './tiles';
 export { drawActor, drawActorOverlays, drawCorpse } from './actors';
-export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel, drawGoldCounter, drawCombatHud } from './ui';
+export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel, drawGoldCounter, drawCombatHud, drawRainOverlay, drawWeatherIndicator } from './ui';
 export { drawContextMenu } from './menu';
+export { drawTentacles, drawMonsterHud } from './monster';
 export { drawMapOverlay } from './map';
 export { drawDockButton, isDockButtonClicked, drawDockedBar, isLeaveHarborClicked } from './docking';
 

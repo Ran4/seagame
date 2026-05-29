@@ -17,6 +17,7 @@ export const COMMANDS: Record<string, string[]> = {
   Repair:            ['deck', 'x', 'y'],
   FireCannon:        [],
   BoardEnemy:        [],
+  Pray:              [],
   GoTo:              ['deck?', 'x', 'y'],
   GoToDeck:          ['deck'],
   CopulateBarrel:    ['deck', 'x', 'y'],

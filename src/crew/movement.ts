@@ -101,7 +101,15 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
     } else if (member.state === CrewState.REPAIRING) {
       member.stateTimer = REPAIR_DURATION; // one repair tick; update.ts loops while damage remains
     } else if (member.state === CrewState.FIGHTING) {
-      member.stateTimer = 2; // brief melee flavor
+      member.stateTimer = 1.2; // first hack on arrival (tentacle) / brief melee flavor
+    } else if (member.state === CrewState.FLEEING) {
+      // Reached the safety of the lower deck — cower/pray a moment, then idle.
+      member.state = CrewState.PRAYING;
+      member.stateTimer = 5 + Math.random() * 6;
+      member.thoughtBubble = 'prayer';
+      member.thoughtBubbleTimer = member.stateTimer;
+    } else if (member.state === CrewState.PRAYING) {
+      member.stateTimer = 6 + Math.random() * 6;
     } else if (member.state === CrewState.PETTING) {
       member.stateTimer = PET_DURATION;
     } else if (member.state === CrewState.CARRYING_CORPSE) {
@@ -140,9 +148,11 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
     member.pixelY = targetY;
     member.path.shift();
 
-    // Wobbly movement: drunk crew may deviate perpendicular
+    // Wobbly movement: drunk crew may deviate perpendicular. Storm-tossed crew
+    // (on an exposed deck during a storm) stumble too — reuses the same mechanism.
     if (member.path.length > 0) {
-      const wobbleChance = member.conditions.has('drunk') ? 0.25 : member.conditions.has('tipsy') ? 0.08 : 0;
+      let wobbleChance = member.conditions.has('drunk') ? 0.25 : member.conditions.has('tipsy') ? 0.08 : 0;
+      if (member.conditions.has('storm_tossed')) wobbleChance = Math.max(wobbleChance, 0.18);
       if (wobbleChance > 0 && Math.random() < wobbleChance) {
         const next = member.path[0];
         const ndx = next.x - target.x;
@@ -159,7 +169,9 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
       }
     }
   } else {
-    const speedMult = member.conditions.has('injured') ? 0.75 : 1.0;
+    // Injured crew limp; soaked ('wet', from a storm) crew slip and slosh about.
+    let speedMult = member.conditions.has('injured') ? 0.75 : 1.0;
+    if (member.conditions.has('wet')) speedMult *= 0.8;
     const move = CREW_SPEED * speedMult * dt;
     member.pixelX += (dx / dist) * Math.min(move, dist);
     member.pixelY += (dy / dist) * Math.min(move, dist);

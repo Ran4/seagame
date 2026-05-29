@@ -12,16 +12,18 @@ import {
   drawContextMenu, drawMapOverlay,
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
   drawDockButton, drawDockedBar, drawGoldCounter, drawCombatHud,
+  drawRainOverlay, drawWeatherIndicator,
+  drawTentacles, drawMonsterHud,
 } from './render';
 import { drawCommandInput } from './command-input';
 
 const WATER_COLOR_1 = '#1a5276';
 
 /** Standalone flooding bar (top-center) shown when the ship is taking on water with no enemy. */
-function drawFloodIndicator(ctx: CanvasRenderingContext2D, floodLevel: number): void {
+function drawFloodIndicator(ctx: CanvasRenderingContext2D, floodLevel: number, yPos = 38): void {
   const w = 180, h = 22;
   const x = CANVAS_WIDTH / 2 - w / 2;
-  const y = 38;
+  const y = yPos;
   ctx.fillStyle = 'rgba(0,10,30,0.78)';
   ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = floodLevel > 50 ? '#cc4444' : '#3a78c0';
@@ -98,6 +100,7 @@ export class Renderer {
       deckIndex,
       hoveredItem: null,
       hoveredBarTooltip: null,
+      weather: world.weather,
     };
 
     ctx.fillStyle = WATER_COLOR_1;
@@ -148,7 +151,15 @@ export class Renderer {
       const nightDark = (1 - brightness) / (1 - NIGHT_BRIGHTNESS);
       const nightAlpha = Math.max(0, nightDark * 0.55 - lanternLift);
       const deckAlpha = deckIndex > 0 ? 0.125 * deckIndex : 0;
-      const totalAlpha = Math.min(0.75, nightAlpha + deckAlpha);
+      // FEATURE 5: a storm further darkens the sky (raise the clamp ceiling so storms
+      // can be murkier than the normal night cap).
+      const stormAlpha = world.weather.state === 'storm' ? world.weather.intensity * 0.4 : 0;
+      // FEATURE 6: the sea darkens ominously as the kraken rises (warning) and stays
+      // murky through the attack.
+      const monsterAlpha = world.monster
+        ? (world.monster.phase === 'warning' ? 0.25 : world.monster.phase === 'attacking' ? 0.18 : 0)
+        : 0;
+      const totalAlpha = Math.min(0.85, nightAlpha + deckAlpha + stormAlpha + monsterAlpha);
       if (totalAlpha > 0) {
         ctx.fillStyle = `rgba(0, 0, 20, ${totalAlpha})`;
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -180,9 +191,17 @@ export class Renderer {
       ctx.globalCompositeOperation = prevComp;
     }
 
+    // Rain sheet (storm) — drawn over the world but under crew/UI.
+    drawRainOverlay(rc, time);
+
     // Corpses (drawn after darkness/glow, before living actors)
     for (const corpse of world.corpses) {
       if (corpse.deck === deckIndex) drawCorpse(rc, corpse, corpse.actorId === world.selectedCorpseId);
+    }
+
+    // Kraken tentacles (FEATURE 6) — world-space overlay drawn over tiles, under crew.
+    if (world.tentacles.length > 0) {
+      drawTentacles(rc, world.tentacles, deckIndex, time);
     }
 
     // Selected object highlight
@@ -217,9 +236,14 @@ export class Renderer {
     drawSettingsButton(rc, world.settingsOpen);
     drawSoundButton(rc, soundMuted, sfxMuted);
     drawGoldCounter(rc, world.gold);
-    // Combat HUD (enemy name, HP bar, distance, our flood indicator)
+    drawWeatherIndicator(rc, world.weather);
+    // Top-center status HUD: combat takes the slot, else the kraken, else flooding.
     if (world.enemyShip) {
       drawCombatHud(rc, world.enemyShip, world.floodLevel);
+    } else if (world.monster) {
+      // Kraken phase indicator (FEATURE 6). Flood shown below it if taking on water.
+      drawMonsterHud(rc, world.monster, world.tentacles.length);
+      if (world.floodLevel > 0) drawFloodIndicator(ctx, world.floodLevel, 96);
     } else if (world.floodLevel > 0) {
       // Show the flood indicator even without an enemy (e.g. storms / lingering breaches)
       drawFloodIndicator(ctx, world.floodLevel);
@@ -245,6 +269,13 @@ export class Renderer {
     }
     if (rc.hoveredBarTooltip) {
       drawBarTooltip(rc, rc.hoveredBarTooltip);
+    }
+
+    // Lightning flash (FEATURE 5) — a brief full-screen white flash that decays in
+    // update(). Drawn above the world/UI but below end-state overlays.
+    if (world.weather.lightningFlash > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.9, world.weather.lightningFlash)})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
 
     // Dock button (approaching harbor island)

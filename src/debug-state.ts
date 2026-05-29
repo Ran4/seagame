@@ -40,6 +40,9 @@ export interface StateSnapshot {
   floodLevel: number;
   gameOverReason: string | null;
   enemyShip: { name: string; hp: number; maxHp: number; crewCount: number; distance: number; hostile: boolean } | null;
+  weather: { state: string; timer: number; intensity: number; lightningFlash: number };
+  monster: { phase: string; timer: number; tentaclesSevered: number } | null;
+  tentacles: { id: number; deck: number; x: number; y: number; hp: number; maxHp: number; grabbedActorId: number | null; grabTimer: number }[];
 }
 
 export function serializeState(world: World): StateSnapshot {
@@ -122,5 +125,18 @@ export function serializeState(world: World): StateSnapshot {
     enemyShip: world.enemyShip
       ? { name: world.enemyShip.name, hp: Math.round(world.enemyShip.hp), maxHp: world.enemyShip.maxHp, crewCount: world.enemyShip.crewCount, distance: Math.round(world.enemyShip.distance * 10) / 10, hostile: world.enemyShip.hostile }
       : null,
+    weather: {
+      state: world.weather.state,
+      timer: Math.round(world.weather.timer * 10) / 10,
+      intensity: Math.round(world.weather.intensity * 100) / 100,
+      lightningFlash: Math.round(world.weather.lightningFlash * 100) / 100,
+    },
+    monster: world.monster
+      ? { phase: world.monster.phase, timer: Math.round(world.monster.timer * 10) / 10, tentaclesSevered: world.monster.tentaclesSevered }
+      : null,
+    tentacles: world.tentacles.map(t => ({
+      id: t.id, deck: t.deck, x: t.x, y: t.y, hp: Math.round(t.hp), maxHp: t.maxHp,
+      grabbedActorId: t.grabbedActorId, grabTimer: Math.round(t.grabTimer * 10) / 10,
+    })),
   };
 }

@@ -162,6 +162,8 @@ export enum CrewState {
   FISHING = 'fishing',
   REPAIRING = 'repairing',
   FIGHTING = 'fighting',
+  FLEEING = 'fleeing',
+  PRAYING = 'praying',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -188,6 +190,8 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.FISHING]: 'Fishing',
   [CrewState.REPAIRING]: 'Repairing',
   [CrewState.FIGHTING]: 'Fighting',
+  [CrewState.FLEEING]: 'Fleeing below deck',
+  [CrewState.PRAYING]: 'Praying',
 };
 
 export interface ContextMenuItem {
@@ -381,7 +385,47 @@ export interface GameSettings {
   inputMode: InputMode;
 }
 
-export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note' | 'mischief';
+export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note' | 'mischief' | 'prayer';
+
+// --- FEATURE 5: Storms & Weather ---
+// Weather lives on the World and is ticked in the sailing block of update().
+//   state          — current sky: clear / cloudy / storm.
+//   timer          — seconds remaining in the current state before a transition roll.
+//   intensity      — 0..1 ramp; rises toward 1 during a storm, falls back toward 0 otherwise.
+//                    Drives rain density + extra darkness + how harsh storm effects hit.
+//   lightningFlash — 0..~1, spikes to ~1 on a flash and decays each frame (white screen flash).
+export interface WeatherState {
+  state: 'clear' | 'cloudy' | 'storm';
+  timer: number;
+  intensity: number;
+  lightningFlash: number;
+}
+
+// --- FEATURE 6: Sea Monsters / Kraken ---
+// A kraken encounter lives on the World while it lasts (one at a time, like enemyShip).
+//   phase            — 'none' (no monster) → 'warning' (foreshadow ~30s) → 'attacking'
+//                      (tentacles + rams) → 'retreating' (brief wind-down → cleared).
+//   timer            — seconds remaining in the current phase (warning/retreating); also
+//                      throttles the ram cadence during 'attacking'.
+//   tentaclesSevered — running count; the kraken retreats once enough are cut.
+export interface MonsterState {
+  phase: 'none' | 'warning' | 'attacking' | 'retreating';
+  timer: number;
+  tentaclesSevered: number;
+}
+
+// A single kraken tentacle: a temporary HP-bearing overlay anchored to a ship-edge tile.
+// Crew hack it with the Fight action; it can grab a crew member and drag them overboard.
+export interface Tentacle {
+  id: number;
+  deck: number;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  grabbedActorId: number | null; // id of a seized crew member, or null
+  grabTimer: number;             // seconds until a grabbed crew is dragged overboard
+}
 
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
@@ -399,6 +443,8 @@ export type Command =
   | { name: 'Repair';            deck: number; x: number; y: number }
   | { name: 'FireCannon' }
   | { name: 'BoardEnemy' }
+  | { name: 'Fight';             deck: number; x: number; y: number }
+  | { name: 'Pray' }
   | { name: 'GoTo';              deck?: number; x: number; y: number }
   | { name: 'GoToDeck';          deck: number }
   | { name: 'CopulateBarrel';    deck: number; x: number; y: number }
@@ -479,4 +525,9 @@ export interface World {
   gameOverReason: string | null;   // generalized game-over text (mutiny also sets mutinyState)
   enemyShip: EnemyShip | null;     // current ship-to-ship combat target (one at a time)
   gold: number;                    // ship treasury (SHARED SYSTEM B; loot/treasure add, buying subtracts)
+  // --- FEATURE 5: Storms & Weather ---
+  weather: WeatherState;           // sky state machine: clear <-> cloudy <-> storm (see WeatherState)
+  // --- FEATURE 6: Sea Monsters / Kraken ---
+  monster: MonsterState | null;    // current kraken encounter (null = none); see MonsterState
+  tentacles: Tentacle[];           // active kraken tentacles gripping the ship's edges
 }
