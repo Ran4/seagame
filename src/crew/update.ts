@@ -1,6 +1,6 @@
 import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY, Corpse } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
-import { createSemen } from '../items';
+import { createSemen, createFish, FishKind } from '../items';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
 import { updateWalking, orderCrewBesideTile } from './movement';
 import { DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from '../harbor';
@@ -71,9 +71,60 @@ const LAND_HO_SPEECH_DURATION = 6; // seconds
 
 const ENERGY_RESTORE_RATE = 255 / 240; // full restore in ~240s (8 in-game hours)
 const DRUNKEDNESS_RATE = 255 / 720;
+
+// Fishing
+const WARM_ISLAND_DISTANCE = 8;      // leagues — "near a warm island" for tropical fish
+const DEEP_WATER_DISTANCE = 12;      // leagues — >this from any island counts as deep water
+const SICK_DURATION = 720;           // pufferfish poisoning lasts ~1 in-game day
+const SICK_VOMIT_INTERVAL = 90;      // average seconds between vomit speech bubbles
+// Ship food supply: idle crew fish autonomously when edible items in barrels run low.
+const LOW_FOOD_THRESHOLD = 3;        // fewer than this many edible units → consider fishing
+const AUTO_FISH_CHANCE = 0.02;       // per idle decision, when food is low
+
+// Drunk fighting (drunk crew with low mutual friendship may throw fists at sea)
+const DRUNK_FIGHT_CHANCE = 0.001;       // ~0.1%/sec while a valid pair exists
+const DRUNK_FIGHT_RANGE = 2;            // tiles
+const DRUNK_FIGHT_FRIENDSHIP_MAX = 64;  // only low-friendship pairs fight
+const DRUNK_FIGHT_FRIENDSHIP_LOSS = 20;
+const DRUNK_FIGHT_MORALE_GAIN = 10;     // comedic — a good scrap lifts spirits
+const DRUNK_FIGHT_MIN_HEALTH = 10;      // never lethal
+const BRUISED_DURATION = 720;           // ~1 in-game day
+const DRUNK_FIGHT_COOLDOWN = 120;       // seconds before the same pair refights
 const LUST_RATE_MALE = 0.15;         // 0→255 in ~1700s (~2.4 days)
 const LUST_RATE_FEMALE = 0.05;       // +108 over 3-day growth phase
 const LUST_CYCLE_LENGTH = 6 * 720;   // 6 in-game days = 4320s
+
+// Baby animals / reproduction (dogs & monkeys; parrots use eggs — not implemented)
+const DAY = 720;                                  // SECONDS_PER_DAY (kept local to avoid import churn)
+const GESTATION_DAYS: Partial<Record<ActorType, number>> = { dog: 2, monkey: 3 };
+const LITTER_SIZE: Partial<Record<ActorType, [number, number]>> = { dog: [1, 5], monkey: [1, 1] };
+const BABY_DURATION = 3 * DAY;                    // 'baby' status removed after 3 in-game days → adult
+const POSTPARTUM_DURATION = 4 * DAY;              // lust cooldown after birth
+const BABY_HUNGER_MULT = 1.5;                     // babies eat more often (hunger decays faster)
+const BABY_FOLLOW_LEASH = TILE_SIZE * 2;          // tighter than the normal dog 2.5-tile leash
+const BABY_PARENT_FRIENDSHIP = 224;               // baby → mother/father
+const PARENT_BABY_FRIENDSHIP = 192;               // mother/father → baby
+const BABY_START_STAT = 200;                      // hunger/energy at birth
+const BABY_NAMES: Partial<Record<ActorType, string[]>> = {
+  dog: ['Rex', 'Pip', 'Salty', 'Bones', 'Biscuit', 'Plank', 'Scupper', 'Rigger', 'Grog', 'Noodle'],
+  monkey: ['Mango', 'Coconut', 'Rascal', 'Jib', 'Tango', 'Bandit'],
+};
+const BABY_ANIMAL_COLORS: Partial<Record<ActorType, string>> = { dog: '#f5f5dc', monkey: '#c68c53' };
+
+// Monkey mischief: idle monkeys occasionally pinch an item and stash it elsewhere.
+// Light, comedic, low-stakes — items are never destroyed, only relocated (recoverable).
+const MISCHIEF_CHANCE = 0.01;             // per idle decision, when off cooldown
+const MISCHIEF_COOLDOWN = 90;             // seconds before a monkey thieves again
+const MISCHIEF_CARRY_TIME = 20;           // seconds a monkey carries loot before stashing
+const MISCHIEF_STEAL_RANGE = 1;           // tiles — only pinch from a crew right beside it
+const MISCHIEF_VICTIM_MORALE_DIP = 8;     // small morale hit for the robbed crew
+// Items a monkey will not pinch (would soft-lock or just be gross).
+const MISCHIEF_BLOCKED_ITEMS = new Set(['Semen']);
+// "Shiny" items the monkey prefers to nick if present.
+const MISCHIEF_SHINY_ITEMS = new Set(['Gem', 'Gemstone', 'Ruby', 'Pearl', 'Gold coin', 'Artifact']);
+const MISCHIEF_THIEF_LINES = ['Ook ook!', 'Eee-eee!', '*chatters gleefully*', '*snatches and runs*'];
+const MISCHIEF_STASH_LINES = ['*hides its loot*', 'Ook!', '*chitters*'];
+const MISCHIEF_VICTIM_LINES = ["Where's me grog?!", 'Oi! Me things!', 'That blasted monkey!', 'Thief! Come back!'];
 
 /**
  * Status/Conditions system.
@@ -97,7 +148,9 @@ const LUST_CYCLE_LENGTH = 6 * 720;   // 6 in-game days = 4320s
  */
 export function refreshConditions(member: Actor, crew: Actor[]): void {
   member.conditions.clear();
-  // Copy raw status keys
+  // Copy raw status keys. This is what surfaces flag-style statuses as conditions —
+  // e.g. 'pregnant', 'baby', 'postpartum' (animal reproduction) become readable
+  // conditions (used for behaviour gating + the crew-panel tooltip) for free.
   for (const key of member.statuses.keys()) {
     member.conditions.add(key);
   }
@@ -118,6 +171,8 @@ export function refreshConditions(member: Actor, crew: Actor[]): void {
   else if (member.profile.hunger < 70) member.conditions.add('hungry');
   // Derived: health
   if (member.health < 32) member.conditions.add('injured');
+  // 'bruised' is a tracked status ({ since }) copied above; it expires ~1 in-game
+  // day after a fist fight (see BRUISED_DURATION decay in updateActors).
   // Derived: morale levels
   if (member.profile.morale >= 192) member.conditions.add('happy');
   else if (member.profile.morale >= 128) member.conditions.add('content');
@@ -188,6 +243,408 @@ function canAccessDeck(member: Actor, deckIndex: number): boolean {
   return true;
 }
 
+/** Distance (leagues) from the ship to the nearest island, or Infinity if no map.
+ * Local approximation — a shared deep-water helper lands later with Storms. */
+function shipDistanceToNearestIsland(worldMap?: WorldMap): number {
+  if (!worldMap || worldMap.islands.length === 0) return Infinity;
+  let best = Infinity;
+  for (const island of worldMap.islands) {
+    const dx = worldMap.shipX - island.x;
+    const dy = worldMap.shipY - island.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** Items in barrels that crew can eat (restore hunger). Counts stackable quantities.
+ * Excludes Semen (a copulation by-product, not real provisions). */
+function countEdibleSupply(barrelInventory: Map<string, Item[]>): number {
+  let count = 0;
+  for (const items of barrelInventory.values()) {
+    for (const item of items) {
+      if (item.hungerRestore > 0 && item.name !== 'Semen') count += item.stackable ? item.quantity : 1;
+    }
+  }
+  return count;
+}
+
+/** Nearest barrel (deck-x-y) to the actor for depositing a catch. Prefers same deck. */
+function findNearestBarrel(member: Actor, decks: Deck[]): DeckPoint | null {
+  let best: DeckPoint | null = null;
+  let bestScore = Infinity;
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+  for (let d = 0; d < decks.length; d++) {
+    const deck = decks[d];
+    for (let y = 0; y < deck.height; y++) {
+      for (let x = 0; x < deck.width; x++) {
+        if (deck.tiles[y][x] !== TileType.BARREL) continue;
+        const deckPenalty = d === member.deck ? 0 : 1000;
+        const score = deckPenalty + Math.abs(x - mx) + Math.abs(y - my);
+        if (score < bestScore) {
+          bestScore = score;
+          best = { x, y, deck: d };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** Pick which fish is caught based on where the ship currently is. */
+function pickFishKind(worldMap?: WorldMap): FishKind {
+  const distToIsland = shipDistanceToNearestIsland(worldMap);
+  const roll = Math.random();
+  // Deep water: chance of a rare swordfish
+  if (distToIsland > DEEP_WATER_DISTANCE && roll < 0.15) return 'swordfish';
+  // Near a warm island: chance of a tropical fish
+  if (distToIsland <= WARM_ISLAND_DISTANCE && roll < 0.30) return 'tropical';
+  // Pufferfish lurk in shallows near land
+  if (distToIsland <= WARM_ISLAND_DISTANCE && roll < 0.40) return 'pufferfish';
+  return 'common';
+}
+
+// ---------------------------------------------------------------------------
+// Baby animals / reproduction (dogs & monkeys). Parrots (eggs) intentionally skipped.
+// ---------------------------------------------------------------------------
+
+/** True if this actor can carry a pregnancy / is a breedable animal type. */
+function isBreedableAnimal(actorType: ActorType): boolean {
+  return GESTATION_DAYS[actorType] !== undefined;
+}
+
+/**
+ * On a successful same-species animal copulation, make one of the pair pregnant.
+ * Chooses the female if the sexes differ, otherwise an arbitrary one. Skips if the
+ * chosen mother is already pregnant or postpartum, or if the species is not breedable.
+ */
+function tryConceive(a: Actor, b: Actor, gameTime: number, activityLog: ActivityLogEntry[]): void {
+  if (a.actorType !== b.actorType) return;
+  if (!isBreedableAnimal(a.actorType)) return;
+  // Pick the mother: female if sexes differ, else arbitrary.
+  let mother = a;
+  let father = b;
+  if (a.profile.sex !== b.profile.sex) {
+    if (a.profile.sex === 'F') { mother = a; father = b; }
+    else { mother = b; father = a; }
+  }
+  if (mother.statuses.has('pregnant') || mother.statuses.has('postpartum')) return;
+  mother.statuses.set('pregnant', { fatherId: father.id, since: gameTime, animalType: mother.actorType });
+  activityLog.push({ text: `${mother.profile.name} is expecting a litter`, time: gameTime });
+}
+
+/** Find a walkable tile at/adjacent to the mother (same deck) for a newborn to spawn on. */
+function findBirthTile(mother: Actor, decks: Deck[]): DeckPoint | null {
+  const deck = decks[mother.deck];
+  if (!deck) return null;
+  const mx = Math.floor(mother.pixelX / TILE_SIZE);
+  const my = Math.floor(mother.pixelY / TILE_SIZE);
+  const candidates: DeckPoint[] = [
+    { x: mx, y: my, deck: mother.deck },
+    { x: mx, y: my - 1, deck: mother.deck },
+    { x: mx, y: my + 1, deck: mother.deck },
+    { x: mx - 1, y: my, deck: mother.deck },
+    { x: mx + 1, y: my, deck: mother.deck },
+  ];
+  for (const c of candidates) {
+    if (c.x < 0 || c.y < 0 || c.x >= deck.width || c.y >= deck.height) continue;
+    if (!WALKABLE.has(deck.tiles[c.y][c.x])) continue;
+    return c;
+  }
+  return null;
+}
+
+/** Build a newborn animal actor (mirrors recruitSailor's full Actor shape). */
+function createBabyAnimal(
+  id: number, actorType: ActorType, mother: Actor, fatherId: number,
+  spawnTile: DeckPoint, gameTime: number, crew: Actor[],
+): Actor {
+  const sex: 'M' | 'F' = Math.random() < 0.5 ? 'M' : 'F';
+  const usedNames = new Set(crew.map(a => a.profile.name));
+  const pool = BABY_NAMES[actorType] ?? ['Pup'];
+  let name = pool[Math.floor(Math.random() * pool.length)];
+  for (const n of pool) { if (!usedNames.has(n)) { name = n; break; } }
+  const color = BABY_ANIMAL_COLORS[actorType] ?? '#cccccc';
+
+  const baby: Actor = {
+    id,
+    actorType,
+    profile: {
+      name, sex, color,
+      spriteIndex: id,
+      numberOfHands: 0,
+      hunger: BABY_START_STAT,
+      energy: BABY_START_STAT,
+      morale: 200,
+      inventory: [],
+      hands: [],
+    },
+    health: 50,
+    maxHealth: 50,
+    carryingCorpseId: null,
+    statuses: new Map<string, Record<string, any> | null>(),
+    conditions: new Set(),
+    skills: {},
+    pixelX: spawnTile.x * TILE_SIZE + TILE_SIZE / 2,
+    pixelY: spawnTile.y * TILE_SIZE + TILE_SIZE / 2,
+    facing: 'south',
+    deck: spawnTile.deck,
+    state: CrewState.IDLE,
+    targetState: CrewState.IDLE,
+    path: [],
+    stateTimer: 0,
+    idleTimer: 1 + Math.random() * 2,
+    copulationTarget: null,
+    relations: [],
+    thoughtBubble: null,
+    thoughtBubbleTimer: 0,
+    conversationPartnerId: null,
+    conversationExchangesLeft: 0,
+    conversationPositive: true,
+    conversationScript: [],
+    conversationCooldown: 0,
+    conversationMyTurn: false,
+    speechBubbleText: null,
+    speechBubbleTimer: 0,
+    takeTarget: null,
+    consumingItem: null,
+    lustSeekCooldown: 0,
+    commandQueue: [],
+    shantyInitiatorId: null,
+  };
+
+  // Newborn status. mother/father ids recorded so behaviour/leash can find them.
+  baby.statuses.set('baby', { since: gameTime, motherId: mother.id, fatherId });
+  // Non-dogs climb; dogs do not (matches factory). No lust while a baby (added on growth).
+  if (actorType !== 'dog') baby.statuses.set('climber', { skill: 128 });
+
+  // Relations — bidirectional, with every existing (non-NPC) actor.
+  for (const other of crew) {
+    if (other.statuses.has('npc')) continue;
+    const isParent = other.id === mother.id || other.id === fatherId;
+    const babyToOther = isParent ? BABY_PARENT_FRIENDSHIP : 64 + Math.floor(Math.random() * 128);
+    const otherToBaby = isParent ? PARENT_BABY_FRIENDSHIP : 64 + Math.floor(Math.random() * 128);
+    const sameSpecies = other.actorType === actorType;
+    baby.relations.push({ actorId: other.id, friendship: babyToOther, attraction: sameSpecies ? Math.floor(Math.random() * 80) : 0 });
+    other.relations.push({ actorId: baby.id, friendship: otherToBaby, attraction: sameSpecies ? Math.floor(Math.random() * 80) : 0 });
+  }
+  return baby;
+}
+
+/**
+ * Per-actor breeding tick: gestation → birth, baby growth, postpartum cooldown.
+ * Newborns are pushed onto `crew` (and world.actors via the same array). The caller's
+ * loop iterates backwards, so newborns appended this tick are not processed until next.
+ */
+function updateBreeding(member: Actor, crew: Actor[], decks: Deck[], gameTime: number, activityLog: ActivityLogEntry[], world?: World): void {
+  // --- Baby growth: become an adult after BABY_DURATION ---
+  const babyStatus = member.statuses.get('baby') as { since: number } | undefined;
+  if (babyStatus && gameTime - babyStatus.since >= BABY_DURATION) {
+    member.statuses.delete('baby');
+    // Grant adult lust now that the baby has grown up (matches factory init).
+    if (LUST_ACTOR_TYPES.has(member.actorType) && !member.statuses.has('lust')) {
+      if (member.profile.sex === 'M') {
+        member.statuses.set('lust', { amount: Math.floor(Math.random() * 129) });
+      } else {
+        member.statuses.set('lust', { amount: 64 + Math.floor(Math.random() * 65), cycleTimer: Math.floor(Math.random() * LUST_CYCLE_LENGTH) });
+      }
+    }
+    activityLog.push({ text: `${member.profile.name} has grown up`, time: gameTime });
+  }
+
+  // --- Postpartum cooldown expiry ---
+  const ppStatus = member.statuses.get('postpartum') as { since: number } | undefined;
+  if (ppStatus && gameTime - ppStatus.since >= POSTPARTUM_DURATION) {
+    member.statuses.delete('postpartum');
+  }
+
+  // --- Gestation → birth ---
+  const pregnant = member.statuses.get('pregnant') as { fatherId: number; since: number; animalType: ActorType } | undefined;
+  if (pregnant) {
+    const gestDays = GESTATION_DAYS[pregnant.animalType] ?? 2;
+    if (gameTime - pregnant.since >= gestDays * DAY) {
+      const spawnTile = findBirthTile(member, decks);
+      if (!spawnTile) return; // no room — retry next tick (keep pregnant status)
+      member.statuses.delete('pregnant');
+      // Mother enters postpartum, lust zeroed.
+      member.statuses.set('postpartum', { since: gameTime });
+      const motherLust = member.statuses.get('lust') as { amount: number } | undefined;
+      if (motherLust) motherLust.amount = 0;
+
+      const [lo, hi] = LITTER_SIZE[pregnant.animalType] ?? [1, 1];
+      const litter = lo + Math.floor(Math.random() * (hi - lo + 1));
+      let maxId = 0;
+      for (const a of crew) { if (a.id > maxId) maxId = a.id; }
+      for (let i = 0; i < litter; i++) {
+        const baby = createBabyAnimal(maxId + 1 + i, pregnant.animalType, member, pregnant.fatherId, spawnTile, gameTime, crew);
+        crew.push(baby);
+        if (world && world.actors !== crew) world.actors.push(baby);
+      }
+      const noun = pregnant.animalType === 'dog' ? (litter === 1 ? 'a puppy' : `${litter} puppies`) : 'a baby monkey';
+      activityLog.push({ text: `${member.profile.name} gave birth to ${noun}!`, time: gameTime });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Monkey mischief: idle monkeys pinch an item and stash it somewhere random.
+// Emergent, comedic, low-stakes. Items are relocated, never destroyed.
+// State lives in statuses: 'thief' { item, since, victimName? } while carrying,
+// 'mischiefCooldown' { until } to space out thieving.
+// ---------------------------------------------------------------------------
+
+/** Can a monkey pinch this item? Excludes blocked/gross items. */
+function isStealableItem(item: Item): boolean {
+  return !MISCHIEF_BLOCKED_ITEMS.has(item.name);
+}
+
+/** Pick the index of the "best" item to steal from a list — prefers shiny loot. */
+function pickStealIndex(items: Item[]): number {
+  let shinyIdx = -1;
+  let anyIdx = -1;
+  for (let i = 0; i < items.length; i++) {
+    if (!isStealableItem(items[i])) continue;
+    if (anyIdx === -1) anyIdx = i;
+    if (MISCHIEF_SHINY_ITEMS.has(items[i].name)) { shinyIdx = i; break; }
+  }
+  return shinyIdx !== -1 ? shinyIdx : anyIdx;
+}
+
+/** Remove one unit of items[idx] and return it as a standalone Item (splits stacks). */
+function takeOneUnit(items: Item[], idx: number): Item {
+  const src = items[idx];
+  if (src.stackable && src.quantity > 1) {
+    src.quantity -= 1;
+    src.weight = Math.max(0, src.weight - Math.round(src.weight / (src.quantity + 1)));
+    return { ...src, quantity: 1 };
+  }
+  return items.splice(idx, 1)[0];
+}
+
+/**
+ * A monkey carrying loot ('thief' status) stashes it: into a random barrel, or
+ * dropped onto the floor (its own inventory) if no barrel is reachable. Clears
+ * the status and starts the mischief cooldown.
+ */
+function monkeyStashLoot(member: Actor, decks: Deck[], barrelInventory: Map<string, Item[]>, gameTime: number, activityLog: ActivityLogEntry[], audio?: AudioManager): void {
+  const thief = member.statuses.get('thief') as { item: Item; since: number } | undefined;
+  if (!thief) return;
+  const item = thief.item;
+  // Pick a random barrel to stash into (any deck), else drop on the monkey's own tile.
+  const barrels = findTilesOfType(decks, TileType.BARREL);
+  const barrel = pickRandom(barrels);
+  if (barrel) {
+    const key = `${barrel.deck}-${barrel.x}-${barrel.y}`;
+    const items = barrelInventory.get(key) || [];
+    if (item.stackable) {
+      const existing = items.find(i => i.name === item.name && i.stackable);
+      if (existing) { existing.quantity += item.quantity; existing.weight += item.weight; }
+      else items.push(item);
+    } else {
+      items.push(item);
+    }
+    barrelInventory.set(key, items);
+    activityLog.push({ text: `${member.profile.name} stashed a pilfered ${item.name.toLowerCase()} in a barrel`, time: gameTime });
+  } else {
+    // Nowhere to hide it — drop it (held in the monkey's own inventory as "dropped" goods).
+    member.profile.inventory.push(item);
+    activityLog.push({ text: `${member.profile.name} dropped a pilfered ${item.name.toLowerCase()}`, time: gameTime });
+  }
+  member.statuses.delete('thief');
+  member.statuses.set('mischiefCooldown', { until: gameTime + MISCHIEF_COOLDOWN });
+  member.speechBubbleText = MISCHIEF_STASH_LINES[Math.floor(Math.random() * MISCHIEF_STASH_LINES.length)];
+  member.speechBubbleTimer = 3;
+  member.thoughtBubble = 'mischief';
+  member.thoughtBubbleTimer = 3;
+  if (audio) audio.play('monkey_mischief', member.deck);
+}
+
+/**
+ * Idle-monkey mischief. Returns true if the monkey took an action this tick
+ * (so the caller should not fall through to normal wander logic).
+ * Two phases: stash whatever it carries (after a delay), or pinch something new.
+ */
+function tryMonkeyMischief(member: Actor, decks: Deck[], allActors: Actor[], barrelInventory: Map<string, Item[]>, gameTime: number, activityLog: ActivityLogEntry[], audio?: AudioManager): boolean {
+  // Phase 1: already carrying loot → stash it once the carry timer elapses.
+  const thief = member.statuses.get('thief') as { item: Item; since: number } | undefined;
+  if (thief) {
+    if (gameTime - thief.since >= MISCHIEF_CARRY_TIME) {
+      monkeyStashLoot(member, decks, barrelInventory, gameTime, activityLog, audio);
+    } else {
+      // Still scampering about with the loot — keep a cheeky bubble up, then wander.
+      if (Math.random() < 0.2) { member.thoughtBubble = 'mischief'; member.thoughtBubbleTimer = 2; }
+      return false; // fall through to normal wandering while carrying
+    }
+    return true;
+  }
+
+  // Phase 2: maybe start a new theft (gated by cooldown + a small chance).
+  const cd = member.statuses.get('mischiefCooldown') as { until: number } | undefined;
+  if (cd) {
+    if (gameTime < cd.until) return false;
+    member.statuses.delete('mischiefCooldown');
+  }
+  if (Math.random() >= MISCHIEF_CHANCE) return false;
+
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+
+  // Prefer pinching from a crew member standing right beside the monkey (funnier).
+  const victims = allActors.filter(c =>
+    c.id !== member.id && c.actorType === 'human' && !c.statuses.has('npc') &&
+    c.deck === member.deck && c.profile.inventory.some(isStealableItem) &&
+    Math.abs(Math.floor(c.pixelX / TILE_SIZE) - mx) + Math.abs(Math.floor(c.pixelY / TILE_SIZE) - my) <= MISCHIEF_STEAL_RANGE
+  );
+  const victim = pickRandom(victims);
+  if (victim) {
+    const idx = pickStealIndex(victim.profile.inventory);
+    if (idx !== -1) {
+      const item = takeOneUnit(victim.profile.inventory, idx);
+      member.statuses.set('thief', { item, since: gameTime, victimName: victim.profile.name });
+      member.speechBubbleText = MISCHIEF_THIEF_LINES[Math.floor(Math.random() * MISCHIEF_THIEF_LINES.length)];
+      member.speechBubbleTimer = 3;
+      member.thoughtBubble = 'mischief';
+      member.thoughtBubbleTimer = 3;
+      // Victim is annoyed: small morale dip + a grumble.
+      victim.profile.morale = Math.max(0, victim.profile.morale - MISCHIEF_VICTIM_MORALE_DIP);
+      victim.speechBubbleText = MISCHIEF_VICTIM_LINES[Math.floor(Math.random() * MISCHIEF_VICTIM_LINES.length)];
+      victim.speechBubbleTimer = 3;
+      activityLog.push({ text: `${member.profile.name} the monkey snatched ${victim.profile.name}'s ${item.name.toLowerCase()}!`, time: gameTime });
+      if (audio) audio.play('monkey_mischief', member.deck);
+      return true;
+    }
+  }
+
+  // Otherwise raid a barrel that has loot in it.
+  const stockedBarrels: { tile: DeckPoint; items: Item[] }[] = [];
+  for (const tile of findTilesOfType(decks, TileType.BARREL)) {
+    const items = barrelInventory.get(`${tile.deck}-${tile.x}-${tile.y}`);
+    if (items && items.some(isStealableItem)) stockedBarrels.push({ tile, items });
+  }
+  const pick = pickRandom(stockedBarrels);
+  if (pick) {
+    const idx = pickStealIndex(pick.items);
+    if (idx !== -1) {
+      const item = takeOneUnit(pick.items, idx);
+      const key = `${pick.tile.deck}-${pick.tile.x}-${pick.tile.y}`;
+      if (pick.items.length === 0) barrelInventory.delete(key); else barrelInventory.set(key, pick.items);
+      member.statuses.set('thief', { item, since: gameTime });
+      member.speechBubbleText = MISCHIEF_THIEF_LINES[Math.floor(Math.random() * MISCHIEF_THIEF_LINES.length)];
+      member.speechBubbleTimer = 3;
+      member.thoughtBubble = 'mischief';
+      member.thoughtBubbleTimer = 3;
+      activityLog.push({ text: `${member.profile.name} the monkey raided a barrel and made off with a ${item.name.toLowerCase()}!`, time: gameTime });
+      if (audio) audio.play('monkey_mischief', member.deck);
+      return true;
+    }
+  }
+
+  // Nothing to pinch — short cooldown so it doesn't re-roll every tick.
+  member.statuses.set('mischiefCooldown', { until: gameTime + MISCHIEF_COOLDOWN / 3 });
+  return false;
+}
+
 export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInventory: Map<string, Item[]>, gameTime: number, lanternOil: Map<string, number> = new Map(), brightness: number = 1.0, activityLog: ActivityLogEntry[] = [], worldMap?: WorldMap, spottedIslands?: Set<number>, world?: World, audio?: AudioManager): void {
   // Reset spotted islands when ship moves far from all spotted islands
   if (worldMap && spottedIslands && spottedIslands.size > 0) {
@@ -212,7 +669,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
 
     // NPCs don't decay needs
     if (!isNPC) {
-    member.profile.hunger = Math.max(0, member.profile.hunger - HUNGER_RATE * dt);
+    // Babies grow fast → burn through hunger quicker (eat more often)
+    const hungerRate = member.conditions.has('baby') ? HUNGER_RATE * BABY_HUNGER_MULT : HUNGER_RATE;
+    member.profile.hunger = Math.max(0, member.profile.hunger - hungerRate * dt);
     member.profile.energy = Math.max(0, member.profile.energy - ENERGY_RATE * dt);
 
     // Drunkedness decay via statuses
@@ -220,6 +679,19 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     if (drunkStatus) {
       drunkStatus.amount = Math.max(0, drunkStatus.amount - DRUNKEDNESS_RATE * dt);
       if (drunkStatus.amount <= 0) member.statuses.delete('drunkedness');
+    }
+
+    // Bruised expiry — fades ~1 in-game day after a fist fight
+    const bruisedStatus = member.statuses.get('bruised') as { since: number } | undefined;
+    if (bruisedStatus && gameTime - bruisedStatus.since >= BRUISED_DURATION) {
+      member.statuses.delete('bruised');
+    }
+
+    // Sick expiry — pufferfish poisoning clears ~1 in-game day after eating it
+    const sickStatus = member.statuses.get('sick') as { since: number } | undefined;
+    if (sickStatus && gameTime - sickStatus.since >= SICK_DURATION) {
+      member.statuses.delete('sick');
+      activityLog.push({ text: `${member.profile.name} recovered from sickness`, time: gameTime });
     }
 
     // Lust tick
@@ -311,6 +783,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     }
     } // end if (!isNPC) — NPCs skip needs decay, morale, starvation
 
+    // Reproduction: gestation/birth, baby growth, postpartum cooldown (dogs & monkeys)
+    if (!isNPC) updateBreeding(member, crew, decks, gameTime, activityLog, world);
+
     refreshConditions(member, crew);
 
     // Death check — remove actor if health <= 0 (not NPCs)
@@ -333,6 +808,30 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       if (member.speechBubbleTimer <= 0) {
         member.speechBubbleText = null;
         member.speechBubbleTimer = 0;
+      }
+    }
+
+    // Sick (pufferfish poisoning): can't work. Eject from work states, retch
+    // periodically. Eating/sleeping/drinking are allowed so they can recover.
+    if (member.conditions.has('sick') && !isNPC) {
+      const SICK_BLOCKED_STATES = new Set<CrewState>([
+        CrewState.STEERING, CrewState.MANNING_CANNON, CrewState.NAVIGATING,
+        CrewState.LOOKOUT, CrewState.FISHING, CrewState.LIGHTING_LANTERN,
+        CrewState.EXTINGUISHING_LANTERN, CrewState.CARRYING_CORPSE, CrewState.BURYING_AT_SEA,
+      ]);
+      if (SICK_BLOCKED_STATES.has(member.state) ||
+          (member.state === CrewState.WALKING && SICK_BLOCKED_STATES.has(member.targetState))) {
+        member.path = [];
+        member.copulationTarget = null;
+        member.commandQueue.length = 0; // drop the order — too sick to carry it out
+        member.state = CrewState.IDLE;
+        member.idleTimer = 1 + Math.random() * 2;
+      }
+      // Occasional vomit (every ~SICK_VOMIT_INTERVAL seconds on average)
+      if (Math.random() < dt / SICK_VOMIT_INTERVAL) {
+        const retches = ['*vomits*', 'Bleurgh...', 'I feel awful...', '*retches over the side*', 'Me guts...'];
+        member.speechBubbleText = retches[Math.floor(Math.random() * retches.length)];
+        member.speechBubbleTimer = 3;
       }
     }
 
@@ -539,6 +1038,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
               partner.copulationTarget = null;
             }
             activityLog.push({ text: `${member.profile.name} copulated with ${partner?.profile.name ?? 'someone'}`, time: gameTime });
+            // Animal conception: same-species animal couple → mother becomes pregnant
+            if (partner) tryConceive(member, partner, gameTime, activityLog);
           } else if (member.copulationTarget?.type === 'barrel') {
             activityLog.push({ text: `${member.profile.name} copulated with a barrel`, time: gameTime });
           }
@@ -553,7 +1054,8 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         member.stateTimer -= dt;
         if (member.stateTimer <= 0) {
           if (member.consumingItem) {
-            activityLog.push({ text: `${member.profile.name} drank ${member.consumingItem.name.toLowerCase()}`, time: gameTime });
+            const verb = (member.consumingItem.hungerRestore > 0 && member.consumingItem.name !== 'Grog ration') ? 'ate' : 'drank';
+            activityLog.push({ text: `${member.profile.name} ${verb} ${member.consumingItem.name.toLowerCase()}`, time: gameTime });
             if (member.consumingItem.name === 'Grog ration') {
               const cur = (member.statuses.get('drunkedness') as { amount: number } | undefined)?.amount ?? 0;
               member.statuses.set('drunkedness', { amount: Math.min(255, cur + 140) });
@@ -561,6 +1063,14 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
             }
             if (member.consumingItem.hungerRestore > 0) {
               member.profile.hunger = Math.min(255, member.profile.hunger + member.consumingItem.hungerRestore);
+            }
+            // Pufferfish poisoning: eating it makes the crew sick for ~1 in-game day.
+            if (member.consumingItem.name === 'Pufferfish') {
+              member.statuses.set('sick', { since: gameTime });
+              member.profile.morale = Math.max(0, member.profile.morale - 20);
+              member.speechBubbleText = 'Ugh... bad fish...';
+              member.speechBubbleTimer = 3;
+              activityLog.push({ text: `${member.profile.name} fell ill from eating pufferfish!`, time: gameTime });
             }
             member.consumingItem = null;
           }
@@ -750,6 +1260,28 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
+      case CrewState.FISHING:
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          const kind = pickFishKind(worldMap);
+          const fish = createFish(kind, gameTime);
+          // Deposit into the nearest barrel; fall back to the angler's own inventory.
+          const barrel = findNearestBarrel(member, decks);
+          if (barrel) {
+            const key = `${barrel.deck}-${barrel.x}-${barrel.y}`;
+            const items = barrelInventory.get(key) || [];
+            items.push(fish);
+            barrelInventory.set(key, items);
+          } else {
+            member.profile.inventory.push(fish);
+          }
+          activityLog.push({ text: `${member.profile.name} caught a ${fish.name.toLowerCase()}!`, time: gameTime });
+          member.thoughtBubble = 'heart';
+          member.thoughtBubbleTimer = 3;
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
     }
   }
 
@@ -792,6 +1324,61 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
             if (audio) audio.play('tavern_brawl', a.deck);
             break outer;
           }
+        }
+      }
+    }
+  }
+
+  // Drunk fighting at sea: two drunk crew with low mutual friendship near each
+  // other may throw fists. Mirrors the harbor tavern brawl but fires anywhere on
+  // the ship, any time. Comedic and non-lethal.
+  if (Math.random() < DRUNK_FIGHT_CHANCE * dt) {
+    const drunks = crew.filter(c =>
+      c.actorType === 'human' && !c.statuses.has('npc') &&
+      c.conditions.has('drunk') &&
+      (c.state === CrewState.IDLE || c.state === CrewState.WALKING)
+    );
+    if (drunks.length >= 2) {
+      const rangeSq = (DRUNK_FIGHT_RANGE * TILE_SIZE) * (DRUNK_FIGHT_RANGE * TILE_SIZE);
+      outer:
+      for (let i = 0; i < drunks.length; i++) {
+        for (let j = i + 1; j < drunks.length; j++) {
+          const a = drunks[i], b = drunks[j];
+          if (a.deck !== b.deck) continue;
+          const dx = a.pixelX - b.pixelX;
+          const dy = a.pixelY - b.pixelY;
+          if (dx * dx + dy * dy >= rangeSq) continue;
+          // Mutual friendship must be low
+          const relA = a.relations.find(r => r.actorId === b.id);
+          const relB = b.relations.find(r => r.actorId === a.id);
+          const friendA = relA?.friendship ?? 128;
+          const friendB = relB?.friendship ?? 128;
+          if (friendA >= DRUNK_FIGHT_FRIENDSHIP_MAX || friendB >= DRUNK_FIGHT_FRIENDSHIP_MAX) continue;
+          // Cooldown: don't let the same pair refight instantly (stored on bruised payload)
+          const bruisedA = a.statuses.get('bruised') as { since: number; fightCooldownUntil?: number } | undefined;
+          const bruisedB = b.statuses.get('bruised') as { since: number; fightCooldownUntil?: number } | undefined;
+          if ((bruisedA?.fightCooldownUntil ?? 0) > gameTime || (bruisedB?.fightCooldownUntil ?? 0) > gameTime) continue;
+
+          // Fight! Both take non-lethal damage, lose friendship, gain morale (good scrap).
+          const cooldownUntil = gameTime + DRUNK_FIGHT_COOLDOWN;
+          a.statuses.set('bruised', { since: gameTime, fightCooldownUntil: cooldownUntil });
+          b.statuses.set('bruised', { since: gameTime, fightCooldownUntil: cooldownUntil });
+          const dmgA = 5 + Math.floor(Math.random() * 11); // 5-15
+          const dmgB = 5 + Math.floor(Math.random() * 11);
+          a.health = Math.max(DRUNK_FIGHT_MIN_HEALTH, a.health - dmgA);
+          b.health = Math.max(DRUNK_FIGHT_MIN_HEALTH, b.health - dmgB);
+          if (relA) relA.friendship = Math.max(0, relA.friendship - DRUNK_FIGHT_FRIENDSHIP_LOSS);
+          if (relB) relB.friendship = Math.max(0, relB.friendship - DRUNK_FIGHT_FRIENDSHIP_LOSS);
+          a.profile.morale = Math.min(255, a.profile.morale + DRUNK_FIGHT_MORALE_GAIN);
+          b.profile.morale = Math.min(255, b.profile.morale + DRUNK_FIGHT_MORALE_GAIN);
+          const fightLines = ['Take that!', 'Ye scallywag!', 'Arrr!', 'Have at ye!', 'Put up yer dukes!'];
+          a.speechBubbleText = fightLines[Math.floor(Math.random() * fightLines.length)];
+          a.speechBubbleTimer = 3;
+          b.speechBubbleText = fightLines[Math.floor(Math.random() * fightLines.length)];
+          b.speechBubbleTimer = 3;
+          activityLog.push({ text: `${a.profile.name} and ${b.profile.name} threw fists in a drunken brawl!`, time: gameTime });
+          if (audio) audio.play('fist_fight', a.deck);
+          break outer;
         }
       }
     }
@@ -861,7 +1448,7 @@ function updateIdle(member: Actor, decks: Deck[], dt: number, crew: Actor[], lan
   if (member.actorType === 'human') {
     updateIdleHuman(member, decks, dt, crew, lanternOil, brightness, world, audio);
   } else {
-    updateIdleAnimal(member, decks, dt, crew, brightness);
+    updateIdleAnimal(member, decks, dt, crew, brightness, gameTime, activityLog, world, audio);
   }
 }
 
@@ -872,9 +1459,20 @@ function isOnShipCheck(tileX: number, tileY: number): boolean {
 
 function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
+  const isSick = member.conditions.has('sick');
 
-  // Hungry? Go eat (when docked, prefer harbor stoves — tavern food)
+  // Hungry? Eat a fish from inventory first (eat it before it spoils), else go to a stove.
   if (member.conditions.has('hungry') || member.conditions.has('starving')) {
+    const FISH_NAMES = new Set(['Fish', 'Tropical fish', 'Swordfish', 'Pufferfish']);
+    const fishIdx = member.profile.inventory.findIndex(i => i.hungerRestore > 0 && FISH_NAMES.has(i.name));
+    if (fishIdx !== -1) {
+      const item = member.profile.inventory.splice(fishIdx, 1)[0];
+      member.state = CrewState.DRINKING; // shared item-consume path applies hungerRestore + pufferfish effect
+      member.stateTimer = 5;
+      member.consumingItem = item;
+      member.path = [];
+      return;
+    }
     let stoves = findTilesOfType(decks, TileType.STOVE);
     if (world?.docking?.phase === 'docked' && Math.random() < 0.6) {
       const harborStoves = stoves.filter(s => !isOnShipCheck(s.x, s.y));
@@ -919,8 +1517,32 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
     }
   }
 
+  // Low on food? Go fishing to replenish supplies. Autonomous economy:
+  // crew fish when few edible items remain in the barrels (and they aren't sick).
+  // Skip while docked — they'd rather buy/eat in town.
+  if (!isSick && world?.docking?.phase !== 'docked' &&
+      countEdibleSupply(world?.barrelInventory ?? new Map()) < LOW_FOOD_THRESHOLD &&
+      Math.random() < AUTO_FISH_CHANCE) {
+    const spots = findTilesOfType(decks, TileType.FISHING_SPOT).filter(s =>
+      // don't crowd a spot another crew is already heading to / using
+      !crew.some(c => c.id !== member.id &&
+        ((c.state === CrewState.FISHING && Math.floor(c.pixelX / TILE_SIZE) === s.x && Math.floor(c.pixelY / TILE_SIZE) === s.y && c.deck === s.deck) ||
+         (c.state === CrewState.WALKING && c.targetState === CrewState.FISHING && c.path.length > 0 && c.path[c.path.length - 1].x === s.x && c.path[c.path.length - 1].y === s.y && c.path[c.path.length - 1].deck === s.deck)))
+    );
+    const target = pickRandom(spots);
+    if (target) {
+      const path = findPath(decks, from, target, world?.gangplanks);
+      if (path) {
+        member.path = path;
+        member.state = CrewState.WALKING;
+        member.targetState = CrewState.FISHING;
+        return;
+      }
+    }
+  }
+
   // Light unlit lanterns when dark
-  if (brightness < 0.7) {
+  if (!isSick && brightness < 0.7) {
     const lanterns = findTilesOfType(decks, TileType.LANTERN);
     const unlit = lanterns.filter(l => {
       const key = `${l.deck}-${l.x}-${l.y}`;
@@ -941,7 +1563,7 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
   }
 
   // Extinguish lit lanterns when bright
-  if (brightness > 0.9) {
+  if (!isSick && brightness > 0.9) {
     const lanterns = findTilesOfType(decks, TileType.LANTERN);
     const lit = lanterns.filter(l => {
       const key = `${l.deck}-${l.x}-${l.y}`;
@@ -1083,7 +1705,7 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
   wanderRandomly(member, decks);
 }
 
-function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: Actor[], brightness: number): void {
+function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: Actor[], brightness: number, gameTime: number = 0, activityLog: ActivityLogEntry[] = [], world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
 
   // Hungry? Go eat at stove
@@ -1101,8 +1723,8 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
     }
   }
 
-  // Lustful? Seek same-species partner (dogs and monkeys only)
-  if (LUST_ACTOR_TYPES.has(member.actorType) && member.conditions.has('lustful') && member.lustSeekCooldown <= 0) {
+  // Lustful? Seek same-species partner (dogs and monkeys only; never while a baby)
+  if (LUST_ACTOR_TYPES.has(member.actorType) && !member.conditions.has('baby') && member.conditions.has('lustful') && member.lustSeekCooldown <= 0) {
     if (trySeekLustPartner(member, allActors, decks)) return;
   }
 
@@ -1167,9 +1789,20 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
     return;
   }
 
+  // Baby: stick close to mother on a tight leash (overrides normal follow/wander)
+  const babyStatus = member.statuses.get('baby') as { motherId?: number } | undefined;
+  if (babyStatus) {
+    if (tryBabyFollowMother(member, babyStatus.motherId, allActors, decks)) return;
+  }
+
   // Dog: follow liked entity
   if (member.actorType === 'dog') {
     if (tryFollowLikedEntity(member, allActors, decks)) return;
+  }
+
+  // Monkey mischief: adult monkeys pinch & stash items (babies are too little).
+  if (member.actorType === 'monkey' && !member.statuses.has('baby')) {
+    if (tryMonkeyMischief(member, decks, allActors, world?.barrelInventory ?? new Map(), gameTime, activityLog, audio)) return;
   }
 
   // Rare conversations (1/20th of human chance)
@@ -1179,6 +1812,36 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
 
   // Otherwise wander
   wanderRandomly(member, decks);
+}
+
+/**
+ * Baby behaviour: stay near the mother on a tight leash (BABY_FOLLOW_LEASH).
+ * If the mother is sleeping, idle within ~1 tile rather than crowding her bed.
+ * Returns true if it set a path / chose to wait, false to fall through to wander.
+ */
+function tryBabyFollowMother(member: Actor, motherId: number | undefined, allActors: Actor[], decks: Deck[]): boolean {
+  if (motherId === undefined) return false;
+  const mother = allActors.find(a => a.id === motherId);
+  if (!mother || !canAccessDeck(member, mother.deck)) return false;
+
+  // Different deck → always go to her.
+  if (mother.deck !== member.deck) {
+    const motherTile = { x: Math.floor(mother.pixelX / TILE_SIZE), y: Math.floor(mother.pixelY / TILE_SIZE), deck: mother.deck };
+    return orderCrewBesideTile(member, motherTile, decks, CrewState.IDLE);
+  }
+
+  const dx = mother.pixelX - member.pixelX;
+  const dy = mother.pixelY - member.pixelY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  // Mother asleep: keep within ~1 tile but don't fuss.
+  const leash = mother.state === CrewState.SLEEPING ? TILE_SIZE * 1 : BABY_FOLLOW_LEASH;
+  if (dist <= leash) {
+    // Close enough — wait a beat near mum.
+    member.idleTimer = 0.5 + Math.random();
+    return true;
+  }
+  const motherTile = { x: Math.floor(mother.pixelX / TILE_SIZE), y: Math.floor(mother.pixelY / TILE_SIZE), deck: mother.deck };
+  return orderCrewBesideTile(member, motherTile, decks, CrewState.IDLE);
 }
 
 /** Dog behavior: follow the entity it likes most, across decks if needed. */

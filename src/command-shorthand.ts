@@ -13,6 +13,7 @@ export const COMMANDS: Record<string, string[]> = {
   Navigate:          ['deck?', 'x?', 'y?'],
   ManCannon:         ['deck?', 'x?', 'y?'],
   Lookout:           ['deck?', 'x?', 'y?'],
+  Fish:              ['deck?', 'x?', 'y?'],
   GoTo:              ['deck?', 'x', 'y'],
   GoToDeck:          ['deck'],
   CopulateBarrel:    ['deck', 'x', 'y'],

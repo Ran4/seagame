@@ -341,6 +341,37 @@ function drawTileIconFallback(rc: RenderContext, tile: TileType, sx: number, sy:
       ctx.fillRect(sx + 17, sy + 4, 7, 11);
       break;
     }
+    case TileType.FISHING_SPOT: {
+      // Deck plank base with a railing gap + a fishing rod leaning over the side
+      ctx.fillStyle = '#c4a46c'; // wooden deck
+      ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+      // Railing posts (broken — the fishing gap)
+      ctx.strokeStyle = '#5c3d2e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + 4, sy + 4);
+      ctx.lineTo(sx + 4, sy + TILE_SIZE - 4);
+      ctx.moveTo(sx + TILE_SIZE - 4, sy + 4);
+      ctx.lineTo(sx + TILE_SIZE - 4, sy + TILE_SIZE - 4);
+      ctx.stroke();
+      // Fishing rod (diagonal pole) + line
+      ctx.strokeStyle = '#7a5230';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + 8, sy + TILE_SIZE - 8);
+      ctx.lineTo(sx + TILE_SIZE - 6, sy + 6);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sx + TILE_SIZE - 6, sy + 6);
+      ctx.lineTo(sx + TILE_SIZE - 6, sy + TILE_SIZE - 4);
+      ctx.stroke();
+      break;
+    }
     case TileType.HARBOR_FLOOR: {
       // Stone floor tiles
       ctx.fillStyle = '#b0a08a';

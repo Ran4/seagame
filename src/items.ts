@@ -16,6 +16,39 @@ export function createGrogRation(gameTime: number = 0): Item {
   };
 }
 
+export type FishKind = 'common' | 'tropical' | 'swordfish' | 'pufferfish';
+
+/** Fish caught while fishing. Spoil fast (~600s = ~10 in-game hours). */
+export function createFish(kind: FishKind, gameTime: number = 0): Item {
+  switch (kind) {
+    case 'tropical':
+      return {
+        name: 'Tropical fish', createdAt: gameTime, weight: 350,
+        description: 'A brightly coloured reef fish. Fetches a good price at harbour.',
+        stackable: false, quantity: 1, spoilAfter: 600, hungerRestore: 30,
+      };
+    case 'swordfish':
+      return {
+        name: 'Swordfish', createdAt: gameTime, weight: 1400,
+        description: 'A huge deep-water fighter with a bladed snout. A hearty meal.',
+        stackable: false, quantity: 1, spoilAfter: 600, hungerRestore: 50,
+      };
+    case 'pufferfish':
+      return {
+        name: 'Pufferfish', createdAt: gameTime, weight: 300,
+        description: 'A spiny puffer. Filling, but its flesh is poisonous if not prepared right.',
+        stackable: false, quantity: 1, spoilAfter: 600, hungerRestore: 50,
+      };
+    case 'common':
+    default:
+      return {
+        name: 'Fish', createdAt: gameTime, weight: 400,
+        description: 'A plain fish, fresh off the line.',
+        stackable: false, quantity: 1, spoilAfter: 600, hungerRestore: 20,
+      };
+  }
+}
+
 export function createSemen(gameTime: number): Item {
   return {
     name: 'Semen', createdAt: gameTime, weight: 5,

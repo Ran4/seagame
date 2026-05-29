@@ -117,6 +117,13 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       log('going to man cannon');
       return true;
     }
+    case 'Fish': {
+      const target = findTileOrRandom(decks, TileType.FISHING_SPOT, cmd);
+      if (!target) { fail('no fishing spot found'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.FISHING)) { fail('can\'t reach fishing spot'); return true; }
+      log('going to fish');
+      return true;
+    }
     case 'Lookout': {
       const masts = findTilesOfType(decks, TileType.MAST);
       const target = (cmd.x !== undefined && cmd.y !== undefined)

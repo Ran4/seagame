@@ -235,6 +235,9 @@ function buildMoraleTooltip(member: Actor, brightness: number, lanternOil: Map<s
   // Injured
   if (member.conditions.has('injured')) lines.push('Health: Injured  \u2193\u2193');
 
+  // Bruised (drunken brawl)
+  if (member.conditions.has('bruised')) lines.push('Health: Bruised  \u2193');
+
   // Dog morale
   if (member.conditions.has('near_friendly_dog')) lines.push('Dog: Faithful friend  \u2191');
   if (member.conditions.has('despises_nearby_dog')) lines.push('Dog: Despises hounds  \u2193\u2193');

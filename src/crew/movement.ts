@@ -93,6 +93,10 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
       if (barrelInventory) performTakeItem(member, barrelInventory);
       member.state = CrewState.IDLE;
       member.idleTimer = 1 + Math.random() * 2;
+    } else if (member.state === CrewState.FISHING) {
+      // Bite time: random 15-60s. TODO: scale with a fishing skill once crew
+      // skills exist (see issues/fishing-needs-crew-skill.md).
+      member.stateTimer = 15 + Math.random() * 45;
     } else if (member.state === CrewState.PETTING) {
       member.stateTimer = PET_DURATION;
     } else if (member.state === CrewState.CARRYING_CORPSE) {

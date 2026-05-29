@@ -488,6 +488,7 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
     case CrewState.LOOKOUT: return { name: 'Lookout', deck: targetDeck, x: tileX, y: tileY };
     case CrewState.LIGHTING_LANTERN: return { name: 'LightLantern', deck: targetDeck, x: tileX, y: tileY };
     case CrewState.EXTINGUISHING_LANTERN: return { name: 'ExtinguishLantern', deck: targetDeck, x: tileX, y: tileY };
+    case CrewState.FISHING: return { name: 'Fish', deck: targetDeck, x: tileX, y: tileY };
   }
 
   // Stairs/mast "go to" — GoTo on the connected deck

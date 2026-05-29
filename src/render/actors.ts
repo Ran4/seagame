@@ -27,8 +27,11 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
       sprite = dirSprite.south;
     }
   }
-  // Animals are drawn slightly smaller (monkey even smaller)
-  const sizeScale = (member.actorType === 'monkey' || member.actorType === 'cat') ? 0.7 : isAnimal ? 0.85 : 1.0;
+  // Animals are drawn slightly smaller (monkey even smaller); babies smaller still
+  const isBaby = member.statuses.has('baby');
+  const sizeScale = isBaby ? 0.6
+    : (member.actorType === 'monkey' || member.actorType === 'cat') ? 0.7
+    : isAnimal ? 0.85 : 1.0;
   const size = TILE_SIZE * sizeScale;
 
   if (sprite) {
@@ -125,9 +128,11 @@ export function drawActorOverlays(rc: RenderContext, member: Actor, selected: bo
       ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
       ctx.fill();
       const bubbleColor = member.thoughtBubble === 'heart' ? '#e74c3c'
-        : member.thoughtBubble === 'music_note' ? '#3498db' : '#666666';
+        : member.thoughtBubble === 'music_note' ? '#3498db'
+        : member.thoughtBubble === 'mischief' ? '#d4a017' : '#666666';
       const bubbleChar = member.thoughtBubble === 'heart' ? '\u2665'
-        : member.thoughtBubble === 'music_note' ? '\u266A' : '\uD83D\uDC94';
+        : member.thoughtBubble === 'music_note' ? '\u266A'
+        : member.thoughtBubble === 'mischief' ? '\u263A' : '\uD83D\uDC94'; // \u263A cheeky grin
       ctx.fillStyle = bubbleColor;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';

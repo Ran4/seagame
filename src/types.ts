@@ -54,6 +54,7 @@ export enum TileType {
   HARBOR_WALL,
   HARBOR_FLOOR,
   NOTICE_BOARD,
+  FISHING_SPOT,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -71,6 +72,7 @@ export const WALKABLE = new Set<TileType>([
   TileType.LAND,
   TileType.GANGPLANK,
   TileType.HARBOR_FLOOR,
+  TileType.FISHING_SPOT,
 ]);
 
 export const SELECTABLE_OBJECTS = new Set<TileType>([
@@ -119,6 +121,7 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.HARBOR_WALL]: '#8b7765',
   [TileType.HARBOR_FLOOR]: '#b0a08a',
   [TileType.NOTICE_BOARD]: '#6b5b3a',
+  [TileType.FISHING_SPOT]: '#4a6f8a',
 };
 
 export interface Point {
@@ -151,6 +154,7 @@ export enum CrewState {
   DANCING = 'dancing',
   CARRYING_CORPSE = 'carrying_corpse',
   BURYING_AT_SEA = 'burying_at_sea',
+  FISHING = 'fishing',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -174,6 +178,7 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.DANCING]: 'Dancing',
   [CrewState.CARRYING_CORPSE]: 'Carrying corpse',
   [CrewState.BURYING_AT_SEA]: 'Burying at sea',
+  [CrewState.FISHING]: 'Fishing',
 };
 
 export interface ContextMenuItem {
@@ -222,6 +227,7 @@ export const TILE_ACTIONS: Partial<Record<TileType, ContextMenuItem[]>> = {
   [TileType.BARREL]: [{ label: 'Copulate', targetState: CrewState.COPULATING }],
   [TileType.LANTERN]: [],
   [TileType.NOTICE_BOARD]: [{ label: 'Read notices', targetState: CrewState.IDLE, action: 'read_notices' }],
+  [TileType.FISHING_SPOT]: [{ label: 'Fish', targetState: CrewState.FISHING }],
 };
 
 export type ActorType = 'human' | 'dog' | 'parrot' | 'monkey' | 'cat';
@@ -354,7 +360,7 @@ export interface GameSettings {
   inputMode: InputMode;
 }
 
-export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note';
+export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note' | 'mischief';
 
 export type CopulationTarget =
   | { type: 'barrel'; x: number; y: number; deck: number }
@@ -368,6 +374,7 @@ export type Command =
   | { name: 'Navigate';          deck?: number; x?: number; y?: number }
   | { name: 'ManCannon';         deck?: number; x?: number; y?: number }
   | { name: 'Lookout';           deck?: number; x?: number; y?: number }
+  | { name: 'Fish';              deck?: number; x?: number; y?: number }
   | { name: 'GoTo';              deck?: number; x: number; y: number }
   | { name: 'GoToDeck';          deck: number }
   | { name: 'CopulateBarrel';    deck: number; x: number; y: number }

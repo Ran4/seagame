@@ -35,9 +35,11 @@ export class AudioManager {
     this.preload('dance_clap', '/audio/elevenlabs-generated/dance_clap.mp3', 'world', 0.5);
     this.preload('harbor_arrive', '/audio/elevenlabs-generated/harbor_arrive.mp3', 'world', 0.6);
     this.preload('tavern_brawl', '/audio/elevenlabs-generated/tavern_brawl.mp3', 'world', 0.7);
+    this.preload('fist_fight', '/audio/elevenlabs-generated/fist_fight.mp3', 'world', 0.7);
     this.preload('recruit', '/audio/elevenlabs-generated/recruit.mp3', 'world', 0.8);
     this.preload('notice_board', '/audio/elevenlabs-generated/notice_board.mp3', 'ui', 0.5);
     this.preload('cat_meow', '/audio/elevenlabs-generated/cat_meow.mp3', 'world', 0.5);
+    this.preload('monkey_mischief', '/audio/elevenlabs-generated/monkey_mischief.mp3', 'world', 0.5);
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;
