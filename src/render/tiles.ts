@@ -372,6 +372,60 @@ function drawTileIconFallback(rc: RenderContext, tile: TileType, sx: number, sy:
       ctx.stroke();
       break;
     }
+    case TileType.BREACH: {
+      // A jagged hole in the hull with dark seawater sloshing through.
+      // Splintered hull frame around the edge.
+      ctx.fillStyle = '#3a261a';
+      ctx.beginPath();
+      ctx.moveTo(sx + 2, sy + 2);
+      ctx.lineTo(sx + 11, sy + 6);
+      ctx.lineTo(sx + 6, sy + 14);
+      ctx.lineTo(sx + 13, sy + 22);
+      ctx.lineTo(sx + 4, sy + TILE_SIZE - 2);
+      ctx.lineTo(sx + 2, sy + TILE_SIZE - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sx + TILE_SIZE - 2, sy + 2);
+      ctx.lineTo(sx + TILE_SIZE - 11, sy + 7);
+      ctx.lineTo(sx + TILE_SIZE - 5, sy + 16);
+      ctx.lineTo(sx + TILE_SIZE - 12, sy + 24);
+      ctx.lineTo(sx + TILE_SIZE - 3, sy + TILE_SIZE - 2);
+      ctx.lineTo(sx + TILE_SIZE - 2, sy + TILE_SIZE - 2);
+      ctx.closePath();
+      ctx.fill();
+      // Dark water in the centre.
+      ctx.fillStyle = '#0a1c2a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 9, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // A glint of water highlight (animated by tile position would need time; static is fine).
+      ctx.fillStyle = 'rgba(80,140,180,0.5)';
+      ctx.fillRect(cx - 5, cy - 2, 4, 2);
+      ctx.fillRect(cx + 1, cy + 4, 5, 2);
+      break;
+    }
+    case TileType.RUBBLE: {
+      // Grey splintered debris pile.
+      ctx.fillStyle = '#4a463f';
+      ctx.fillRect(sx + 2, sy + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      ctx.fillStyle = '#6b665c';
+      // Scattered chunks.
+      ctx.fillRect(sx + 5, sy + 6, 8, 6);
+      ctx.fillRect(sx + 16, sy + 9, 7, 5);
+      ctx.fillRect(sx + 8, sy + 17, 6, 7);
+      ctx.fillRect(sx + 18, sy + 19, 8, 6);
+      // Dark cracks.
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sx + 4, sy + 14);
+      ctx.lineTo(sx + 14, sy + 16);
+      ctx.moveTo(sx + 20, sy + 6);
+      ctx.lineTo(sx + 24, sy + 18);
+      ctx.stroke();
+      break;
+    }
     case TileType.HARBOR_FLOOR: {
       // Stone floor tiles
       ctx.fillStyle = '#b0a08a';

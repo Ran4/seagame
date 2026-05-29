@@ -55,6 +55,8 @@ export enum TileType {
   HARBOR_FLOOR,
   NOTICE_BOARD,
   FISHING_SPOT,
+  BREACH,
+  RUBBLE,
 }
 
 export const WALKABLE = new Set<TileType>([
@@ -88,6 +90,7 @@ export const SELECTABLE_OBJECTS = new Set<TileType>([
 ]);
 
 export const OBJECT_MAX_HP: Partial<Record<TileType, number>> = {
+  [TileType.HULL]: 120,
   [TileType.HELM]: 100,
   [TileType.MAST]: 150,
   [TileType.CANNON]: 80,
@@ -122,6 +125,8 @@ export const TILE_COLORS: Record<TileType, string> = {
   [TileType.HARBOR_FLOOR]: '#b0a08a',
   [TileType.NOTICE_BOARD]: '#6b5b3a',
   [TileType.FISHING_SPOT]: '#4a6f8a',
+  [TileType.BREACH]: '#0d2233',     // dark sea-water showing through a hole in the hull
+  [TileType.RUBBLE]: '#555048',     // grey splintered debris
 };
 
 export interface Point {
@@ -155,6 +160,8 @@ export enum CrewState {
   CARRYING_CORPSE = 'carrying_corpse',
   BURYING_AT_SEA = 'burying_at_sea',
   FISHING = 'fishing',
+  REPAIRING = 'repairing',
+  FIGHTING = 'fighting',
 }
 
 export const STATE_NAMES: Record<CrewState, string> = {
@@ -179,6 +186,8 @@ export const STATE_NAMES: Record<CrewState, string> = {
   [CrewState.CARRYING_CORPSE]: 'Carrying corpse',
   [CrewState.BURYING_AT_SEA]: 'Burying at sea',
   [CrewState.FISHING]: 'Fishing',
+  [CrewState.REPAIRING]: 'Repairing',
+  [CrewState.FIGHTING]: 'Fighting',
 };
 
 export interface ContextMenuItem {
@@ -335,6 +344,18 @@ export interface WorldMap {
   islands: Island[];
 }
 
+/** An enemy ship encountered while sailing. A lightweight World-level entity — we
+ * do not simulate its decks/crew individually; HP + crew count are abstract. */
+export interface EnemyShip {
+  name: string;
+  hp: number;
+  maxHp: number;
+  crewCount: number;
+  distance: number;       // leagues to the player ship (0 = adjacent / boardable)
+  hostile: boolean;
+  fireTimer: number;      // seconds until the enemy fires its next volley
+}
+
 export type Sex = 'M' | 'F';
 
 export interface Item {
@@ -375,6 +396,9 @@ export type Command =
   | { name: 'ManCannon';         deck?: number; x?: number; y?: number }
   | { name: 'Lookout';           deck?: number; x?: number; y?: number }
   | { name: 'Fish';              deck?: number; x?: number; y?: number }
+  | { name: 'Repair';            deck: number; x: number; y: number }
+  | { name: 'FireCannon' }
+  | { name: 'BoardEnemy' }
   | { name: 'GoTo';              deck?: number; x: number; y: number }
   | { name: 'GoToDeck';          deck: number }
   | { name: 'CopulateBarrel';    deck: number; x: number; y: number }
@@ -449,4 +473,10 @@ export interface World {
   nearbyHarborIsland: Island | null;
   strandedActors: Map<number, Actor[]>;  // island ID → actors left on that island
   strandedCorpses: Map<number, Corpse[]>;  // island ID → corpses left on that island
+  // --- SHARED SYSTEM A: object/hull damage + combat ---
+  objectHp: Map<string, number>;   // "deck-x-y" → current HP of a damageable tile (absent = full)
+  floodLevel: number;              // 0..100, rises while hull breaches exist on the lowest deck
+  gameOverReason: string | null;   // generalized game-over text (mutiny also sets mutinyState)
+  enemyShip: EnemyShip | null;     // current ship-to-ship combat target (one at a time)
+  gold: number;                    // ship treasury (SHARED SYSTEM B; loot/treasure add, buying subtracts)
 }

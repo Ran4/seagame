@@ -49,6 +49,33 @@ export function createFish(kind: FishKind, gameTime: number = 0): Item {
   }
 }
 
+/** Timber for patching hull breaches / repairing damaged objects. Stackable, never spoils. */
+export function createWood(gameTime: number = 0): Item {
+  return {
+    name: 'Wood', createdAt: gameTime, weight: 2000,
+    description: 'Spare planking and timber for patching the hull and repairing the ship.',
+    stackable: true, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** Cannon ammunition. Stackable, never spoils. Consumed when a cannon fires (if present). */
+export function createCannonball(gameTime: number = 0): Item {
+  return {
+    name: 'Cannonball', createdAt: gameTime, weight: 5000,
+    description: 'A heavy iron ball. Loaded into the cannons to fire on enemy ships.',
+    stackable: true, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** Medicine — consumed (via Drink path) to clear/reduce the 'injured' status. */
+export function createMedicine(gameTime: number = 0): Item {
+  return {
+    name: 'Medicine', createdAt: gameTime, weight: 200,
+    description: 'A pouch of salves and bandages. Patches up an injured crew member.',
+    stackable: true, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
 export function createSemen(gameTime: number): Item {
   return {
     name: 'Semen', createdAt: gameTime, weight: 5,

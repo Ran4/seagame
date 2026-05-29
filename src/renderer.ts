@@ -11,11 +11,33 @@ import {
   drawTooltip, drawItemTooltip, drawBarTooltip,
   drawContextMenu, drawMapOverlay,
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
-  drawDockButton, drawDockedBar,
+  drawDockButton, drawDockedBar, drawGoldCounter, drawCombatHud,
 } from './render';
 import { drawCommandInput } from './command-input';
 
 const WATER_COLOR_1 = '#1a5276';
+
+/** Standalone flooding bar (top-center) shown when the ship is taking on water with no enemy. */
+function drawFloodIndicator(ctx: CanvasRenderingContext2D, floodLevel: number): void {
+  const w = 180, h = 22;
+  const x = CANVAS_WIDTH / 2 - w / 2;
+  const y = 38;
+  ctx.fillStyle = 'rgba(0,10,30,0.78)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = floodLevel > 50 ? '#cc4444' : '#3a78c0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = '#88bbdd';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Flooding', x + 6, y + h / 2);
+  ctx.fillStyle = '#333';
+  ctx.fillRect(x + 58, y + 6, w - 66, 10);
+  ctx.fillStyle = floodLevel > 50 ? '#ff4444' : '#3a78c0';
+  ctx.fillRect(x + 58, y + 6, (w - 66) * Math.min(1, floodLevel / 100), 10);
+  ctx.textBaseline = 'alphabetic';
+}
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -194,6 +216,14 @@ export class Renderer {
     }
     drawSettingsButton(rc, world.settingsOpen);
     drawSoundButton(rc, soundMuted, sfxMuted);
+    drawGoldCounter(rc, world.gold);
+    // Combat HUD (enemy name, HP bar, distance, our flood indicator)
+    if (world.enemyShip) {
+      drawCombatHud(rc, world.enemyShip, world.floodLevel);
+    } else if (world.floodLevel > 0) {
+      // Show the flood indicator even without an enemy (e.g. storms / lingering breaches)
+      drawFloodIndicator(ctx, world.floodLevel);
+    }
     if (world.settingsOpen) {
       drawSettingsPanel(rc, world.settings);
     }
@@ -208,7 +238,7 @@ export class Renderer {
       drawCommandInput(rc, world.commandInput);
     }
     if (mapOverlayOpen && worldMap) {
-      drawMapOverlay(rc, worldMap, mousePos, time, hasNavigator, hasHelmsman, hasExpertNavigator);
+      drawMapOverlay(rc, worldMap, mousePos, time, hasNavigator, hasHelmsman, hasExpertNavigator, world.enemyShip);
     }
     if (rc.hoveredItem) {
       drawItemTooltip(rc, rc.hoveredItem.item);
@@ -245,29 +275,43 @@ export class Renderer {
       ctx.textBaseline = 'alphabetic';
     }
 
-    // Mutiny game over overlay
+    // Game over overlay \u2014 generalized to display world.gameOverReason.
+    // Both mutiny and sinking (flooding) end the game via mutinyState === 'game_over'.
     if (world.mutinyState === 'game_over') {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Skull and crossbones (simple canvas drawing)
       const cx = CANVAS_WIDTH / 2;
       const cy = CANVAS_HEIGHT / 2 - 40;
-      ctx.font = '64px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#cc2222';
-      ctx.fillText('\u2620', cx, cy);
 
-      // "MUTINY!" header
+      // Determine the headline + subtext from the reason (default = mutiny).
+      const reason = world.gameOverReason;
+      const sank = reason === 'Your ship sank!';
+      const headline = sank ? 'SUNK!' : 'MUTINY!';
+      const subtext = reason ?? 'The crew has seized the ship.';
+
+      // Icon: skull for mutiny, waves for sinking.
+      if (sank) {
+        ctx.fillStyle = '#3a78c0';
+        ctx.font = '64px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('\u2248', cx, cy); // \u2248 waves
+      } else {
+        ctx.font = '64px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#cc2222';
+        ctx.fillText('\u2620', cx, cy); // skull & crossbones
+      }
+
       ctx.font = 'bold 48px serif';
-      ctx.fillStyle = '#cc2222';
-      ctx.fillText('MUTINY!', cx, cy + 60);
+      ctx.fillStyle = sank ? '#5599dd' : '#cc2222';
+      ctx.fillText(headline, cx, cy + 60);
 
-      // Subtext
       ctx.font = '18px serif';
       ctx.fillStyle = '#cccccc';
-      ctx.fillText('The crew has seized the ship.', cx, cy + 100);
+      ctx.fillText(subtext, cx, cy + 100);
 
       ctx.font = '14px monospace';
       ctx.fillStyle = '#888888';

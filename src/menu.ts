@@ -3,6 +3,7 @@ import {
   CrewState, ContextMenu, ContextMenuItem, TILE_ACTIONS, STATE_NAMES,
   Item, World, Command, Deck, computeMenuWidth,
 } from './types';
+import { getObjectHp, getObjectMaxHp, CANNON_RANGE, BOARD_RANGE } from './combat';
 
 /** Build a context menu from a right-click. Returns ContextMenu, null (close menu), or undefined (no change). */
 export function buildContextMenu(
@@ -246,6 +247,25 @@ export function buildContextMenu(
           tileActions = [{ label: 'Extinguish', targetState: CrewState.EXTINGUISHING_LANTERN }];
         }
       }
+      // Manual cannon volley — when manning/right-clicking a cannon with an enemy in range.
+      if (tileType === TileType.CANNON && world.enemyShip && world.enemyShip.distance <= CANNON_RANGE) {
+        items.push({ label: 'Fire Cannon', targetState: CrewState.IDLE, action: 'fire_cannon' });
+      }
+      // Board the enemy — when an enemy ship has closed to boarding range.
+      if (world.enemyShip && world.enemyShip.distance <= BOARD_RANGE) {
+        items.push({ label: `Board the ${world.enemyShip.name}`, targetState: CrewState.IDLE, action: 'board_enemy' });
+      }
+      // Repair — BREACH tiles, or damaged HULL / objects (current HP < max).
+      const isBreach = tileType === TileType.BREACH;
+      const isDamaged = getObjectMaxHp(tileType) > 0 &&
+        getObjectHp(world, world.activeDeck, tileX, tileY) < getObjectMaxHp(tileType);
+      if (isBreach || isDamaged) {
+        const hasWood = selectedActor.profile.inventory.some(i => i.name === 'Wood') ||
+          Array.from(world.barrelInventory.values()).some(items2 => items2.some(i => i.name === 'Wood'));
+        items.push(hasWood
+          ? { label: isBreach ? 'Repair breach' : 'Repair', targetState: CrewState.REPAIRING }
+          : { label: 'Repair (no wood)', targetState: CrewState.REPAIRING, disabled: true });
+      }
       if (tileActions) items.push(...tileActions);
     }
     // "Open Map" on map table when someone is navigating
@@ -430,6 +450,14 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
     return { name: 'TakeItem', barrelKey: menuItem.itemData.barrelKey, itemName: menuItem.itemData.itemName };
   }
 
+  // Combat actions
+  if (menuItem.action === 'fire_cannon') {
+    return { name: 'FireCannon' };
+  }
+  if (menuItem.action === 'board_enemy') {
+    return { name: 'BoardEnemy' };
+  }
+
   // Crew-crew interactions (Kiss, Copulate, Converse, Pet)
   if (menuItem.targetActorId !== undefined) {
     const actorId = menuItem.targetActorId;
@@ -489,6 +517,7 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
     case CrewState.LIGHTING_LANTERN: return { name: 'LightLantern', deck: targetDeck, x: tileX, y: tileY };
     case CrewState.EXTINGUISHING_LANTERN: return { name: 'ExtinguishLantern', deck: targetDeck, x: tileX, y: tileY };
     case CrewState.FISHING: return { name: 'Fish', deck: targetDeck, x: tileX, y: tileY };
+    case CrewState.REPAIRING: return { name: 'Repair', deck: contextMenu.deck, x: tileX, y: tileY };
   }
 
   // Stairs/mast "go to" — GoTo on the connected deck

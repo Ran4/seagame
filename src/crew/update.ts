@@ -1,6 +1,7 @@
 import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY, Corpse } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen, createFish, FishKind } from '../items';
+import { repairObject, getObjectHp, getObjectMaxHp } from '../combat';
 import { tryStartConversation, updateTalking, tickConversationCooldown } from '../conversation';
 import { updateWalking, orderCrewBesideTile } from './movement';
 import { DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from '../harbor';
@@ -80,6 +81,17 @@ const SICK_VOMIT_INTERVAL = 90;      // average seconds between vomit speech bub
 // Ship food supply: idle crew fish autonomously when edible items in barrels run low.
 const LOW_FOOD_THRESHOLD = 3;        // fewer than this many edible units → consider fishing
 const AUTO_FISH_CHANCE = 0.02;       // per idle decision, when food is low
+
+// Repair (hull/object damage — SHARED SYSTEM A)
+const REPAIR_AMOUNT = 35;            // HP restored per completed repair tick (one Wood consumed)
+const AUTO_REPAIR_FLOOD = 1;         // floodLevel above which brave idle crew patch breaches
+const REPAIR_BRAVE_MORALE = 96;      // crew with morale >= this will autonomously fight flooding
+
+// Injury healing (combat / sea-monster wounds)
+const INJURY_HEAL_RATE = 2.0;        // HP/sec base passive healing while injured
+const INJURY_HEAL_BED_MULT = 2.0;    // extra while SLEEPING (bed rest)
+const INJURY_HEAL_DOCKED_MULT = 2.0; // extra while docked at harbor
+const INJURY_CLEAR_HEALTH = 60;      // injured status clears once health recovers past this
 
 // Drunk fighting (drunk crew with low mutual friendship may throw fists at sea)
 const DRUNK_FIGHT_CHANCE = 0.001;       // ~0.1%/sec while a valid pair exists
@@ -169,7 +181,8 @@ export function refreshConditions(member: Actor, crew: Actor[]): void {
   else if (member.profile.energy < 60) member.conditions.add('tired');
   if (member.profile.hunger < 15) member.conditions.add('starving');
   else if (member.profile.hunger < 70) member.conditions.add('hungry');
-  // Derived: health
+  // Derived: health. 'injured' is also set explicitly as a status { severity } by
+  // combat / sea-monster wounds (it auto-copies above); low health is a fallback.
   if (member.health < 32) member.conditions.add('injured');
   // 'bruised' is a tracked status ({ since }) copied above; it expires ~1 in-game
   // day after a fist fight (see BRUISED_DURATION decay in updateActors).
@@ -290,6 +303,77 @@ function findNearestBarrel(member: Actor, decks: Deck[]): DeckPoint | null {
     }
   }
   return best;
+}
+
+/** Consume one Wood unit from the crew's inventory, or from a barrel adjacent to them.
+ * Returns true if a unit was found and consumed. */
+function consumeWoodFor(member: Actor, decks: Deck[], barrelInventory: Map<string, Item[]>): boolean {
+  // Inventory first.
+  const invIdx = member.profile.inventory.findIndex(i => i.name === 'Wood');
+  if (invIdx !== -1) {
+    const w = member.profile.inventory[invIdx];
+    if (w.stackable && w.quantity > 1) { w.quantity--; w.weight -= 2000; }
+    else member.profile.inventory.splice(invIdx, 1);
+    return true;
+  }
+  // Else any barrel on the ship (timber is hauled to the breach).
+  for (const [key, items] of barrelInventory) {
+    const idx = items.findIndex(i => i.name === 'Wood');
+    if (idx === -1) continue;
+    const w = items[idx];
+    if (w.stackable && w.quantity > 1) { w.quantity--; w.weight -= 2000; }
+    else items.splice(idx, 1);
+    if (items.length === 0) barrelInventory.delete(key);
+    return true;
+  }
+  return false;
+}
+
+/** Find a damaged hull / breach / damaged object tile adjacent to (or under) the crew. */
+function findAdjacentDamage(member: Actor, world: World): DeckPoint | null {
+  const deck = world.decks[member.deck];
+  if (!deck) return null;
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+  const DIRS = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (const [dx, dy] of DIRS) {
+    const x = mx + dx, y = my + dy;
+    if (x < 0 || y < 0 || x >= deck.width || y >= deck.height) continue;
+    const tile = deck.tiles[y][x];
+    if (tile === TileType.BREACH) return { x, y, deck: member.deck };
+    if (getObjectMaxHp(tile) > 0 && getObjectHp(world, member.deck, x, y) < getObjectMaxHp(tile)) {
+      return { x, y, deck: member.deck };
+    }
+  }
+  return null;
+}
+
+/** Nearest BREACH tile on the ship (for autonomous flood-fighting), or null. */
+function findNearestBreach(member: Actor, decks: Deck[]): DeckPoint | null {
+  let best: DeckPoint | null = null;
+  let bestScore = Infinity;
+  const mx = Math.floor(member.pixelX / TILE_SIZE);
+  const my = Math.floor(member.pixelY / TILE_SIZE);
+  for (let d = 0; d < decks.length; d++) {
+    const deck = decks[d];
+    for (let y = 0; y < deck.height; y++) {
+      for (let x = 0; x < deck.width; x++) {
+        if (deck.tiles[y][x] !== TileType.BREACH) continue;
+        const score = (d === member.deck ? 0 : 1000) + Math.abs(x - mx) + Math.abs(y - my);
+        if (score < bestScore) { bestScore = score; best = { x, y, deck: d }; }
+      }
+    }
+  }
+  return best;
+}
+
+/** True if the ship's barrels (or this crew) hold any Wood for repairs. */
+function shipHasWood(member: Actor, barrelInventory: Map<string, Item[]>): boolean {
+  if (member.profile.inventory.some(i => i.name === 'Wood')) return true;
+  for (const items of barrelInventory.values()) {
+    if (items.some(i => i.name === 'Wood')) return true;
+  }
+  return false;
 }
 
 /** Pick which fish is caught based on where the ship currently is. */
@@ -694,6 +778,18 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       activityLog.push({ text: `${member.profile.name} recovered from sickness`, time: gameTime });
     }
 
+    // Injury healing — combat/monster wounds mend over time, faster in bed or at harbor.
+    if (member.statuses.has('injured')) {
+      let healRate = INJURY_HEAL_RATE;
+      if (member.state === CrewState.SLEEPING) healRate *= INJURY_HEAL_BED_MULT;
+      if (world?.docking?.phase === 'docked') healRate *= INJURY_HEAL_DOCKED_MULT;
+      member.health = Math.min(member.maxHealth, member.health + healRate * dt);
+      if (member.health >= INJURY_CLEAR_HEALTH) {
+        member.statuses.delete('injured');
+        activityLog.push({ text: `${member.profile.name} has recovered from their injuries`, time: gameTime });
+      }
+    }
+
     // Lust tick
     const lustStatus = member.statuses.get('lust') as { amount: number; cycleTimer?: number } | undefined;
     if (lustStatus) {
@@ -818,6 +914,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         CrewState.STEERING, CrewState.MANNING_CANNON, CrewState.NAVIGATING,
         CrewState.LOOKOUT, CrewState.FISHING, CrewState.LIGHTING_LANTERN,
         CrewState.EXTINGUISHING_LANTERN, CrewState.CARRYING_CORPSE, CrewState.BURYING_AT_SEA,
+        CrewState.REPAIRING, CrewState.FIGHTING,
       ]);
       if (SICK_BLOCKED_STATES.has(member.state) ||
           (member.state === CrewState.WALKING && SICK_BLOCKED_STATES.has(member.targetState))) {
@@ -1064,6 +1161,14 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
             if (member.consumingItem.hungerRestore > 0) {
               member.profile.hunger = Math.min(255, member.profile.hunger + member.consumingItem.hungerRestore);
             }
+            // Medicine: patches up an injured crew member (clears injury, restores health).
+            if (member.consumingItem.name === 'Medicine') {
+              member.statuses.delete('injured');
+              member.health = Math.min(member.maxHealth, member.health + 60);
+              member.speechBubbleText = 'Much better!';
+              member.speechBubbleTimer = 3;
+              activityLog.push({ text: `${member.profile.name} took medicine and feels better`, time: gameTime });
+            }
             // Pufferfish poisoning: eating it makes the crew sick for ~1 in-game day.
             if (member.consumingItem.name === 'Pufferfish') {
               member.statuses.set('sick', { since: gameTime });
@@ -1282,6 +1387,36 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
+      case CrewState.REPAIRING:
+        if (member.actorType === 'human') member.skills.repair = Math.min(255, (member.skills.repair ?? 0) + 0.1 * dt);
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          if (world) {
+            const dmg = findAdjacentDamage(member, world);
+            if (dmg && consumeWoodFor(member, decks, barrelInventory)) {
+              const repairBonus = (member.skills.repair ?? 0) >= SKILL_MASTERY ? REPAIR_AMOUNT * 1.5 : REPAIR_AMOUNT;
+              const full = repairObject(world, dmg.deck, dmg.x, dmg.y, repairBonus);
+              if (full) activityLog.push({ text: `${member.profile.name} finished a repair`, time: gameTime });
+              if (audio) audio.play('repair', member.deck);
+              // Still damage adjacent and wood to hand → keep patching.
+              if (findAdjacentDamage(member, world) && shipHasWood(member, barrelInventory)) {
+                member.stateTimer = 4; // another repair tick
+                break;
+              }
+            }
+          }
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
+      case CrewState.FIGHTING:
+        // Brief melee flavor (boarding duels are resolved abstractly in combat.ts).
+        member.stateTimer -= dt;
+        if (member.stateTimer <= 0) {
+          member.state = CrewState.IDLE;
+          member.idleTimer = 1 + Math.random() * 2;
+        }
+        break;
     }
   }
 
@@ -1404,6 +1539,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         activityLog.push({ text: 'The crew calms down — mutiny averted.', time: gameTime });
       } else if (world.mutinyTimer <= 0) {
         world.mutinyState = 'game_over';
+        world.gameOverReason = 'The crew has seized the ship.';
         activityLog.push({ text: 'MUTINY! The crew has seized the ship.', time: gameTime });
       }
     }
@@ -1460,6 +1596,40 @@ function isOnShipCheck(tileX: number, tileY: number): boolean {
 function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[], lanternOil: Map<string, number>, brightness: number, world?: World, audio?: AudioManager): void {
   const from = currentTile(member);
   const isSick = member.conditions.has('sick');
+  const isInjured = member.conditions.has('injured');
+
+  // EMERGENCY: the ship is flooding. Brave, able crew run to patch the nearest breach.
+  if (!isSick && !isInjured && world && world.floodLevel > AUTO_REPAIR_FLOOD &&
+      member.profile.morale >= REPAIR_BRAVE_MORALE &&
+      shipHasWood(member, world.barrelInventory ?? new Map())) {
+    const breach = findNearestBreach(member, decks);
+    if (breach) {
+      // Don't crowd a breach another repairer is already heading to.
+      const taken = crew.some(c => c.id !== member.id &&
+        ((c.state === CrewState.REPAIRING) ||
+         (c.state === CrewState.WALKING && c.targetState === CrewState.REPAIRING && c.path.length > 0 &&
+          c.path[c.path.length - 1].deck === breach.deck)) &&
+        Math.abs(Math.floor(c.pixelX / TILE_SIZE) - breach.x) + Math.abs(Math.floor(c.pixelY / TILE_SIZE) - breach.y) <= 1 && c.deck === breach.deck);
+      if (!taken) {
+        if (orderCrewBesideTile(member, breach, decks, CrewState.REPAIRING, world.gangplanks)) return;
+      }
+    }
+  }
+
+  // Injured? Prefer bed rest to recover (heals faster while sleeping).
+  if (isInjured && !isSick) {
+    const beds = findTilesOfType(decks, TileType.BED);
+    const target = pickRandom(beds);
+    if (target) {
+      const path = findPath(decks, from, target, world?.gangplanks);
+      if (path) {
+        member.path = path;
+        member.state = CrewState.WALKING;
+        member.targetState = CrewState.SLEEPING;
+        return;
+      }
+    }
+  }
 
   // Hungry? Eat a fish from inventory first (eat it before it spoils), else go to a stove.
   if (member.conditions.has('hungry') || member.conditions.has('starving')) {

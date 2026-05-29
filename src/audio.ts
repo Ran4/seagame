@@ -40,6 +40,9 @@ export class AudioManager {
     this.preload('notice_board', '/audio/elevenlabs-generated/notice_board.mp3', 'ui', 0.5);
     this.preload('cat_meow', '/audio/elevenlabs-generated/cat_meow.mp3', 'world', 0.5);
     this.preload('monkey_mischief', '/audio/elevenlabs-generated/monkey_mischief.mp3', 'world', 0.5);
+    this.preload('cannon_fire', '/audio/elevenlabs-generated/cannon_fire.mp3', 'world', 0.8);
+    this.preload('ship_hit', '/audio/elevenlabs-generated/ship_hit.mp3', 'world', 0.7);
+    this.preload('repair', '/audio/elevenlabs-generated/repair.mp3', 'world', 0.5);
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;

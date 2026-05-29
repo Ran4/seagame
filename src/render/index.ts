@@ -1,7 +1,7 @@
 export type { RenderContext } from './context';
 export { drawWater, drawDeck } from './tiles';
 export { drawActor, drawActorOverlays, drawCorpse } from './actors';
-export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel } from './ui';
+export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel, drawGoldCounter, drawCombatHud } from './ui';
 export { drawContextMenu } from './menu';
 export { drawMapOverlay } from './map';
 export { drawDockButton, isDockButtonClicked, drawDockedBar, isLeaveHarborClicked } from './docking';
@@ -28,4 +28,6 @@ export const TILE_NAMES: Partial<Record<TileType, string>> = {
   [TileType.HARBOR_FLOOR]: 'Floor',
   [TileType.NOTICE_BOARD]: 'Notice Board',
   [TileType.FISHING_SPOT]: 'Fishing Spot',
+  [TileType.BREACH]: 'Hull Breach',
+  [TileType.RUBBLE]: 'Rubble',
 };

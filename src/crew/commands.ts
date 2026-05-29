@@ -1,8 +1,8 @@
 import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Command, ActivityLogEntry, World, Corpse } from '../types';
 import { stopConversation } from '../conversation';
-import { createSemen } from '../items';
 import { orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './movement';
 import { AudioManager } from '../audio';
+import { fireFriendlyVolley, resolveBoarding, BOARD_RANGE, CANNON_RANGE } from '../combat';
 
 export const DRINK_DURATION = 5;
 
@@ -122,6 +122,38 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       if (!target) { fail('no fishing spot found'); return true; }
       if (!orderCrewToAdjacentTile(member, target, decks, CrewState.FISHING)) { fail('can\'t reach fishing spot'); return true; }
       log('going to fish');
+      return true;
+    }
+    case 'Repair': {
+      const target = { x: cmd.x, y: cmd.y, deck: cmd.deck };
+      // Need wood: either in inventory or somewhere in the ship's barrels.
+      const hasWood = member.profile.inventory.some(i => i.name === 'Wood') ||
+        Array.from(world?.barrelInventory?.values() ?? []).some(items => items.some(i => i.name === 'Wood'));
+      if (!hasWood) { fail('no wood for repairs'); return true; }
+      if (!orderCrewToAdjacentTile(member, target, decks, CrewState.REPAIRING, world?.gangplanks)) {
+        fail('can\'t reach the damage'); return true;
+      }
+      log('going to repair');
+      return true;
+    }
+    // FireCannon / BoardEnemy are immediate-effect orders: issueCommand() forces the
+    // issuer to IDLE with idleTimer 0, so even a crew member who was steering or manning
+    // a cannon resolves the order on the very next tick (no waiting to go idle naturally).
+    case 'FireCannon': {
+      if (!world?.enemyShip) { fail('no enemy to fire on'); return true; }
+      if (world.enemyShip.hp <= 0) { fail('the enemy is already a wreck'); return true; }
+      if (world.enemyShip.distance > CANNON_RANGE) { fail('enemy out of range'); return true; }
+      // Manual volley: gunners currently manning cannons add to the shot.
+      const gunners = crew.filter(c => c.state === CrewState.MANNING_CANNON && c.actorType === 'human');
+      fireFriendlyVolley(world, audio, gunners);
+      log('ordered a cannon volley');
+      return true;
+    }
+    case 'BoardEnemy': {
+      if (!world?.enemyShip) { fail('no enemy to board'); return true; }
+      if (world.enemyShip.distance > BOARD_RANGE) { fail('enemy too far to board'); return true; }
+      resolveBoarding(world, audio);
+      log('led a boarding party');
       return true;
     }
     case 'Lookout': {

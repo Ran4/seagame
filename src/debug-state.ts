@@ -36,6 +36,10 @@ export interface StateSnapshot {
   barrels: Record<string, { name: string; quantity: number }[]>;
   corpses: { actorId: number; name: string; deck: number; type: string }[];
   spottedIslands: number[];
+  gold: number;
+  floodLevel: number;
+  gameOverReason: string | null;
+  enemyShip: { name: string; hp: number; maxHp: number; crewCount: number; distance: number; hostile: boolean } | null;
 }
 
 export function serializeState(world: World): StateSnapshot {
@@ -112,5 +116,11 @@ export function serializeState(world: World): StateSnapshot {
     barrels,
     corpses: world.corpses.map(c => ({ actorId: c.actorId, name: c.name, deck: c.deck, type: c.actorType })),
     spottedIslands: Array.from(world.spottedIslands),
+    gold: world.gold,
+    floodLevel: Math.round(world.floodLevel * 10) / 10,
+    gameOverReason: world.gameOverReason,
+    enemyShip: world.enemyShip
+      ? { name: world.enemyShip.name, hp: Math.round(world.enemyShip.hp), maxHp: world.enemyShip.maxHp, crewCount: world.enemyShip.crewCount, distance: Math.round(world.enemyShip.distance * 10) / 10, hostile: world.enemyShip.hostile }
+      : null,
   };
 }

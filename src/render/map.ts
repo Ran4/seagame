@@ -1,7 +1,7 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, WorldMap, SECONDS_PER_DAY } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, WorldMap, SECONDS_PER_DAY, EnemyShip } from '../types';
 import { RenderContext } from './context';
 
-export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean, hasHelmsman: boolean, hasExpertNavigator?: boolean): void {
+export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: { x: number; y: number }, time: number, hasNavigator: boolean, hasHelmsman: boolean, hasExpertNavigator?: boolean, enemyShip?: EnemyShip | null): void {
   const ctx = rc.ctx;
   const ox = 40, oy = 40, ow = 880, oh = 460;
 
@@ -120,6 +120,37 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
+
+  // Enemy ship marker (red skull) — positioned near the player at its current distance.
+  // The enemy has no fixed world coords; place it offset from the ship by its distance
+  // (in leagues, scaled to the map), clamped inside the overlay.
+  if (enemyShip) {
+    const lgScaleX = ow / 100;       // screen px per league (x)
+    const off = Math.max(6, enemyShip.distance * lgScaleX);
+    let ex = shipSX + off * 0.7;
+    let ey = shipSY - off * 0.5;
+    ex = Math.max(ox + 12, Math.min(ox + ow - 12, ex));
+    ey = Math.max(oy + 36, Math.min(oy + oh - 24, ey));
+    // Dashed line ship → enemy
+    ctx.strokeStyle = '#cc4444';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(shipSX, shipSY);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Marker
+    ctx.fillStyle = '#cc2222';
+    ctx.font = 'bold 14px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('☠', ex, ey);
+    ctx.fillStyle = '#ffaaaa';
+    ctx.font = '10px monospace';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(enemyShip.name, ex, ey - 10);
+  }
 
   // Hovered island tooltip
   if (hoveredIsland) {

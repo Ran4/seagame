@@ -144,6 +144,14 @@ export function startDocking(world: World): void {
   world.worldMap.currentSpeed = 0;
   world.mapOverlayOpen = false;
 
+  // Pulling into the wharf leaves any pursuer (or drifting wreck) behind — clear the
+  // combat target so it doesn't stay frozen on the HUD while docked and abruptly
+  // resume the moment we undock.
+  if (world.enemyShip) {
+    world.activityLog.push({ text: `Made the safety of port — shook off the ${world.enemyShip.name}.`, time: world.time });
+    world.enemyShip = null;
+  }
+
   // Create docking state
   world.docking = createDockingState(island);
 }

@@ -199,6 +199,89 @@ export function drawBar(rc: RenderContext, x: number, y: number, w: number, h: n
   ctx.fillRect(x, y, w * Math.max(0, Math.min(1, fill)), h);
 }
 
+/** Gold treasury counter, top-left under the deck selector. */
+export function drawGoldCounter(rc: RenderContext, gold: number): void {
+  const ctx = rc.ctx;
+  const x = 10, y = 14 + 3 * 22 + 6; // below the (up to 3) deck-selector rows
+  const w = 92, h = 20;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#665522';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  // Coin
+  ctx.fillStyle = '#ffcc44';
+  ctx.beginPath();
+  ctx.arc(x + 12, y + h / 2, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#aa8822';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x + 12, y + h / 2, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#ffe9a8';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${gold}`, x + 24, y + h / 2 + 1);
+  ctx.textBaseline = 'alphabetic';
+}
+
+/** Top-center combat HUD: enemy name, HP bar, distance, and our flood/damage indicator. */
+export function drawCombatHud(rc: RenderContext, enemy: { name: string; hp: number; maxHp: number; distance: number; hostile: boolean }, floodLevel: number): void {
+  const ctx = rc.ctx;
+  const w = 260, h = 70;
+  const x = CANVAS_WIDTH / 2 - w / 2;
+  const y = 38;
+
+  ctx.fillStyle = 'rgba(20,0,0,0.78)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#aa3333';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+  // Enemy name + distance
+  ctx.fillStyle = '#ffaaaa';
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(`☠ ${enemy.name}`, x + 8, y + 18);
+  ctx.fillStyle = '#ddccaa';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'right';
+  const distStr = enemy.distance <= 1 ? 'ALONGSIDE' : `${enemy.distance.toFixed(1)} lg`;
+  ctx.fillText(distStr, x + w - 8, y + 18);
+
+  // Enemy HP bar
+  const barX = x + 8, barW = w - 16;
+  drawBar(rc, barX, y + 24, barW, 10, enemy.hp / enemy.maxHp, '#cc3333');
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX + 0.5, y + 24 + 0.5, barW - 1, 9);
+  ctx.fillStyle = '#fff';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Hull ${Math.ceil(enemy.hp)}/${enemy.maxHp}`, x + w / 2, y + 32);
+
+  // Our flood / damage indicator
+  ctx.fillStyle = floodLevel > 50 ? '#ff6666' : '#88bbdd';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('Flooding', barX, y + 50);
+  drawBar(rc, barX + 56, y + 42, barW - 56, 9, floodLevel / 100, floodLevel > 50 ? '#ff4444' : '#3a78c0');
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX + 56 + 0.5, y + 42 + 0.5, barW - 56 - 1, 8);
+
+  // Hint
+  ctx.fillStyle = '#bbaa88';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  const hint = enemy.distance <= 1.2 ? 'Right-click: Board' : 'Man cannons to fire • sail off to flee';
+  ctx.fillText(hint, x + w / 2, y + h - 4);
+  ctx.textAlign = 'left';
+}
+
 export function drawItemSlot(rc: RenderContext, x: number, y: number, size: number, item: Item | null): void {
   const ctx = rc.ctx;
   // Slot background

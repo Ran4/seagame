@@ -6,7 +6,7 @@ import { drawCrewPanel, drawObjectPanel } from './panels';
 
 export { drawCrewPanel, drawObjectPanel, drawCorpsePanel } from './panels';
 export { drawTooltip, drawItemTooltip, drawBarTooltip } from './tooltips';
-export { drawSoundButton, drawActivityLog, drawCompass, drawBar, drawItemSlot, drawSettingsButton, drawSettingsPanel } from './widgets';
+export { drawSoundButton, drawActivityLog, drawCompass, drawBar, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawGoldCounter, drawCombatHud } from './widgets';
 
 export function drawUI(
   rc: RenderContext,

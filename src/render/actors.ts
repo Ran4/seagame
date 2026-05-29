@@ -100,6 +100,10 @@ export function drawActor(rc: RenderContext, member: Actor, selected: boolean): 
     ctx.fillText('\u266A', sx + 14, sy - 12);
   } else if (member.state === CrewState.DANCING) {
     ctx.fillText('\u266B', sx + 14, sy - 12);
+  } else if (member.state === CrewState.REPAIRING) {
+    ctx.fillText('\u2692', sx + 14, sy - 12); // hammer & pick
+  } else if (member.state === CrewState.FIGHTING) {
+    ctx.fillText('\u2694', sx + 14, sy - 12); // crossed swords
   }
 }
 

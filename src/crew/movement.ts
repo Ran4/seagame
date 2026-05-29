@@ -10,6 +10,7 @@ const NAVIGATE_DURATION = 999999;
 const COPULATE_DURATION = 15;
 const KISS_DURATION = 3;
 const PET_DURATION = 3;
+const REPAIR_DURATION = 4; // seconds per repair tick (consumes 1 Wood)
 
 function currentTile(member: Actor): DeckPoint {
   return {
@@ -97,6 +98,10 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
       // Bite time: random 15-60s. TODO: scale with a fishing skill once crew
       // skills exist (see issues/fishing-needs-crew-skill.md).
       member.stateTimer = 15 + Math.random() * 45;
+    } else if (member.state === CrewState.REPAIRING) {
+      member.stateTimer = REPAIR_DURATION; // one repair tick; update.ts loops while damage remains
+    } else if (member.state === CrewState.FIGHTING) {
+      member.stateTimer = 2; // brief melee flavor
     } else if (member.state === CrewState.PETTING) {
       member.stateTimer = PET_DURATION;
     } else if (member.state === CrewState.CARRYING_CORPSE) {

@@ -17,6 +17,9 @@ const LEAGUES_PER_DAY = 70;
 export const SHIP_SPEED = LEAGUES_PER_DAY / SECONDS_PER_DAY; // ~0.0972 leagues/sec
 
 export const DOCKING_DISTANCE = 3; // leagues
+// SHARED SYSTEM C — deep-water / region helper. Combat encounters, sea-monster rolls,
+// and (later) swordfish availability gate on "open ocean, no land in view".
+export const DEEP_WATER_DISTANCE = 12; // leagues — beyond this from any island = deep water
 
 export function createWorldMap(): WorldMap {
   let shipX = 50;
@@ -90,6 +93,23 @@ export function stopSailing(map: WorldMap): void {
 
 export function setDestination(map: WorldMap, island: Island): void {
   map.destinationIsland = island;
+}
+
+/** Distance (leagues) from the ship to the nearest island. Infinity if no islands. */
+export function distanceToNearestIsland(map: WorldMap): number {
+  let min = Infinity;
+  for (const isl of map.islands) {
+    const dx = map.shipX - isl.x;
+    const dy = map.shipY - isl.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
+/** True if the ship is in open ocean (far from any island). */
+export function isInDeepWater(map: WorldMap): boolean {
+  return distanceToNearestIsland(map) > DEEP_WATER_DISTANCE;
 }
 
 /** Returns the nearest harbor island within docking distance, or null. */

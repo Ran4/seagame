@@ -1,5 +1,9 @@
 import { Deck, TileType, TILE_SIZE, CANVAS_WIDTH, CANVAS_HEIGHT, WALKABLE, CrewState, Item, SECONDS_PER_DAY, getShipBrightness, LANTERN_BURNOUT_RATE, Command, World, SKILL_MASTERY, InputMode, GameSettings } from './types';
-import { createSemen, createGrogRation, updateSpoilage } from './items';
+import { createSemen, createGrogRation, createWood, createCannonball, updateSpoilage } from './items';
+import { updateFlooding, hasIntactMast, hasIntactHelm, fireFriendlyVolley, enemyVolley, CANNON_RANGE } from './combat';
+import { isInDeepWater } from './worldmap';
+import { CONFIG } from './config';
+import type { EnemyShip } from './types';
 import { createShip } from './ship';
 import { createActors, updateActors, issueCommand } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
@@ -110,6 +114,134 @@ function recruitSailor(world: World): void {
 }
 
 
+// --- Ship-to-ship combat (FEATURE 4) ---
+const ENEMY_NAMES = ['Black Gull', 'Sea Wraith', 'Crimson Maw', 'Salt Reaver', 'Gallows Wind', 'Drowned Lady', 'Iron Barracuda', 'Storm Vulture'];
+const ENCOUNTER_TICK = 4;             // seconds between encounter rolls while sailing
+const ENCOUNTER_BASE_CHANCE = 0.012;  // per roll in normal waters
+const ENCOUNTER_DEEP_CHANCE = 0.05;   // per roll in deep water
+const ENCOUNTER_PIRATE_CHANCE = 0.09; // per roll near pirate islands (Tortuga / Skull Rock)
+const ENEMY_APPROACH_SPEED = 0.9;     // leagues/sec the enemy closes when chasing & player slow/stopped
+const ENEMY_CHASE_WHILE_SAILING = 0.25; // leagues/sec the enemy still closes while player is at full sail
+const ENEMY_WRECK_DRIFT = 0.18;       // leagues/sec a crippled (hp 0) wreck drifts away if not boarded
+const ESCAPE_DISTANCE = 14;           // leagues — beyond this the enemy gives up
+const ESCAPE_CHANCE = 0.06;           // per encounter tick while sailing & out of cannon range
+const ENEMY_FIRE_INTERVAL = 6;        // seconds between enemy volleys
+const CANNON_RELOAD = 5;              // seconds between auto-fired friendly volleys
+const PIRATE_ISLAND_IDS = new Set([0, 3]); // Tortuga, Skull Rock
+
+let combatEncounterTimer = 0;
+let friendlyFireTimer = 0;
+
+/** Roll for a new enemy encounter while sailing. Higher odds in deep water / near pirate isles. */
+function maybeSpawnEnemy(world: World, audio: AudioManager): void {
+  if (world.enemyShip) return;
+  const map = world.worldMap;
+  if (map.currentSpeed <= 0) return; // only while the ship is actually moving
+
+  let chance = ENCOUNTER_BASE_CHANCE;
+  if (isInDeepWater(map)) chance = ENCOUNTER_DEEP_CHANCE;
+  // Near a pirate island (within ~10 leagues) bumps the odds further.
+  for (const isl of map.islands) {
+    if (!PIRATE_ISLAND_IDS.has(isl.id)) continue;
+    const dx = map.shipX - isl.x, dy = map.shipY - isl.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 10) { chance = Math.max(chance, ENCOUNTER_PIRATE_CHANCE); break; }
+  }
+
+  // Test aid: forceEncounter config guarantees the first encounter once sailing.
+  if (CONFIG.forceEncounter) { chance = 1; CONFIG.forceEncounter = false; }
+
+  if (Math.random() >= chance) return;
+
+  const hp = 80 + Math.floor(Math.random() * 120); // 80..200
+  const enemy: EnemyShip = {
+    name: ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)],
+    hp,
+    maxHp: hp,
+    crewCount: 2 + Math.floor(Math.random() * 5), // 2..6
+    distance: 8 + Math.random() * 4,              // appears 8..12 leagues off
+    hostile: true,
+    fireTimer: ENEMY_FIRE_INTERVAL,
+  };
+  world.enemyShip = enemy;
+  world.activityLog.push({ text: `Enemy ship sighted: the ${enemy.name}! It bears down on us.`, time: world.time });
+  audio.play('cannon_fire', world.activeDeck);
+}
+
+/** Per-frame combat update: enemy movement, auto-cannon fire, enemy volleys, escape. */
+function updateCombat(world: World, audio: AudioManager, dt: number): void {
+  // Roll for new encounters on a throttle while sailing.
+  combatEncounterTimer += dt;
+  if (combatEncounterTimer >= ENCOUNTER_TICK) {
+    combatEncounterTimer = 0;
+    maybeSpawnEnemy(world, audio);
+  }
+
+  const enemy = world.enemyShip;
+  if (!enemy) { friendlyFireTimer = 0; return; }
+
+  const map = world.worldMap;
+  const moving = map.currentSpeed > 0;
+
+  const crippled = enemy.hp <= 0;
+
+  // A hostile enemy chases: it closes fast when the player is slow/stopped (standing to
+  // fight), and slowly even while the player is at full sail (the player can outrun it
+  // over time — see the escape roll below).
+  if (enemy.hostile && !crippled) {
+    const closeRate = moving ? ENEMY_CHASE_WHILE_SAILING : ENEMY_APPROACH_SPEED;
+    enemy.distance = Math.max(0, enemy.distance - closeRate * dt);
+  }
+
+  // A crippled (hp 0) wreck is dead in the water: it drifts away under its own momentum
+  // unless the player deliberately sails up to board it for loot. This drift runs at ANY
+  // distance (not just beyond cannon range) so a mid-range kill can never freeze in place
+  // and soft-lock the encounter — it will eventually drift off and clear via the escape
+  // path below. The player can still close the gap to board while it lingers.
+  if (crippled) {
+    enemy.hostile = false;
+    enemy.distance += ENEMY_WRECK_DRIFT * dt;
+  }
+
+  // Fleeing: while under full sail and out of cannon range, a chance each encounter tick
+  // to shake the enemy. Distance also slowly grows past the escape threshold over time.
+  if (moving && !crippled && enemy.distance > CANNON_RANGE) {
+    enemy.distance += ENEMY_CHASE_WHILE_SAILING * 1.5 * dt; // net outpace while running
+    if (Math.random() < ESCAPE_CHANCE * dt) enemy.distance = ESCAPE_DISTANCE; // clean getaway
+  }
+
+  // Escaped / wreck drifted off?
+  if (enemy.distance >= ESCAPE_DISTANCE) {
+    const text = crippled
+      ? `The wreck of the ${enemy.name} drifts away on the current.`
+      : `Lost the ${enemy.name} in our wake — we've escaped!`;
+    world.activityLog.push({ text, time: world.time });
+    world.enemyShip = null;
+    return;
+  }
+
+  // In cannon range: friendly cannons auto-fire on a reload timer — but never on a wreck
+  // (hp 0), which would waste cannonballs and spam the log every reload forever.
+  if (enemy.distance <= CANNON_RANGE) {
+    if (!crippled) {
+      const gunners = world.actors.filter(c => c.state === CrewState.MANNING_CANNON && c.actorType === 'human');
+      if (gunners.length > 0) {
+        friendlyFireTimer += dt;
+        if (friendlyFireTimer >= CANNON_RELOAD) {
+          friendlyFireTimer = 0;
+          fireFriendlyVolley(world, audio, gunners);
+        }
+      }
+
+      // Enemy fires back periodically (only while it still has hull).
+      enemy.fireTimer -= dt;
+      if (enemy.fireTimer <= 0) {
+        enemy.fireTimer = ENEMY_FIRE_INTERVAL;
+        enemyVolley(world, audio);
+      }
+    }
+  }
+}
+
 function loadSettings(): GameSettings {
   try {
     const stored = localStorage.getItem('seagame_settings');
@@ -159,6 +291,10 @@ export function createWorld(): World {
         const key = `${lowerDeckIndex}-${x}-${y}`;
         const items = barrelInventory.get(key) || [];
         for (let g = 0; g < 4; g++) items.push(createGrogRation());
+        // Combat supplies: spare timber for repairs + cannon ammunition.
+        const wood = createWood(0); wood.quantity = 6; wood.weight = 2000 * 6;
+        const balls = createCannonball(0); balls.quantity = 12; balls.weight = 5000 * 12;
+        items.push(wood, balls);
         barrelInventory.set(key, items);
         break outer;
       }
@@ -222,6 +358,11 @@ export function createWorld(): World {
     nearbyHarborIsland: null,
     strandedActors: new Map(),
     strandedCorpses: new Map(),
+    objectHp: new Map(),
+    floodLevel: 0,
+    gameOverReason: null,
+    enemyShip: null,
+    gold: 100,
   };
 }
 
@@ -373,9 +514,24 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       updateNavigator(world.worldMap);
       world.navTimer = 0;
     }
-    if (anySteering) updateHelmsman(world.worldMap);
+    // A destroyed helm/mast disables steering / caps sailing.
+    const canSteer = hasIntactHelm(world);
+    const canSail = hasIntactMast(world);
+    if (anySteering && canSteer) updateHelmsman(world.worldMap);
+    if (!canSteer || !canSail) {
+      // No working helm → cannot answer the wheel; no mast → no canvas to drive the ship.
+      world.worldMap.currentSpeed = 0;
+    }
     updateSailing(world.worldMap, dt);
+
+    // Ship-to-ship combat only runs at sea (not docked).
+    updateCombat(world, audio, dt);
   }
+
+  // Hull flooding always ticks: at sea breaches let water rise; in port the bilge
+  // pumps keep draining (never rises) so the flood level can't freeze while docked
+  // and harbor hull repairs can clear breaches.
+  updateFlooding(world, dt, world.docking.phase === 'none');
 
   // Scroll water downward (always Y-axis only — the ship sprite always faces up,
   // so heading-based scrolling would look wrong and be disorienting)
