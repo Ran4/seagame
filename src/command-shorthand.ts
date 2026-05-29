@@ -15,6 +15,7 @@ export const COMMANDS: Record<string, string[]> = {
   Lookout:           ['deck?', 'x?', 'y?'],
   Fish:              ['deck?', 'x?', 'y?'],
   Repair:            ['deck', 'x', 'y'],
+  Fight:             ['deck', 'x', 'y'],
   FireCannon:        [],
   BoardEnemy:        [],
   UseMap:            [],

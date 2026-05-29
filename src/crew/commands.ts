@@ -48,7 +48,12 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
 
   // Seized by a kraken tentacle — can't obey anything but Stop until cut free.
   if (member.conditions.has('grabbed') && cmd.name !== 'Stop') {
-    activityLog.push({ text: `${name} can't — held fast by a tentacle!`, time: gameTime });
+    // Occasional feedback only — this is re-checked every idle tick, so don't spam the log.
+    if (Math.random() < 0.08) {
+      activityLog.push({ text: `${name} can't — held fast by a tentacle!`, time: gameTime });
+    }
+    member.speechBubbleText = 'Help!';
+    member.speechBubbleTimer = 1.5;
     return true; // keep the order queued; they'll act once freed
   }
 
