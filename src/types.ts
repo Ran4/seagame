@@ -327,6 +327,16 @@ export interface Camera {
   y: number;
 }
 
+// FEATURE 7 — per-island personality / economy descriptor. Drives trade prices and
+// flavour at the docked harbour. Optional: islands without it use neutral defaults.
+export interface IslandEconomy {
+  flavor: string;        // one-line personality blurb shown on the docked bar / notice board
+  priceBuyMult: number;  // multiplier on the base price when the crew BUYS goods (>1 = expensive)
+  priceSellMult: number; // multiplier on the base price when the crew SELLS loot (>1 = pays well)
+  lawless?: boolean;     // pirate haven: cheap crew, pricier goods
+  blackMarket?: boolean; // buys stolen loot/treasure high, fewer honest goods
+}
+
 export interface Island {
   id: number;
   name: string;
@@ -335,6 +345,10 @@ export interface Island {
   hasHarbor: boolean;
   description: string;
   hidden?: boolean;
+  economy?: IslandEconomy;  // FEATURE 7 — personality/pricing (undefined = neutral)
+  // FEATURE 8 — set when a treasure map for this island has been read; draws an X
+  // on the world-map overlay. Cleared after a successful shore dig.
+  treasureMarker?: boolean;
 }
 
 export interface WorldMap {
@@ -371,6 +385,11 @@ export interface Item {
   quantity: number;        // 1 for non-stackable items
   spoilAfter: number | null; // seconds until spoiled (null = never)
   hungerRestore: number;     // hunger added when consumed (0-255 scale)
+  // FEATURE 8 — treasure-map payload: which island it points to + whether it's a fake.
+  // Only present on 'Treasure map' items.
+  mapData?: { islandId: number; fake: boolean };
+  // FEATURE 8 — cursed loot can't be dropped or sold and saps morale while carried.
+  cursed?: boolean;
 }
 
 export type InputMode = 'html' | 'ingame';
@@ -444,6 +463,8 @@ export type Command =
   | { name: 'FireCannon' }
   | { name: 'BoardEnemy' }
   | { name: 'Fight';             deck: number; x: number; y: number }
+  | { name: 'UseMap';            itemName?: string }
+  | { name: 'SendExpedition' }
   | { name: 'Pray' }
   | { name: 'GoTo';              deck?: number; x: number; y: number }
   | { name: 'GoToDeck';          deck: number }
@@ -468,6 +489,28 @@ export type Command =
 export interface ActivityLogEntry {
   text: string;
   time: number;  // game time when logged
+}
+
+// FEATURE 7 — harbour contracts (delivery / hunt missions taken from an NPC).
+//   'deliver' — completes when the ship later docks at island `targetIslandId`.
+//   'hunt'    — completes when an enemy ship named `targetShipName` is defeated.
+export interface Contract {
+  id: number;
+  kind: 'deliver' | 'hunt';
+  description: string;
+  targetIslandId?: number;   // for 'deliver'
+  targetShipName?: string;   // for 'hunt'
+  reward: number;            // gold paid on completion
+  status: 'active' | 'completed';
+}
+
+// FEATURE 8 — a shore expedition: a party of crew sent ashore at a treasure island.
+// While active the party get the 'ashore' status (hidden from the deck, needs paused);
+// on returnTime an outcome is rolled and the party reappears at the gangplank.
+export interface Expedition {
+  islandId: number;
+  returnTime: number;     // world.time (seconds) at which the party returns
+  crewIds: number[];      // ids of the crew sent ashore
 }
 
 export interface GangplankConnection {
@@ -525,9 +568,17 @@ export interface World {
   gameOverReason: string | null;   // generalized game-over text (mutiny also sets mutinyState)
   enemyShip: EnemyShip | null;     // current ship-to-ship combat target (one at a time)
   gold: number;                    // ship treasury (SHARED SYSTEM B; loot/treasure add, buying subtracts)
+  // --- FEATURE 7: Harbor towns — contracts + offers + docking toast ---
+  contracts: Contract[];           // active/completed delivery & hunt missions
+  contractOffers: Contract[];      // 1-3 offers available at the current harbour (regenerated per dock)
+  nextContractId: number;          // monotonically increasing id allocator for contracts
+  dockingToast: { text: string; timer: number } | null; // transient "Docking…/completed!" banner
   // --- FEATURE 5: Storms & Weather ---
   weather: WeatherState;           // sky state machine: clear <-> cloudy <-> storm (see WeatherState)
   // --- FEATURE 6: Sea Monsters / Kraken ---
   monster: MonsterState | null;    // current kraken encounter (null = none); see MonsterState
   tentacles: Tentacle[];           // active kraken tentacles gripping the ship's edges
+  // --- FEATURE 8: Treasure Maps & Exploration ---
+  treasureIslands: Set<number>;    // island ids that have a treasure marker (set when a map is read)
+  expedition: Expedition | null;   // a crew party currently ashore digging for treasure (one at a time)
 }

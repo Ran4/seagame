@@ -123,3 +123,39 @@ export function isLeaveHarborClicked(mx: number, my: number, hasHelmsman: boolea
   return mx >= LEAVE_BTN_X && mx <= LEAVE_BTN_X + LEAVE_BTN_W &&
     my >= LEAVE_BTN_Y && my <= LEAVE_BTN_Y + LEAVE_BTN_H;
 }
+
+// --- FEATURE 8: "Dig for treasure!" button (shown when docked at a marked island) ---
+
+const DIG_BTN_W = 130;
+const DIG_BTN_H = 20;
+const DIG_BTN_Y = CANVAS_HEIGHT - DIG_BTN_H - 11;
+// Sits just left of the "Leave harbor" button.
+const DIG_BTN_X = LEAVE_BTN_X - DIG_BTN_W - 8;
+
+/** Draw a "Dig for treasure!" button (only call when docked at a treasure-marked island). */
+export function drawDigButton(
+  ctx: CanvasRenderingContext2D,
+  mousePos: { x: number; y: number },
+  busy: boolean,
+): void {
+  const inBtn = mousePos.x >= DIG_BTN_X && mousePos.x <= DIG_BTN_X + DIG_BTN_W &&
+    mousePos.y >= DIG_BTN_Y && mousePos.y <= DIG_BTN_Y + DIG_BTN_H;
+  const hover = !busy && inBtn;
+  ctx.fillStyle = busy
+    ? 'rgba(60, 60, 60, 0.6)'
+    : (hover ? 'rgba(180, 150, 50, 0.95)' : 'rgba(140, 110, 30, 0.85)');
+  ctx.fillRect(DIG_BTN_X, DIG_BTN_Y, DIG_BTN_W, DIG_BTN_H);
+  ctx.strokeStyle = busy ? '#666666' : '#ddbb55';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(DIG_BTN_X, DIG_BTN_Y, DIG_BTN_W, DIG_BTN_H);
+  ctx.fillStyle = busy ? '#888888' : '#fff8e0';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(busy ? 'Party ashore...' : 'Dig for treasure!', DIG_BTN_X + DIG_BTN_W / 2, DIG_BTN_Y + DIG_BTN_H / 2 + 4);
+}
+
+/** Check if a click hits the "Dig for treasure!" button. */
+export function isDigButtonClicked(mx: number, my: number): boolean {
+  return mx >= DIG_BTN_X && mx <= DIG_BTN_X + DIG_BTN_W &&
+    my >= DIG_BTN_Y && my <= DIG_BTN_Y + DIG_BTN_H;
+}

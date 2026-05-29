@@ -49,6 +49,18 @@ export function readNoticeBoard(world: World): void {
     world.activityLog.push({ text: shuffled[i], time: world.time });
   }
 
+  // FEATURE 7 — the docked island's personality, then any active contracts (truthful,
+  // built from real world state per the project convention).
+  const flavor = world.docking.island?.economy?.flavor;
+  if (flavor) world.activityLog.push({ text: flavor, time: world.time });
+  const active = world.contracts.filter(c => c.status === 'active');
+  if (active.length > 0) {
+    world.activityLog.push({ text: 'Your active contracts:', time: world.time });
+    for (const c of active) {
+      world.activityLog.push({ text: `• ${c.description} (${c.reward}g)`, time: world.time });
+    }
+  }
+
   // Chance to reveal a hidden island if crew has expert navigator
   const hasExpertNav = world.actors.some(c =>
     !c.statuses.has('npc') && c.actorType === 'human' &&

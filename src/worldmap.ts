@@ -3,12 +3,32 @@ import { CONFIG } from './config';
 export { SECONDS_PER_DAY };
 
 const ISLANDS: Island[] = [
-  { id: 0, name: 'Tortuga', x: 20, y: 30, hasHarbor: true, description: 'A bustling pirate haven with taverns and trade.' },
+  {
+    id: 0, name: 'Tortuga', x: 20, y: 30, hasHarbor: true,
+    description: 'A bustling pirate haven with taverns and trade.',
+    economy: { flavor: 'Lawless pirate haven — cheap crew, dear goods.', priceBuyMult: 1.4, priceSellMult: 1.0, lawless: true },
+  },
   { id: 1, name: 'Isla Muerta', x: 75, y: 15, hasHarbor: false, description: 'A cursed island shrouded in fog. No safe harbor.' },
-  { id: 2, name: 'Port Royal', x: 35, y: 60, hasHarbor: true, description: 'A fortified colonial port with a busy market.' },
-  { id: 3, name: 'Skull Rock', x: 85, y: 55, hasHarbor: false, description: 'A jagged rock formation. Rumored treasure inside.', hidden: true },
-  { id: 4, name: 'Palm Cove', x: 10, y: 10, hasHarbor: true, description: 'A peaceful cove with fresh water and coconuts.' },
-  { id: 5, name: 'Blackwater Bay', x: 60, y: 45, hasHarbor: true, description: 'Deep natural harbor. Shipwrights available.' },
+  {
+    id: 2, name: 'Port Royal', x: 35, y: 60, hasHarbor: true,
+    description: 'A fortified colonial port with a busy market.',
+    economy: { flavor: 'Civilised colonial port — fair, honest prices.', priceBuyMult: 0.85, priceSellMult: 1.1 },
+  },
+  {
+    id: 3, name: 'Skull Rock', x: 85, y: 55, hasHarbor: false, hidden: true,
+    description: 'A jagged rock formation. Rumored treasure inside.',
+    economy: { flavor: 'A smugglers\' black market — pays top coin for plunder.', priceBuyMult: 1.6, priceSellMult: 1.3, blackMarket: true },
+  },
+  {
+    id: 4, name: 'Palm Cove', x: 10, y: 10, hasHarbor: true,
+    description: 'A peaceful cove with fresh water and coconuts.',
+    economy: { flavor: 'A sleepy cove — modest stock, gentle prices.', priceBuyMult: 1.0, priceSellMult: 0.95 },
+  },
+  {
+    id: 5, name: 'Blackwater Bay', x: 60, y: 45, hasHarbor: true,
+    description: 'Deep natural harbor. Shipwrights available.',
+    economy: { flavor: 'A shipwrights\' harbour — cheap timber and repairs.', priceBuyMult: 0.9, priceSellMult: 1.0 },
+  },
   { id: 6, name: 'Serpent Isle', x: 45, y: 75, hasHarbor: false, description: 'Dense jungle. Strange sounds at night.', hidden: true },
 ];
 
@@ -151,7 +171,9 @@ export function handleMapOverlayClick(map: WorldMap, mx: number, my: number, has
     const toScreenX = (wx: number) => OVL_X + (wx / 100) * OVL_W;
     const toScreenY = (wy: number) => OVL_Y + 30 + ((wy / 80) * (OVL_H - 50));
     for (const island of map.islands) {
-      if (island.hidden && !hasExpertNavigator) continue;
+      // Keep the hidden-island gate in sync with render/map.ts: a treasure-marked
+      // island is clickable as a destination even if otherwise hidden (FEATURE 8).
+      if (island.hidden && !hasExpertNavigator && !island.treasureMarker) continue;
       const ix = toScreenX(island.x);
       const iy = toScreenY(island.y);
       const dx = mx - ix;

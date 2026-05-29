@@ -11,6 +11,8 @@
 
 import { World, TileType, OBJECT_MAX_HP, CrewState, TILE_SIZE, ActivityLogEntry, Actor } from './types';
 import { createWood, createCannonball } from './items';
+import { checkHuntContract } from './contracts';
+import { createLootTreasureMap } from './treasure';
 import type { AudioManager } from './audio';
 
 // Flooding tuning. floodLevel is 0..100; at 100 the ship sinks.
@@ -243,6 +245,12 @@ export function fireFriendlyVolley(world: World, audio: AudioManager | undefined
   if (enemy.hp <= 0) {
     enemy.hostile = false;
     world.activityLog.push({ text: `The ${enemy.name} is crippled and dead in the water!`, time: world.time });
+    // FEATURE 7 — sinking the marked ship by gunfire also satisfies a 'hunt' contract
+    // (you don't have to board it). Guarded so it only fires once as hp first hits 0.
+    const activeBefore = world.contracts.filter(c => c.status === 'active').length;
+    checkHuntContract(world, enemy.name);
+    const activeAfter = world.contracts.filter(c => c.status === 'active').length;
+    if (audio && activeAfter < activeBefore) audio.play('contract_complete', world.activeDeck);
   }
 }
 
@@ -330,15 +338,18 @@ export function resolveBoarding(world: World, audio: AudioManager | undefined): 
       const balls = createCannonball(world.time); balls.quantity = 4; balls.weight = 5000 * 4;
       items.push(wood, balls);
       if (Math.random() < 0.35) {
-        items.push({
-          name: 'Treasure map', createdAt: world.time, weight: 30,
-          description: 'A weathered map captured from the enemy. (Exploration coming soon.)',
-          stackable: false, quantity: 1, spoilAfter: null, hungerRestore: 0,
-        });
+        // FEATURE 8 — a real captured treasure map pointing to a random island.
+        items.push(createLootTreasureMap(world));
+        world.activityLog.push({ text: 'Among the plunder: a weathered treasure map! Read it at the map table.', time: world.time });
       }
       world.barrelInventory.set(barrelKey, items);
     }
     world.activityLog.push({ text: `Boarding successful! Captured the ${enemy.name} — ${goldLoot} gold and supplies seized.`, time: world.time });
+    // FEATURE 7 — a defeated enemy may satisfy an active 'hunt' contract.
+    const activeBefore = world.contracts.filter(c => c.status === 'active').length;
+    checkHuntContract(world, enemy.name);
+    const activeAfter = world.contracts.filter(c => c.status === 'active').length;
+    if (audio && activeAfter < activeBefore) audio.play('contract_complete', world.activeDeck);
     world.enemyShip = null;
   } else {
     world.activityLog.push({ text: `The boarding was repelled by the ${enemy.name}'s crew!`, time: world.time });

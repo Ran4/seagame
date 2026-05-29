@@ -5,6 +5,9 @@ import {
 } from './types';
 import { getObjectHp, getObjectMaxHp, CANNON_RANGE, BOARD_RANGE } from './combat';
 import { tentacleAt } from './monster';
+import { availableGoods, buyPrice, sellableInventory } from './trade';
+import { activeContracts } from './contracts';
+import { hasTreasureMap } from './treasure';
 
 /** Build a context menu from a right-click. Returns ContextMenu, null (close menu), or undefined (no change). */
 export function buildContextMenu(
@@ -114,20 +117,58 @@ export function buildContextMenu(
             submenu.push(alreadyTalking
               ? { label: `Talk to ${clickedCrew.profile.name} (talking)`, targetState: CrewState.TALKING, targetActorId: clickedCrew.id, disabled: true }
               : { label: `Talk to ${clickedCrew.profile.name}`, targetState: CrewState.TALKING, targetActorId: clickedCrew.id });
-            // Bartender: buy grog
+            // Bartender: buy grog (now costs gold — see game.ts handler)
             if (npcData?.role === 'bartender') {
               submenu.push({ label: 'Buy grog', targetState: CrewState.IDLE, action: 'buy_grog', targetActorId: clickedCrew.id });
             }
-            // Merchant: browse wares
+            // Merchant: real Buy ▶ / Sell ▶ trading (FEATURE 7)
             if (npcData?.role === 'merchant') {
-              submenu.push({ label: 'Browse wares', targetState: CrewState.IDLE, action: 'browse_wares', targetActorId: clickedCrew.id });
+              // Buy submenu — one entry per available good with its price.
+              const buySub: ContextMenuItem[] = availableGoods(world).map(g => ({
+                label: `${g.name} — ${buyPrice(world, g)}g`,
+                targetState: CrewState.IDLE,
+                action: 'buy_good',
+                itemData: { barrelKey: '', itemName: g.name },
+                disabled: world.gold < buyPrice(world, g),
+              }));
+              submenu.push({ label: 'Buy ▶', targetState: CrewState.IDLE, submenu: buySub });
+
+              // Sell submenu — one entry per sellable holding.
+              const sellable = sellableInventory(world);
+              const sellSub: ContextMenuItem[] = sellable.length > 0
+                ? sellable.map(s => ({
+                    label: `${s.name} (x${s.quantity}) — ${s.unitPrice}g`,
+                    targetState: CrewState.IDLE,
+                    action: 'sell_item',
+                    itemData: { barrelKey: '', itemName: s.name },
+                  }))
+                : [{ label: 'Nothing to sell', targetState: CrewState.IDLE, disabled: true }];
+              submenu.push({ label: 'Sell ▶', targetState: CrewState.IDLE, submenu: sellSub });
             }
-            // Innkeeper: recruit sailor
+            // Innkeeper: recruit sailor + take contracts (FEATURE 7)
             if (npcData?.role === 'innkeeper') {
               const alreadyRecruited = world.actors.some(a => a.statuses.has('recruited_this_visit'));
               submenu.push(alreadyRecruited
                 ? { label: 'Recruit sailor (already recruited)', targetState: CrewState.IDLE, action: 'recruit_sailor', disabled: true }
                 : { label: 'Recruit sailor', targetState: CrewState.IDLE, action: 'recruit_sailor', targetActorId: clickedCrew.id });
+
+              // Take contract submenu — one entry per available offer.
+              const contractSub: ContextMenuItem[] = world.contractOffers.length > 0
+                ? world.contractOffers.map(c => ({
+                    label: `${c.description} — ${c.reward}g`,
+                    targetState: CrewState.IDLE,
+                    action: 'take_contract',
+                    itemData: { barrelKey: String(c.id), itemName: '' },
+                  }))
+                : [{ label: 'No contracts available', targetState: CrewState.IDLE, disabled: true }];
+              submenu.push({ label: 'Take contract ▶', targetState: CrewState.IDLE, submenu: contractSub });
+            }
+            // Townsfolk also gossip about active contracts (lets player review them).
+            if (npcData?.role === 'townsfolk') {
+              const active = activeContracts(world);
+              if (active.length > 0) {
+                submenu.push({ label: 'Review contracts', targetState: CrewState.IDLE, action: 'review_contracts', targetActorId: clickedCrew.id });
+              }
             }
           }
         }
@@ -291,6 +332,16 @@ export function buildContextMenu(
     // "Open Map" on map table when someone is navigating
     if (tileType === TileType.MAP_TABLE && anyNavigating) {
       items.push({ label: 'Open Map', targetState: CrewState.NAVIGATING });
+    }
+    // FEATURE 8 — "Use Map" on the map table when a human is selected and the ship holds
+    // a treasure map. Reading it reveals the target island + drops a marker.
+    if (tileType === TileType.MAP_TABLE) {
+      const selectedActor = world.selectedActorId !== null ? world.actors.find(c => c.id === world.selectedActorId) : null;
+      if (selectedActor && selectedActor.actorType === 'human' && !selectedActor.statuses.has('npc') && !clickedCrew) {
+        if (hasTreasureMap(world)) {
+          items.push({ label: 'Use treasure map', targetState: CrewState.IDLE, action: 'use_map' });
+        }
+      }
     }
     // "Leave harbor" on gangplank when docked
     if (tileType === TileType.GANGPLANK && world.docking.phase === 'docked') {
@@ -468,6 +519,14 @@ export function menuItemToCommand(contextMenu: ContextMenu, decks: Deck[], menuI
   // Take item from barrel
   if (menuItem.action === 'take_item' && menuItem.itemData) {
     return { name: 'TakeItem', barrelKey: menuItem.itemData.barrelKey, itemName: menuItem.itemData.itemName };
+  }
+
+  // FEATURE 8 — treasure map / shore expedition actions
+  if (menuItem.action === 'use_map') {
+    return { name: 'UseMap' };
+  }
+  if (menuItem.action === 'send_expedition') {
+    return { name: 'SendExpedition' };
   }
 
   // Combat actions

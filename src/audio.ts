@@ -50,6 +50,14 @@ export class AudioManager {
     // Sea-monster SFX (FEATURE 6). Files may not exist yet — play() tolerates missing sounds.
     this.preload('kraken_warning', '/audio/elevenlabs-generated/kraken_warning.mp3', 'world', 0.8);
     this.preload('kraken_attack', '/audio/elevenlabs-generated/kraken_attack.mp3', 'world', 0.9);
+    // Harbor trading / contracts SFX (FEATURE 7). Files may not exist yet — play() tolerates missing sounds.
+    this.preload('buy', '/audio/elevenlabs-generated/buy.mp3', 'ui', 0.5);
+    this.preload('sell', '/audio/elevenlabs-generated/sell.mp3', 'ui', 0.5);
+    this.preload('contract_accept', '/audio/elevenlabs-generated/contract_accept.mp3', 'ui', 0.6);
+    this.preload('contract_complete', '/audio/elevenlabs-generated/contract_complete.mp3', 'ui', 0.7);
+    // Treasure / exploration SFX (FEATURE 8). Files may not exist yet — play() tolerates missing sounds.
+    this.preload('treasure_dig', '/audio/elevenlabs-generated/treasure_dig.mp3', 'world', 0.6);
+    this.preload('treasure_found', '/audio/elevenlabs-generated/treasure_found.mp3', 'world', 0.8);
 
     this.music = new Audio('/audio/shanty.wav');
     this.music.loop = true;

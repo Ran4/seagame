@@ -1,11 +1,11 @@
 export type { RenderContext } from './context';
 export { drawWater, drawDeck } from './tiles';
 export { drawActor, drawActorOverlays, drawCorpse } from './actors';
-export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel, drawGoldCounter, drawCombatHud, drawRainOverlay, drawWeatherIndicator } from './ui';
+export { drawUI, drawSoundButton, drawActivityLog, drawCompass, drawTooltip, drawItemTooltip, drawBarTooltip, drawItemSlot, drawSettingsButton, drawSettingsPanel, drawCorpsePanel, drawGoldCounter, drawCombatHud, drawRainOverlay, drawWeatherIndicator, drawDockingToast, drawContractsHud } from './ui';
 export { drawContextMenu } from './menu';
 export { drawTentacles, drawMonsterHud } from './monster';
 export { drawMapOverlay } from './map';
-export { drawDockButton, isDockButtonClicked, drawDockedBar, isLeaveHarborClicked } from './docking';
+export { drawDockButton, isDockButtonClicked, drawDockedBar, isLeaveHarborClicked, drawDigButton, isDigButtonClicked } from './docking';
 
 import { TileType } from '../types';
 

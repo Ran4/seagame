@@ -188,6 +188,9 @@ export function refreshConditions(member: Actor, crew: Actor[]): void {
   if (member.health < 32) member.conditions.add('injured');
   // 'bruised' is a tracked status ({ since }) copied above; it expires ~1 in-game
   // day after a fist fight (see BRUISED_DURATION decay in updateActors).
+  // FEATURE 8 — carrying a cursed relic afflicts the bearer (morale penalty applied
+  // in the morale-target block). Set by createCursedItem (item.cursed flag).
+  if (member.profile.inventory.some(i => i.cursed)) member.conditions.add('cursed');
   // Derived: morale levels
   if (member.profile.morale >= 192) member.conditions.add('happy');
   else if (member.profile.morale >= 128) member.conditions.add('content');
@@ -749,9 +752,27 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
     if (allFar) spottedIslands.clear();
   }
 
+  // FEATURE 8 — a cursed relic anywhere aboard (barrel or inventory) casts a pall over
+  // the whole crew (morale penalty applied in the morale-target block below).
+  let shipCursed = false;
+  if (world) {
+    for (const items of world.barrelInventory.values()) {
+      if (items.some(i => i.cursed)) { shipCursed = true; break; }
+    }
+    if (!shipCursed) {
+      for (const a of crew) {
+        if (a.profile.inventory.some(i => i.cursed)) { shipCursed = true; break; }
+      }
+    }
+  }
+
   for (let ci = crew.length - 1; ci >= 0; ci--) {
     const member = crew[ci];
     const isNPC = member.statuses.has('npc');
+
+    // FEATURE 8 — crew on a shore expedition are off-ship: pause all needs/AI/movement.
+    // They reappear (status cleared) when the expedition resolves (see updateExpedition).
+    if (member.statuses.has('ashore')) continue;
 
     // NPCs don't decay needs
     if (!isNPC) {
@@ -837,7 +858,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       const harborBonus = (world?.docking?.phase === 'docked') ? 20 : 0;
       // Kraken Slayer (FEATURE 6): a permanent swagger from having bested the deep's horror.
       const slayerBonus = member.conditions.has('kraken_slayer') ? 15 : 0;
-      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty + harborBonus + slayerBonus));
+      // FEATURE 8: a cursed relic aboard drags everyone's spirits down.
+      const cursePenalty = shipCursed ? -25 : 0;
+      const target = Math.min(255, Math.max(0, (hungerContrib + energyContrib + avgFriendship) / 3 + dogMoraleAdj + injuryPenalty + harborBonus + slayerBonus + cursePenalty));
       const diff = target - member.profile.morale;
       const step = MORALE_RATE * dt;
       if (Math.abs(diff) < step) {

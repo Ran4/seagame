@@ -58,7 +58,9 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
   // Islands
   let hoveredIsland: typeof worldMap.islands[0] | null = null;
   for (const island of worldMap.islands) {
-    if (island.hidden && !hasExpertNavigator) continue;
+    // Hidden islands stay off the map unless an expert navigator is plotting — OR a
+    // treasure map has revealed this one (FEATURE 8).
+    if (island.hidden && !hasExpertNavigator && !island.treasureMarker) continue;
     const ix = toScreenX(island.x);
     const iy = toScreenY(island.y);
     const radius = 8;
@@ -95,6 +97,22 @@ export function drawMapOverlay(rc: RenderContext, worldMap: WorldMap, mousePos: 
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(island.name, ix, iy - radius - 4);
+
+    // FEATURE 8 — treasure marker: a red "X" stamped over a marked island.
+    if (island.treasureMarker) {
+      ctx.strokeStyle = '#ff3b30';
+      ctx.lineWidth = 2.5;
+      const xr = radius + 5;
+      ctx.beginPath();
+      ctx.moveTo(ix - xr, iy - xr);
+      ctx.lineTo(ix + xr, iy + xr);
+      ctx.moveTo(ix + xr, iy - xr);
+      ctx.lineTo(ix - xr, iy + xr);
+      ctx.stroke();
+      ctx.fillStyle = '#ffd27f';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText('TREASURE', ix, iy + radius + 14);
+    }
   }
 
   // Ship (red triangle, rotated to currentHeading)

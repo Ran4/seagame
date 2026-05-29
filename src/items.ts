@@ -105,6 +105,57 @@ export function createTentacleMeat(gameTime: number = 0): Item {
   };
 }
 
+// --- FEATURE 8: Treasure Maps & Exploration ---
+
+/** A treasure map pointing to a specific island. `fake` maps lead nowhere (trap/empty).
+ * The target island + fake flag live in `mapData`. Non-stackable, never spoils. */
+export function createTreasureMap(opts: { islandId: number; fake?: boolean }, gameTime: number = 0): Item {
+  return {
+    name: 'Treasure map', createdAt: gameTime, weight: 30,
+    description: 'A weathered map marked with an X. Read it at the map table to chart a course.',
+    stackable: false, quantity: 1, spoilAfter: null, hungerRestore: 0,
+    mapData: { islandId: opts.islandId, fake: opts.fake ?? false },
+  };
+}
+
+/** A cut gem — pure trade value, sells very high at harbour. Stackable, never spoils. */
+export function createGem(gameTime: number = 0): Item {
+  return {
+    name: 'Gem', createdAt: gameTime, weight: 60,
+    description: 'A glittering cut gemstone. Worth a small fortune to the right buyer.',
+    stackable: true, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** An ancient artifact — lore curio, fetches a princely sum. Non-stackable, never spoils. */
+export function createArtifact(gameTime: number = 0): Item {
+  const LORE = [
+    'A tarnished idol of a forgotten sea-god, eyes set with black pearls.',
+    'A captain\'s astrolabe etched with stars no chart records.',
+    'A jade serpent coiled about a drowned man\'s ring.',
+    'A conquistador\'s breastplate, dented and salt-crusted.',
+    'A music box that plays a tune sailors swear lures sirens.',
+  ];
+  return {
+    name: 'Artifact', createdAt: gameTime, weight: 1200,
+    description: LORE[Math.floor(Math.random() * LORE.length)],
+    stackable: false, quantity: 1, spoilAfter: null, hungerRestore: 0,
+  };
+}
+
+/** A cursed relic — drags down morale and cannot be dropped or sold (see 'cursed' status). */
+export function createCursedItem(gameTime: number = 0): Item {
+  const NAMES = [
+    'Cursed doubloon', 'Bleeding skull', 'Weeping idol', 'Black opal of Cortez',
+  ];
+  return {
+    name: NAMES[Math.floor(Math.random() * NAMES.length)], createdAt: gameTime, weight: 200,
+    description: 'A cold, malevolent relic. The crew dare not part with it — nor do they want to.',
+    stackable: false, quantity: 1, spoilAfter: null, hungerRestore: 0,
+    cursed: true,
+  };
+}
+
 export function createSemen(gameTime: number): Item {
   return {
     name: 'Semen', createdAt: gameTime, weight: 5,

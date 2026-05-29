@@ -5,6 +5,7 @@ import { AudioManager } from '../audio';
 import { fireFriendlyVolley, resolveBoarding, BOARD_RANGE, CANNON_RANGE } from '../combat';
 import { refusesOrderInStorm } from '../weather';
 import { tentacleAt } from '../monster';
+import { useMap, startExpedition } from '../treasure';
 
 // Topside work that fearful crew may refuse to do in a raging storm (it means going
 // up into the weather). Below-deck / personal actions are not gated.
@@ -186,6 +187,21 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       if (world.enemyShip.distance > BOARD_RANGE) { fail('enemy too far to board'); return true; }
       resolveBoarding(world, audio);
       log('led a boarding party');
+      return true;
+    }
+    case 'UseMap': {
+      // FEATURE 8 — read a treasure map (immediate effect; issueCommand forces idle so
+      // it resolves next tick). Reveals the target island + marks the world map.
+      if (!world) { fail('no world reference'); return true; }
+      useMap(world, member, audio);
+      log('read a treasure map');
+      return true;
+    }
+    case 'SendExpedition': {
+      // FEATURE 8 — lead a shore party to dig at the docked, treasure-marked island.
+      if (!world) { fail('no world reference'); return true; }
+      if (!startExpedition(world, audio)) { fail('cannot send a shore party'); return true; }
+      log('led a shore party');
       return true;
     }
     case 'Lookout': {

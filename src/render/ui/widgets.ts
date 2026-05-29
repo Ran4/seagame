@@ -2,7 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   Item, SECONDS_PER_DAY,
   ActivityLogEntry,
-  GameSettings, WeatherState,
+  GameSettings, WeatherState, Contract,
 } from '../../types';
 import { RenderContext } from '../context';
 
@@ -225,6 +225,60 @@ export function drawGoldCounter(rc: RenderContext, gold: number): void {
   ctx.textBaseline = 'middle';
   ctx.fillText(`${gold}`, x + 24, y + h / 2 + 1);
   ctx.textBaseline = 'alphabetic';
+}
+
+/** FEATURE 7 — transient docking banner ("Docking…" / "Docking completed!"). */
+export function drawDockingToast(rc: RenderContext, toast: { text: string; timer: number }): void {
+  const ctx = rc.ctx;
+  // Fade the completion toast out over its last second.
+  const alpha = toast.timer === Infinity ? 1 : Math.max(0, Math.min(1, toast.timer));
+  const w = Math.max(180, ctx.measureText(toast.text).width + 48);
+  const h = 30;
+  const x = CANVAS_WIDTH / 2 - w / 2;
+  const y = 46;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(10, 30, 60, 0.9)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#88bbee';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = '#cce6ff';
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(toast.text, CANVAS_WIDTH / 2, y + h / 2 + 1);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+
+/** FEATURE 7 — small active-contracts list, top-right under the activity-log area. */
+export function drawContractsHud(rc: RenderContext, contracts: Contract[]): void {
+  if (contracts.length === 0) return;
+  const ctx = rc.ctx;
+  const rows = contracts.slice(0, 4);
+  const w = 240, lineH = 14;
+  const h = 18 + rows.length * lineH + 4;
+  const x = CANVAS_WIDTH - w - 8;
+  const y = 8;
+  ctx.fillStyle = 'rgba(0,0,0,0.66)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#665522';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = '#ffe9a8';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('⚓ Contracts', x + 6, y + 13);
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#d8d0b8';
+  for (let i = 0; i < rows.length; i++) {
+    const c = rows[i];
+    let label = `${c.description} (${c.reward}g)`;
+    if (label.length > 36) label = label.slice(0, 35) + '…';
+    ctx.fillText(label, x + 6, y + 13 + (i + 1) * lineH);
+  }
 }
 
 /** Top-center combat HUD: enemy name, HP bar, distance, and our flood/damage indicator. */

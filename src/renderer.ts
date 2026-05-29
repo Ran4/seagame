@@ -12,8 +12,10 @@ import {
   drawContextMenu, drawMapOverlay,
   drawSettingsButton, drawSettingsPanel, drawCorpsePanel,
   drawDockButton, drawDockedBar, drawGoldCounter, drawCombatHud,
+  drawDigButton,
   drawRainOverlay, drawWeatherIndicator,
   drawTentacles, drawMonsterHud,
+  drawDockingToast, drawContractsHud,
 } from './render';
 import { drawCommandInput } from './command-input';
 
@@ -126,7 +128,7 @@ export class Renderer {
         if (corpse.deck === 1) drawCorpse(rc, corpse, corpse.actorId === world.selectedCorpseId);
       }
       for (const member of crew) {
-        if (member.deck === 1) {
+        if (member.deck === 1 && !member.statuses.has('ashore')) {
           drawActor(rc, member, member.id === selectedActorId);
         }
       }
@@ -214,13 +216,14 @@ export class Renderer {
     }
 
     for (const member of crew) {
-      if (member.deck === deckIndex) {
+      // FEATURE 8 — crew on a shore expedition are hidden from the deck.
+      if (member.deck === deckIndex && !member.statuses.has('ashore')) {
         drawActor(rc, member, member.id === selectedActorId);
       }
     }
     // Second pass: draw bubbles and name labels on top of all actors
     for (const member of crew) {
-      if (member.deck === deckIndex) {
+      if (member.deck === deckIndex && !member.statuses.has('ashore')) {
         drawActorOverlays(rc, member, member.id === selectedActorId);
       }
     }
@@ -286,6 +289,20 @@ export class Renderer {
     // "Leave harbor" button when docked
     if (world.docking.phase === 'docked') {
       drawDockedBar(ctx, hasHelmsman, mousePos, world.docking.island?.name);
+      // FEATURE 8 — "Dig for treasure!" button when docked at a marked island.
+      if (world.docking.island && world.treasureIslands.has(world.docking.island.id)) {
+        drawDigButton(ctx, mousePos, world.expedition !== null);
+      }
+    }
+
+    // FEATURE 7 — docking toast ("Docking…" / "Docking completed!") + active contracts.
+    if (world.dockingToast) {
+      drawDockingToast(rc, world.dockingToast);
+    }
+    if (!world.enemyShip && !world.monster) {
+      // Avoid stacking on top of the combat/kraken HUD (top-center) — contracts list
+      // sits top-right, but skip while a combat HUD is fighting for attention.
+      drawContractsHud(rc, world.contracts.filter(c => c.status === 'active'));
     }
 
     // Mutiny ultimatum warning banner

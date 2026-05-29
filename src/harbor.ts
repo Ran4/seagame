@@ -2,6 +2,7 @@ import {TileType, Deck, DockingState, Island, TILE_SIZE, CrewState, WALKABLE, It
 import {stopSailing} from './worldmap';
 import type {World} from './types';
 import {createGrogRation} from './items';
+import {generateContractOffers, checkDeliverContracts} from './contracts';
 
 // Harbor layout: 41 wide × 33 tall
 // # = Harbor Wall, _ = Harbor Floor, L = Land, W = Wharf
@@ -154,6 +155,9 @@ export function startDocking(world: World): void {
 
   // Create docking state
   world.docking = createDockingState(island);
+
+  // FEATURE 7 — show a "Docking…" indicator while the ship drives into the wharf.
+  world.dockingToast = { text: `Docking at ${island.name}…`, timer: Infinity };
 }
 
 /** Complete docking — fill harbor tiles into the existing expanded grid. */
@@ -162,6 +166,9 @@ export function completeDocking(world: World): void {
 
   docking.phase = 'docked';
   docking.harborAnimOffset = 0;
+
+  // FEATURE 7 — replace the "Docking…" indicator with a brief completion toast.
+  world.dockingToast = { text: 'Docking completed!', timer: 3 };
 
   // Fill harbor tiles on upper deck (d=1) where grid currently has water
   const upperDeck = world.decks[1];
@@ -251,12 +258,27 @@ export function completeDocking(world: World): void {
   }
 
   world.activityLog.push({text: `Docked at ${docking.island?.name ?? 'harbor'}`, time: world.time});
+
+  // FEATURE 7 — show the island's personality flavour on arrival.
+  const flavor = docking.island?.economy?.flavor;
+  if (flavor) world.activityLog.push({ text: flavor, time: world.time });
+
+  // FEATURE 7 — complete any 'deliver' contracts targeting this island, then offer
+  // a fresh batch of contracts at this harbour's NPC (the innkeeper/harbormaster).
+  if (islandId != null) checkDeliverContracts(world, islandId);
+  generateContractOffers(world);
 }
 
 /** Start undocking — clear harbor tiles and begin undocking animation. */
 export function startUndocking(world: World): void {
   const docking = world.docking;
   if (docking.phase !== 'docked') return;
+
+  // FEATURE 8 — don't sail off and leave a shore party behind. Wait for them to return.
+  if (world.expedition && world.expedition.islandId === docking.island?.id) {
+    world.activityLog.push({ text: 'Can\'t leave — the shore party is still ashore!', time: world.time });
+    return;
+  }
 
   // Clear harbor tiles on upper deck — set back to water
   const upperDeck = world.decks[1];
@@ -381,6 +403,11 @@ export function startUndocking(world: World): void {
 
   // Clear gangplank connections
   world.gangplanks = [];
+
+  // FEATURE 7 — clear this harbour's contract offers (a fresh batch is generated on
+  // the next dock). Accepted contracts on world.contracts persist across voyages.
+  world.contractOffers = [];
+  world.dockingToast = null;
 
   // Start undocking animation
   docking.phase = 'undocking';

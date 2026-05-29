@@ -37,12 +37,17 @@ export interface StateSnapshot {
   corpses: { actorId: number; name: string; deck: number; type: string }[];
   spottedIslands: number[];
   gold: number;
+  docking: { phase: string; island: string | null };
+  contracts: { id: number; kind: string; description: string; reward: number; status: string }[];
+  contractOffers: { id: number; kind: string; description: string; reward: number }[];
   floodLevel: number;
   gameOverReason: string | null;
   enemyShip: { name: string; hp: number; maxHp: number; crewCount: number; distance: number; hostile: boolean } | null;
   weather: { state: string; timer: number; intensity: number; lightningFlash: number };
   monster: { phase: string; timer: number; tentaclesSevered: number } | null;
   tentacles: { id: number; deck: number; x: number; y: number; hp: number; maxHp: number; grabbedActorId: number | null; grabTimer: number }[];
+  treasureIslands: number[];
+  expedition: { islandId: number; returnTime: number; crewIds: number[] } | null;
 }
 
 export function serializeState(world: World): StateSnapshot {
@@ -120,6 +125,9 @@ export function serializeState(world: World): StateSnapshot {
     corpses: world.corpses.map(c => ({ actorId: c.actorId, name: c.name, deck: c.deck, type: c.actorType })),
     spottedIslands: Array.from(world.spottedIslands),
     gold: world.gold,
+    docking: { phase: world.docking.phase, island: world.docking.island?.name ?? null },
+    contracts: world.contracts.map(c => ({ id: c.id, kind: c.kind, description: c.description, reward: c.reward, status: c.status })),
+    contractOffers: world.contractOffers.map(c => ({ id: c.id, kind: c.kind, description: c.description, reward: c.reward })),
     floodLevel: Math.round(world.floodLevel * 10) / 10,
     gameOverReason: world.gameOverReason,
     enemyShip: world.enemyShip
@@ -138,5 +146,9 @@ export function serializeState(world: World): StateSnapshot {
       id: t.id, deck: t.deck, x: t.x, y: t.y, hp: Math.round(t.hp), maxHp: t.maxHp,
       grabbedActorId: t.grabbedActorId, grabTimer: Math.round(t.grabTimer * 10) / 10,
     })),
+    treasureIslands: Array.from(world.treasureIslands),
+    expedition: world.expedition
+      ? { islandId: world.expedition.islandId, returnTime: Math.round(world.expedition.returnTime), crewIds: world.expedition.crewIds }
+      : null,
   };
 }

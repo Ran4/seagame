@@ -15,7 +15,10 @@ import { AudioManager } from './audio';
 import { getAutocomplete, submitCommandInput } from './command-input';
 import { readNoticeBoard } from './notices';
 import { startDocking, completeDocking, startUndocking, completeUndocking, DOCKING_SPEED, UNDOCKING_END, DECK_X_SHIFT, DECK_Y_SHIFT, SHIP_WIDTH, SHIP_HEIGHT } from './harbor';
-import { isDockButtonClicked, isLeaveHarborClicked } from './render/docking';
+import { availableGoods, buyGood, sellItem, buyPrice } from './trade';
+import { acceptContract, activeContracts } from './contracts';
+import { isDockButtonClicked, isLeaveHarborClicked, isDigButtonClicked } from './render/docking';
+import { updateExpedition, startExpedition } from './treasure';
 import type { Actor, Sex } from './types';
 
 const RECRUIT_NAMES_M = ['Hank', 'Barney', 'Sven', 'Diego', 'Rufus', 'Ollie', 'Claude', 'Finn'];
@@ -155,8 +158,16 @@ function maybeSpawnEnemy(world: World, audio: AudioManager): void {
   if (Math.random() >= chance) return;
 
   const hp = 80 + Math.floor(Math.random() * 120); // 80..200
+  // FEATURE 7 — if a 'hunt' contract is active, bias the encounter toward its target
+  // ship name so the contract is actually completable (40% chance to be the marked ship).
+  const huntTargets = world.contracts
+    .filter(c => c.status === 'active' && c.kind === 'hunt' && c.targetShipName)
+    .map(c => c.targetShipName!);
+  const name = (huntTargets.length > 0 && Math.random() < 0.4)
+    ? huntTargets[Math.floor(Math.random() * huntTargets.length)]
+    : ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
   const enemy: EnemyShip = {
-    name: ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)],
+    name,
     hp,
     maxHp: hp,
     crewCount: 2 + Math.floor(Math.random() * 5), // 2..6
@@ -265,6 +276,9 @@ export function createWorld(): World {
   const decks = createShip();
   const actors = createActors(4, decks);
   const worldMap = createWorldMap();
+  // FEATURE 8 — clear any treasure markers left on the shared ISLANDS objects from a
+  // previous game (worldMap.islands is a shared module-level array).
+  for (const isl of worldMap.islands) isl.treasureMarker = false;
   const barrelInventory = new Map<string, Item[]>();
   const lanternOil = new Map<string, number>();
 
@@ -365,9 +379,15 @@ export function createWorld(): World {
     gameOverReason: null,
     enemyShip: null,
     gold: 100,
+    contracts: [],
+    contractOffers: [],
+    nextContractId: 1,
+    dockingToast: null,
     weather: { state: 'clear', timer: WEATHER_CLEAR_DURATION, intensity: 0, lightningFlash: 0 },
     monster: null,
     tentacles: [],
+    treasureIslands: new Set(),
+    expedition: null,
   };
 }
 
@@ -488,14 +508,27 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     }
   }
 
+  // FEATURE 8 — "Dig for treasure!" button click (docked at a treasure-marked island).
+  if (world.docking.phase === 'docked' && input.mouseClick && world.expedition === null &&
+      world.docking.island && world.treasureIslands.has(world.docking.island.id)) {
+    if (isDigButtonClicked(input.mouseClick.x, input.mouseClick.y)) {
+      startExpedition(world, audio);
+      input.mouseClick = null;
+    }
+  }
+
   // Docking animation: harbor slides into position
   if (world.docking.phase === 'docking') {
     if (anySteering) {
       world.docking.harborAnimOffset += DOCKING_SPEED * dt;
       if (world.docking.harborAnimOffset >= 0) {
         world.docking.harborAnimOffset = 0;
+        const activeBefore = world.contracts.filter(c => c.status === 'active').length;
         completeDocking(world);
         audio.play('harbor_arrive', world.activeDeck);
+        // FEATURE 7 — a delivery contract may have just completed on arrival.
+        const activeAfter = world.contracts.filter(c => c.status === 'active').length;
+        if (activeAfter < activeBefore) audio.play('contract_complete', world.activeDeck);
       }
     }
   }
@@ -509,6 +542,16 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       }
     }
   }
+
+  // FEATURE 7 — tick the transient docking toast ("Docking…" persists with timer
+  // Infinity; "Docking completed!" decays after a few seconds).
+  if (world.dockingToast && world.dockingToast.timer !== Infinity) {
+    world.dockingToast.timer -= dt;
+    if (world.dockingToast.timer <= 0) world.dockingToast = null;
+  }
+
+  // FEATURE 8 — shore expedition: bring the party back + roll an outcome when due.
+  updateExpedition(world, audio);
 
   // Three-step sailing: navigator sets orders, helmsman executes, physics always runs
   // Skip sailing updates during docking
@@ -703,11 +746,55 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
         world.contextMenu = null;
         input.mouseClick = null;
       } else if (menuItem.action === 'buy_grog') {
-        // Buy grog from bartender — give selected crew member a grog ration
+        // Buy grog from bartender — costs gold (FEATURE 7). Grog ration price comes
+        // from the goods table so it respects the docked island's buy multiplier.
         const member = world.selectedActorId !== null ? world.actors.find(c => c.id === world.selectedActorId) : null;
-        if (member) {
-          member.profile.inventory.push(createGrogRation());
-          world.activityLog.push({ text: `${member.profile.name} bought a grog ration`, time: world.time });
+        const grog = availableGoods(world).find(g => g.name === 'Grog ration');
+        if (member && grog) {
+          const price = buyPrice(world, grog);
+          if (world.gold >= price) {
+            world.gold -= price;
+            member.profile.inventory.push(createGrogRation(world.time));
+            world.activityLog.push({ text: `${member.profile.name} bought a grog ration for ${price} gold (${world.gold} left).`, time: world.time });
+            audio.play('buy', world.activeDeck);
+          } else {
+            world.activityLog.push({ text: `Not enough gold for a grog ration (need ${price}, have ${world.gold}).`, time: world.time });
+          }
+        }
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'buy_good' && menuItem.itemData) {
+        // Buy a good from the merchant (FEATURE 7) — deduct gold, deliver to a barrel.
+        const good = availableGoods(world).find(g => g.name === menuItem!.itemData!.itemName);
+        if (good) {
+          if (buyGood(world, good)) audio.play('buy', world.activeDeck);
+          else audio.play('click', world.activeDeck);
+        }
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'sell_item' && menuItem.itemData) {
+        // Sell one unit of an item to the merchant (FEATURE 7) — remove + add gold.
+        if (sellItem(world, menuItem.itemData.itemName)) audio.play('sell', world.activeDeck);
+        else audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'take_contract' && menuItem.itemData) {
+        // Accept a harbour contract (FEATURE 7).
+        const offerId = Number(menuItem.itemData.barrelKey);
+        if (acceptContract(world, offerId)) audio.play('contract_accept', world.activeDeck);
+        else audio.play('click', world.activeDeck);
+        world.contextMenu = null;
+        input.mouseClick = null;
+      } else if (menuItem.action === 'review_contracts') {
+        // List active contracts in the activity log (FEATURE 7).
+        const active = activeContracts(world);
+        world.activityLog.push({ text: '--- Active Contracts ---', time: world.time });
+        if (active.length === 0) {
+          world.activityLog.push({ text: 'No active contracts.', time: world.time });
+        } else {
+          for (const c of active) {
+            world.activityLog.push({ text: `${c.description} — reward ${c.reward} gold`, time: world.time });
+          }
         }
         audio.play('click', world.activeDeck);
         world.contextMenu = null;
@@ -715,16 +802,6 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       } else if (menuItem.action === 'recruit_sailor') {
         recruitSailor(world);
         audio.play('recruit', world.activeDeck);
-        world.contextMenu = null;
-        input.mouseClick = null;
-      } else if (menuItem.action === 'browse_wares') {
-        world.activityLog.push({ text: '--- Merchant\'s Wares ---', time: world.time });
-        world.activityLog.push({ text: 'Grog ration — keeps the crew happy', time: world.time });
-        world.activityLog.push({ text: 'Hardtack — cheap but filling', time: world.time });
-        world.activityLog.push({ text: 'Hemp rope — essential for rigging', time: world.time });
-        world.activityLog.push({ text: 'Gunpowder — for the cannons', time: world.time });
-        world.activityLog.push({ text: '(Trading not yet available)', time: world.time });
-        audio.play('click', world.activeDeck);
         world.contextMenu = null;
         input.mouseClick = null;
       } else if (menuItem.action === 'read_notices') {
