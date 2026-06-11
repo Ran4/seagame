@@ -97,6 +97,17 @@ function createActor(id: number, actorType: ActorType, name: string, sex: Sex, c
   };
 }
 
+/** Random unused name from the pool; numeric suffix once the pool is exhausted
+ * (name-keyed lookups like order files require uniqueness). */
+export function pickUniqueName(pool: string[], usedNames: Set<string>): string {
+  const unused = pool.filter(n => !usedNames.has(n));
+  if (unused.length > 0) return unused[Math.floor(Math.random() * unused.length)];
+  const base = pool[Math.floor(Math.random() * pool.length)];
+  let suffix = 2;
+  while (usedNames.has(`${base} ${suffix}`)) suffix++;
+  return `${base} ${suffix}`;
+}
+
 export function createActors(humanCount: number, decks: Deck[]): Actor[] {
   const actors: Actor[] = [];
   let nextId = 0;

@@ -1,5 +1,6 @@
 import {TileType, Deck, DockingState, Island, TILE_SIZE, CrewState, WALKABLE, Item, Actor} from './types';
 import {stopSailing} from './worldmap';
+import {WEATHER_CLEAR_DURATION} from './weather';
 import type {World} from './types';
 import {createGrogRation} from './items';
 import {generateContractOffers, checkDeliverContracts} from './contracts';
@@ -95,31 +96,47 @@ export const UNDOCKING_END = -26 * TILE_SIZE;
 // Gangplank position in expanded grid coordinates
 const GANGPLANK_X = DECK_X_SHIFT - 1;  // 28
 const GANGPLANK_Y = 8 + DECK_Y_SHIFT;  // 15 (ship row 8 + offset)
-const GANGPLANK_HULL_X = DECK_X_SHIFT; // 29 (hull tile converted to floor for walkability)
+const GANGPLANK_HULL_X = DECK_X_SHIFT; // 29 (ship-edge tile — the port fishing spot — converted to floor for walkability)
 
-/** Check if a tile is inside a building (has harbor walls on at least 3 sides within 2 tiles). */
+// Tiles that can occur inside a building — scanning past these is still "indoors".
+const BUILDING_INTERIOR_TILES = new Set([
+  TileType.HARBOR_FLOOR, TileType.TABLE, TileType.BED, TileType.STOVE,
+  TileType.BARREL, TileType.LANTERN, TileType.NOTICE_BOARD,
+]);
+
+/** Check if a tile is inside a building: scanning outward over interior tiles,
+ *  a HARBOR_WALL bounds it in at least 3 of 4 directions (door gaps allowed). */
 function isInsideBuilding(harborTiles: TileType[][], x: number, y: number): boolean {
   let wallCount = 0;
   const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   for (const [dx, dy] of dirs) {
-    for (let d = 1; d <= 2; d++) {
-      const nx = x + dx * d;
-      const ny = y + dy * d;
-      if (ny >= 0 && ny < harborTiles.length && nx >= 0 && nx < harborTiles[0].length) {
-        if (harborTiles[ny][nx] === TileType.HARBOR_WALL) {
-          wallCount++;
-          break;
-        }
+    let nx = x + dx;
+    let ny = y + dy;
+    while (ny >= 0 && ny < harborTiles.length && nx >= 0 && nx < harborTiles[0].length) {
+      const tile = harborTiles[ny][nx];
+      if (tile === TileType.HARBOR_WALL) {
+        wallCount++;
+        break;
       }
+      if (!BUILDING_INTERIOR_TILES.has(tile)) break;
+      nx += dx;
+      ny += dy;
     }
   }
   return wallCount >= 3;
 }
 
 /** Check if a tile position is within the ship region of the expanded grid. */
-function isOnShip(tileX: number, tileY: number): boolean {
+export function isOnShip(tileX: number, tileY: number): boolean {
   return tileX >= DECK_X_SHIFT && tileX < DECK_X_SHIFT + SHIP_WIDTH &&
          tileY >= DECK_Y_SHIFT && tileY < DECK_Y_SHIFT + SHIP_HEIGHT;
+}
+
+/** True if a "deck-x-y" barrel/lantern key belongs to the ship (not a docked harbor).
+ * Harbor tiles only ever exist on deck 1, outside the ship bounding box. */
+export function isShipBarrelKey(key: string): boolean {
+  const [d, x, y] = key.split('-').map(Number);
+  return d !== 1 || isOnShip(x, y);
 }
 
 /** Create the docking state when initiating docking at an island. */
@@ -153,6 +170,30 @@ export function startDocking(world: World): void {
     world.enemyShip = null;
   }
 
+  // Same for weather and the kraken: their state machines (updateWeather/updateMonster)
+  // only tick at sea, but rendering and crew panic read the state unconditionally — a
+  // storm or attack left active here would freeze and torment the crew in port forever.
+  if (world.weather.state === 'storm') {
+    world.activityLog.push({ text: 'The storm is left raging behind us — calm waters in the lee of the harbor.', time: world.time });
+  }
+  world.weather.state = 'clear';
+  world.weather.timer = WEATHER_CLEAR_DURATION;
+  world.weather.intensity = 0;
+  world.weather.lightningFlash = 0;
+
+  if (world.monster) {
+    // Free anyone still in a tentacle's grip before the encounter is dropped.
+    for (const t of world.tentacles) {
+      if (t.grabbedActorId !== null) {
+        const v = world.actors.find(a => a.id === t.grabbedActorId);
+        if (v) v.statuses.delete('grabbed');
+      }
+    }
+    world.tentacles = [];
+    world.monster = null;
+    world.activityLog.push({ text: 'The kraken will not follow into the shallows — it sinks away as we make port.', time: world.time });
+  }
+
   // Create docking state
   world.docking = createDockingState(island);
 
@@ -170,18 +211,23 @@ export function completeDocking(world: World): void {
   // FEATURE 7 — replace the "Docking…" indicator with a brief completion toast.
   world.dockingToast = { text: 'Docking completed!', timer: 3 };
 
-  // Fill harbor tiles on upper deck (d=1) where grid currently has water
+  // Fill harbor tiles on upper deck (d=1) where grid currently has water.
+  // Never inside the ship bounding box — the pointed bow leaves WATER corners there,
+  // and startUndocking's cleanup skips the bbox, so wharf tiles written into those
+  // corners would persist (walkable!) forever at sea.
   const upperDeck = world.decks[1];
   for (let y = 0; y < docking.harborHeight; y++) {
     for (let x = 0; x < docking.harborWidth; x++) {
       const tile = docking.harborTiles[y][x];
-      if (tile !== TileType.WATER && upperDeck.tiles[y][x] === TileType.WATER) {
+      if (tile !== TileType.WATER && upperDeck.tiles[y][x] === TileType.WATER && !isOnShip(x, y)) {
         upperDeck.tiles[y][x] = tile;
       }
     }
   }
 
-  // Place gangplank + convert adjacent hull to floor for walkability
+  // Place gangplank + convert the adjacent ship-edge tile to floor for walkability.
+  // Remember what stood there (the port-side fishing spot) so undocking can restore it.
+  docking.gangplankHullTile = upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X];
   upperDeck.tiles[GANGPLANK_Y][GANGPLANK_X] = TileType.GANGPLANK;
   upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X] = TileType.FLOOR;
 
@@ -280,6 +326,11 @@ export function startUndocking(world: World): void {
     return;
   }
 
+  // The recruit limit is per harbor visit — reset it as we leave port.
+  for (const actor of world.actors) {
+    actor.statuses.delete('recruited_this_visit');
+  }
+
   // Clear harbor tiles on upper deck — set back to water
   const upperDeck = world.decks[1];
   for (let y = 0; y < docking.harborHeight; y++) {
@@ -290,9 +341,10 @@ export function startUndocking(world: World): void {
     }
   }
 
-  // Restore gangplank and hull
+  // Remove the gangplank and restore the ship-edge tile it replaced
   upperDeck.tiles[GANGPLANK_Y][GANGPLANK_X] = TileType.WATER;
-  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X] = TileType.HULL;
+  upperDeck.tiles[GANGPLANK_Y][GANGPLANK_HULL_X] = docking.gangplankHullTile ?? TileType.HULL;
+  docking.gangplankHullTile = undefined;
 
   // Separate actors on ship vs on land, filtering out NPCs (they just disappear)
   const islandId = docking.island?.id;
@@ -331,6 +383,9 @@ export function startUndocking(world: World): void {
       actor.conversationPartnerId = null;
       actor.speechBubbleText = null;
       actor.copulationTarget = null;
+      // Drop relations to the despawning NPCs, same as the ship crew below — stale
+      // entries would skew morale math and point at ids of long-gone actors.
+      actor.relations = actor.relations.filter(r => !npcIds.has(r.actorId));
     }
     const existing = world.strandedActors.get(islandId) ?? [];
     existing.push(...landActors);
@@ -452,11 +507,9 @@ const HARBOR_NPCS: HarborNPCDef[] = [
 ];
 
 function getNextActorId(world: World): number {
-  let maxId = 0;
-  for (const actor of world.actors) {
-    if (actor.id > maxId) maxId = actor.id;
-  }
-  return maxId + 1;
+  // Monotonic — a max(id)+1 scan over world.actors would reuse the ids of actors
+  // stranded ashore (they're moved out of world.actors but keep their ids).
+  return world.nextActorId++;
 }
 
 function createNPC(def: HarborNPCDef, id: number): Actor {
@@ -569,16 +622,15 @@ function createHarborCat(id: number): Actor {
 }
 
 function spawnHarborNPCs(world: World): void {
-  let nextId = getNextActorId(world);
   const npcs: Actor[] = [];
 
   for (const def of HARBOR_NPCS) {
-    const npc = createNPC(def, nextId++);
+    const npc = createNPC(def, getNextActorId(world));
     npcs.push(npc);
   }
 
   // Spawn a harbor cat
-  const cat = createHarborCat(nextId++);
+  const cat = createHarborCat(getNextActorId(world));
   npcs.push(cat);
 
   // Initialize relations between NPCs and all existing actors

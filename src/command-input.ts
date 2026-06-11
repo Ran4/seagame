@@ -68,6 +68,19 @@ export function submitCommandInput(world: World): void {
     return;
   }
 
+  // Same gating as the context menu: NPCs can't be commanded, and animals
+  // only take commands via order files, not the player-facing command bar.
+  if (member.statuses.has('npc')) {
+    world.activityLog.push({ text: `${member.profile.name} is not part of the crew`, time: world.time });
+    world.commandInput = null;
+    return;
+  }
+  if (member.actorType !== 'human') {
+    world.activityLog.push({ text: `${member.profile.name} doesn't take orders`, time: world.time });
+    world.commandInput = null;
+    return;
+  }
+
   try {
     const command = parseShorthand(text);
     issueCommand(member, command, world.actors);

@@ -529,12 +529,14 @@ export interface DockingState {
   harborWidth: number;
   harborHeight: number;
   harborAnimOffset: number;       // Y pixel offset during docking/undocking animation
+  gangplankHullTile?: TileType;   // ship tile overwritten by the gangplank walkway, restored on undock
 }
 
 // All game simulation state — the "world" struct that free functions operate on
 export interface World {
   decks: Deck[];
   actors: Actor[];
+  nextActorId: number;            // monotonic id allocator — never reuse ids (stranded actors keep theirs)
   corpses: Corpse[];
   camera: Camera;
   activeDeck: number;
@@ -568,7 +570,7 @@ export interface World {
   strandedCorpses: Map<number, Corpse[]>;  // island ID → corpses left on that island
   // --- SHARED SYSTEM A: object/hull damage + combat ---
   objectHp: Map<string, number>;   // "deck-x-y" → current HP of a damageable tile (absent = full)
-  floodLevel: number;              // 0..100, rises while hull breaches exist on the lowest deck
+  floodLevel: number;              // 0..100, rises while hull breaches exist on any deck
   gameOverReason: string | null;   // generalized game-over text (mutiny also sets mutinyState)
   enemyShip: EnemyShip | null;     // current ship-to-ship combat target (one at a time)
   gold: number;                    // ship treasury (SHARED SYSTEM B; loot/treasure add, buying subtracts)

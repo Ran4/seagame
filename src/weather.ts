@@ -119,9 +119,12 @@ export function updateWeather(world: World, dt: number, audio?: AudioManager): v
       if (Math.random() < CLEAR_TO_CLOUDY + deepBonus) enterState(world, 'cloudy', audio);
       else w.timer = WEATHER_CLEAR_DURATION; // stay clear another spell
     } else if (w.state === 'cloudy') {
-      const r = Math.random();
-      if (r < CLOUDY_TO_STORM + deepBonus) enterState(world, 'storm', audio);
-      else if (r < CLOUDY_TO_STORM + deepBonus + CLOUDY_TO_CLEAR) enterState(world, 'clear', audio);
+      // Roll storm first, then split what's left between clearing and lingering at the
+      // base ratio — keeps the deep-water bonus from pushing the total past 1 and
+      // eating the linger band.
+      const clearShare = CLOUDY_TO_CLEAR / (1 - CLOUDY_TO_STORM);
+      if (Math.random() < CLOUDY_TO_STORM + deepBonus) enterState(world, 'storm', audio);
+      else if (Math.random() < clearShare) enterState(world, 'clear', audio);
       else w.timer = WEATHER_CLOUDY_DURATION; // lingers cloudy
     } else { // storm
       // Storms blow over into cloudy skies (clouds then clear normally).

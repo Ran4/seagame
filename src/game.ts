@@ -7,7 +7,7 @@ import { updateMonster } from './monster';
 import { CONFIG } from './config';
 import type { EnemyShip } from './types';
 import { createShip } from './ship';
-import { createActors, updateActors, issueCommand } from './crew';
+import { createActors, updateActors, issueCommand, pickUniqueName } from './crew';
 import { createInputHandler, updateCamera, handleClick, InputState } from './input';
 import { updateSailing, updateNavigator, updateHelmsman, createWorldMap, SHIP_SPEED, handleMapOverlayClick, getNearbyHarborIsland, stopSailing } from './worldmap';
 import { buildContextMenu, handleMenuClick, menuItemToCommand } from './menu';
@@ -26,15 +26,13 @@ const RECRUIT_NAMES_F = ['Rosa', 'Elsa', 'Nora', 'Greta', 'Molly', 'Faye', 'Astr
 const RECRUIT_COLORS = ['#e67e22', '#1abc9c', '#e91e63', '#8e44ad', '#16a085', '#d35400'];
 
 function recruitSailor(world: World): void {
-  let maxId = 0;
-  for (const a of world.actors) { if (a.id > maxId) maxId = a.id; }
-  const id = maxId + 1;
+  const id = world.nextActorId++;
   const sex: Sex = Math.random() < 0.5 ? 'M' : 'F';
   const names = sex === 'M' ? RECRUIT_NAMES_M : RECRUIT_NAMES_F;
   const usedNames = new Set(world.actors.map(a => a.profile.name));
-  let name = names[Math.floor(Math.random() * names.length)];
-  // Avoid duplicate names
-  for (const n of names) { if (!usedNames.has(n)) { name = n; break; } }
+  // Pick randomly among unused names; suffix to stay unique once the pool is exhausted
+  // (name-keyed lookups like order files require uniqueness).
+  const name = pickUniqueName(names, usedNames);
   const color = RECRUIT_COLORS[Math.floor(Math.random() * RECRUIT_COLORS.length)];
 
   // Spawn on upper deck near the gangplank
@@ -133,7 +131,7 @@ const ENEMY_WRECK_DRIFT = SHIP_SPEED * 0.3;   // a crippled (hp 0) wreck only co
 const ENCOUNTER_MIN_RANGE = 7;        // leagues — closest an enemy appears
 const ENCOUNTER_MAX_RANGE = 11;       // leagues — farthest an enemy appears
 const ESCAPE_DISTANCE = 14;           // leagues — beyond this the enemy gives up
-const ESCAPE_CHANCE = 0.06;           // per encounter tick while fleeing (sailing, not chasing) & out of cannon range
+const ESCAPE_CHANCE = 0.06;           // per encounter tick while the gap is opening (fleeing, not chasing) & out of cannon range
 const ENEMY_FIRE_INTERVAL = 6;        // seconds between enemy volleys
 const CANNON_RELOAD = 5;              // seconds between auto-fired friendly volleys
 const PIRATE_ISLAND_IDS = new Set([0, 3]); // Tortuga, Skull Rock
@@ -171,10 +169,20 @@ function maybeSpawnEnemy(world: World, audio: AudioManager): void {
     ? huntTargets[Math.floor(Math.random() * huntTargets.length)]
     : ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
   // Place the enemy at a real map position: a random bearing, ENCOUNTER_MIN..MAX leagues off.
-  const bearing = Math.random() * Math.PI * 2;
-  const range = ENCOUNTER_MIN_RANGE + Math.random() * (ENCOUNTER_MAX_RANGE - ENCOUNTER_MIN_RANGE);
-  const ex = Math.max(0, Math.min(100, map.shipX + Math.cos(bearing) * range));
-  const ey = Math.max(0, Math.min(80, map.shipY + Math.sin(bearing) * range));
+  // Clamping to the map rectangle can collapse the offset when the player hugs an edge or
+  // corner — re-roll bearings until the clamped point still honours the minimum range, so
+  // an enemy never materializes already inside cannon range.
+  let ex = 0, ey = 0, placed = false;
+  for (let attempt = 0; attempt < 12 && !placed; attempt++) {
+    const bearing = Math.random() * Math.PI * 2;
+    const range = ENCOUNTER_MIN_RANGE + Math.random() * (ENCOUNTER_MAX_RANGE - ENCOUNTER_MIN_RANGE);
+    const tx = Math.max(0, Math.min(100, map.shipX + Math.cos(bearing) * range));
+    const ty = Math.max(0, Math.min(80, map.shipY + Math.sin(bearing) * range));
+    if (Math.hypot(map.shipX - tx, map.shipY - ty) >= ENCOUNTER_MIN_RANGE) {
+      ex = tx; ey = ty; placed = true;
+    }
+  }
+  if (!placed) return; // boxed into a corner with no clean spawn point — skip this encounter
   const enemy: EnemyShip = {
     name,
     hp,
@@ -194,10 +202,13 @@ function maybeSpawnEnemy(world: World, audio: AudioManager): void {
 
 /** Per-frame combat update: enemy movement, auto-cannon fire, enemy volleys, escape. */
 function updateCombat(world: World, audio: AudioManager, dt: number): void {
-  // Roll for new encounters on a throttle while sailing.
+  // Roll for new encounters on a throttle while sailing. The escape roll below shares
+  // this tick — ESCAPE_CHANCE is tuned per encounter tick, not per frame.
   combatEncounterTimer += dt;
+  let encounterTick = false;
   if (combatEncounterTimer >= ENCOUNTER_TICK) {
     combatEncounterTimer = 0;
+    encounterTick = true;
     maybeSpawnEnemy(world, audio);
   }
 
@@ -208,6 +219,7 @@ function updateCombat(world: World, audio: AudioManager, dt: number): void {
   const moving = map.currentSpeed > 0;
 
   const crippled = enemy.hp <= 0;
+  const prevDistance = enemy.distance;
 
   // --- Positional movement ---------------------------------------------------------------
   // The player ship has already moved this frame (updateSailing ran before us). Now move the
@@ -229,10 +241,12 @@ function updateCombat(world: World, audio: AudioManager, dt: number): void {
   enemy.y = Math.max(0, Math.min(80, enemy.y));
   enemy.distance = Math.hypot(map.shipX - enemy.x, map.shipY - enemy.y);
 
-  // Fleeing: if the player is actively sailing AWAY (not chasing) and out of cannon range,
-  // there's a chance each tick to slip the pursuer in open sea. Chasing never triggers this.
-  if (moving && !map.chaseEnemy && !crippled && enemy.distance > CANNON_RANGE) {
-    if (Math.random() < ESCAPE_CHANCE * dt) {
+  // Fleeing: if the player is actually opening the gap (sailing away, not chasing, not
+  // merely moving toward the enemy) and out of cannon range, there's a chance per
+  // encounter tick to slip the pursuer in open sea. Chasing never triggers this.
+  if (encounterTick && moving && !map.chaseEnemy && !crippled &&
+      enemy.distance > CANNON_RANGE && enemy.distance > prevDistance) {
+    if (Math.random() < ESCAPE_CHANCE) {
       world.activityLog.push({ text: `Lost the ${enemy.name} in our wake — we've escaped!`, time: world.time });
       world.enemyShip = null;
       map.chaseEnemy = false;
@@ -352,6 +366,7 @@ export function createWorld(): World {
   return {
     decks,
     actors,
+    nextActorId: actors.reduce((m, a) => Math.max(m, a.id), 0) + 1,
     corpses: [],
     camera: {
       x: DECK_X_SHIFT * TILE_SIZE + (SHIP_WIDTH * TILE_SIZE - CANVAS_WIDTH) / 2,
@@ -413,8 +428,14 @@ export function createWorld(): World {
 export function update(world: World, input: InputState, audio: AudioManager, hoveredItem: Item | null, dt: number): void {
   audio.activeDeck = world.activeDeck;
 
-  // Game over — skip simulation updates, only handle input for restart
-  if (world.mutinyState === 'game_over') return;
+  // Game over — skip simulation updates (restart is a page refresh). Still drain
+  // the input buffers: the listeners keep pushing, and nothing below runs to clear them.
+  if (world.mutinyState === 'game_over') {
+    input.keyEvents.length = 0;
+    input.mouseClick = null;
+    input.rightClick = null;
+    return;
+  }
 
   // --- Command input bar ---
   input.commandBarOpen = world.commandInput !== null;
@@ -684,7 +705,7 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
   }
 
   // Camera
-  updateCamera(world.camera, input, dt, world.decks[world.activeDeck].width, world.decks[world.activeDeck].height, world.docking.phase === 'docked');
+  updateCamera(world.camera, input, dt, world.decks[world.activeDeck].height);
 
   // Map overlay click interception
   if (input.mouseClick && world.mapOverlayOpen) {
@@ -700,76 +721,8 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
     input.mouseClick = null;
   }
 
-  // Clicks
-  if (input.mouseClick) {
-    const mx = input.mouseClick.x;
-    const my = input.mouseClick.y;
-
-    // Bottom-left buttons: cogwheel (8), music (36), sfx (64) — all 24x24, 4px gap
-    const btnSize = 24;
-    const btnY = CANVAS_HEIGHT - btnSize - 8;
-
-    // Settings cogwheel
-    if (mx >= 8 && mx <= 8 + btnSize && my >= btnY && my <= btnY + btnSize) {
-      world.settingsOpen = !world.settingsOpen;
-      audio.play('click', world.activeDeck);
-      input.mouseClick = null;
-    }
-    // Music toggle
-    const musicBtnX = 8 + btnSize + 4;
-    if (input.mouseClick && mx >= musicBtnX && mx <= musicBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
-      audio.toggleMute();
-      input.mouseClick = null;
-    }
-    // SFX toggle
-    const sfxBtnX = musicBtnX + btnSize + 4;
-    if (input.mouseClick && mx >= sfxBtnX && mx <= sfxBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
-      audio.toggleSfxMute();
-      input.mouseClick = null;
-    }
-
-    // Settings panel click handling
-    if (input.mouseClick && world.settingsOpen) {
-      // Panel is drawn above the cogwheel: x=8, y=btnY-panelH-4
-      const panelW = 200;
-      const panelH = 50;
-      const panelX = 8;
-      const panelY = btnY - panelH - 4;
-      if (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH) {
-        // Pill hit detection: pills are at y=panelY+26, "Html" at x=panelX+80, "In-game" at x after
-        const pillY = panelY + 24;
-        const pillH = 18;
-        if (my >= pillY && my <= pillY + pillH) {
-          const htmlPillX = panelX + 78;
-          const htmlPillW = 38;
-          const ingamePillX = htmlPillX + htmlPillW + 4;
-          const ingamePillW = 62;
-          if (mx >= htmlPillX && mx <= htmlPillX + htmlPillW) {
-            world.settings.inputMode = 'html';
-            saveSettings(world.settings);
-          } else if (mx >= ingamePillX && mx <= ingamePillX + ingamePillW) {
-            world.settings.inputMode = 'ingame';
-            saveSettings(world.settings);
-          }
-        }
-        input.mouseClick = null;
-      }
-    }
-
-    // Check deck selector panel (x:10-170, y:14 + i*22, h:22 — ship decks only)
-    const selectorDeckCount = Math.min(3, world.decks.length);
-    if (input.mouseClick && mx >= 10 && mx <= 170 && my >= 14 && my < 14 + selectorDeckCount * 22) {
-      const clicked = Math.floor((my - 14) / 22);
-      if (clicked >= 0 && clicked < selectorDeckCount && clicked !== world.activeDeck) {
-        world.activeDeck = clicked;
-        audio.play('deck_change', world.activeDeck);
-      }
-      audio.startMusicOnInteraction();
-      input.mouseClick = null;
-    }
-  }
-
-  // Context menu click handling (before normal click processing)
+  // Context menu click handling — must run before the UI widget handlers below,
+  // since the menu is drawn topmost (topmost drawn = first to receive clicks)
   if (input.mouseClick && world.contextMenu) {
     const menuItem = handleMenuClick(world.contextMenu, input.mouseClick);
     if (menuItem) {
@@ -870,6 +823,76 @@ export function update(world: World, input: InputState, audio: AudioManager, hov
       world.contextMenu = null;
     } else {
       // undefined = clicked on submenu parent or disabled submenu item, keep menu open
+      input.mouseClick = null;
+    }
+  }
+
+  // UI widget clicks (deck selector, bottom-left buttons, settings panel) —
+  // handled after the context menu so an open menu drawn on top wins the click
+  if (input.mouseClick) {
+    const mx = input.mouseClick.x;
+    const my = input.mouseClick.y;
+
+    // Bottom-left buttons: cogwheel (8), music (36), sfx (64) — all 24x24, 4px gap
+    const btnSize = 24;
+    const btnY = CANVAS_HEIGHT - btnSize - 8;
+
+    // Settings cogwheel
+    if (mx >= 8 && mx <= 8 + btnSize && my >= btnY && my <= btnY + btnSize) {
+      world.settingsOpen = !world.settingsOpen;
+      audio.play('click', world.activeDeck);
+      input.mouseClick = null;
+    }
+    // Music toggle
+    const musicBtnX = 8 + btnSize + 4;
+    if (input.mouseClick && mx >= musicBtnX && mx <= musicBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+      audio.toggleMute();
+      input.mouseClick = null;
+    }
+    // SFX toggle
+    const sfxBtnX = musicBtnX + btnSize + 4;
+    if (input.mouseClick && mx >= sfxBtnX && mx <= sfxBtnX + btnSize && my >= btnY && my <= btnY + btnSize) {
+      audio.toggleSfxMute();
+      input.mouseClick = null;
+    }
+
+    // Settings panel click handling
+    if (input.mouseClick && world.settingsOpen) {
+      // Panel is drawn above the cogwheel: x=8, y=btnY-panelH-4
+      const panelW = 200;
+      const panelH = 50;
+      const panelX = 8;
+      const panelY = btnY - panelH - 4;
+      if (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH) {
+        // Pill hit detection: pills are at y=panelY+26, "Html" at x=panelX+80, "In-game" at x after
+        const pillY = panelY + 24;
+        const pillH = 18;
+        if (my >= pillY && my <= pillY + pillH) {
+          const htmlPillX = panelX + 78;
+          const htmlPillW = 38;
+          const ingamePillX = htmlPillX + htmlPillW + 4;
+          const ingamePillW = 62;
+          if (mx >= htmlPillX && mx <= htmlPillX + htmlPillW) {
+            world.settings.inputMode = 'html';
+            saveSettings(world.settings);
+          } else if (mx >= ingamePillX && mx <= ingamePillX + ingamePillW) {
+            world.settings.inputMode = 'ingame';
+            saveSettings(world.settings);
+          }
+        }
+        input.mouseClick = null;
+      }
+    }
+
+    // Check deck selector panel (x:10-170, y:14 + i*22, h:22 — ship decks only)
+    const selectorDeckCount = Math.min(3, world.decks.length);
+    if (input.mouseClick && mx >= 10 && mx <= 170 && my >= 14 && my < 14 + selectorDeckCount * 22) {
+      const clicked = Math.floor((my - 14) / 22);
+      if (clicked >= 0 && clicked < selectorDeckCount && clicked !== world.activeDeck) {
+        world.activeDeck = clicked;
+        audio.play('deck_change', world.activeDeck);
+      }
+      audio.startMusicOnInteraction();
       input.mouseClick = null;
     }
   }

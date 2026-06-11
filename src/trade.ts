@@ -14,6 +14,7 @@ import {
   createTreasureMap,
 } from './items';
 import { findFirstBarrelKey } from './combat';
+import { isShipBarrelKey } from './harbor';
 import { pickTreasureIsland } from './treasure';
 
 /** A purchasable good offered by the merchant. */
@@ -146,7 +147,12 @@ export function sellableInventory(world: World): SellableEntry[] {
     if (item.cursed) return; // FEATURE 8 — cursed loot can't be sold
     counts.set(item.name, (counts.get(item.name) ?? 0) + (item.stackable ? item.quantity : 1));
   };
-  for (const items of world.barrelInventory.values()) for (const it of items) add(it);
+  // Ship barrels only — the harbor's own seeded barrels (tavern/market stock on
+  // deck 1) are not ours to sell back to the merchant.
+  for (const [key, items] of world.barrelInventory) {
+    if (!isShipBarrelKey(key)) continue;
+    for (const it of items) add(it);
+  }
   for (const a of world.actors) {
     if (a.statuses.has('npc')) continue;
     for (const it of a.profile.inventory) add(it);
@@ -161,8 +167,9 @@ export function sellableInventory(world: World): SellableEntry[] {
 
 /** Remove one unit of `itemName` from barrels or crew inventory. Returns true if removed. */
 function removeOneItem(world: World, itemName: string): boolean {
-  // Barrels first.
+  // Ship barrels first (never the docked harbor's own barrels).
   for (const [key, items] of world.barrelInventory) {
+    if (!isShipBarrelKey(key)) continue;
     const idx = items.findIndex(i => i.name === itemName && !i.cursed);
     if (idx === -1) continue;
     const it = items[idx];

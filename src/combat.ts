@@ -11,13 +11,14 @@
 
 import { World, TileType, OBJECT_MAX_HP, CrewState, TILE_SIZE, ActivityLogEntry, Actor } from './types';
 import { createWood, createCannonball } from './items';
+import { isShipBarrelKey } from './harbor';
 import { checkHuntContract } from './contracts';
 import { createLootTreasureMap } from './treasure';
 import type { AudioManager } from './audio';
 
 // Flooding tuning. floodLevel is 0..100; at 100 the ship sinks.
 // One breach raises the flood ~ FLOOD_RATE %/sec; with no breaches it drains slowly.
-export const FLOOD_RATE = 0.6;        // % per second per breach on the lowest deck
+export const FLOOD_RATE = 0.6;        // % per second per breach (any deck)
 export const FLOOD_DRAIN_RATE = 1.2;  // % per second the bilge pumps clear water when no breaches
 
 // Combat range thresholds (leagues). Shared so the menu can gate the Board action.
@@ -138,22 +139,23 @@ export function repairObject(world: World, deck: number, x: number, y: number, a
   return false;
 }
 
-/** Count BREACH tiles on the lowest deck (closest to the waterline). */
+/** Count BREACH tiles across all decks. Kraken rams breach the upper deck and enemy
+ * volleys can hit any deck — every breach ships water (waves wash over the upper
+ * hull line too), so all of them must drive the flooding simulation. */
 export function countBreaches(world: World): number {
-  const lowest = world.decks.length - 1;
-  const d = world.decks[lowest];
-  if (!d) return 0;
   let n = 0;
-  for (let y = 0; y < d.height; y++) {
-    for (let x = 0; x < d.width; x++) {
-      if (d.tiles[y][x] === TileType.BREACH) n++;
+  for (const d of world.decks) {
+    for (let y = 0; y < d.height; y++) {
+      for (let x = 0; x < d.width; x++) {
+        if (d.tiles[y][x] === TileType.BREACH) n++;
+      }
     }
   }
   return n;
 }
 
 /**
- * Advance the flooding simulation. Rising flood from breaches on the lowest deck;
+ * Advance the flooding simulation. Rising flood from breaches anywhere on the ship;
  * slow drain when there are none. At >= 100 the ship sinks: sets a game-over reason
  * and flips mutinyState to 'game_over' (the existing full-stop end state).
  *
@@ -199,22 +201,36 @@ export function combatRating(member: Actor): number {
   return r;
 }
 
-/** First BARREL tile key ("deck-x-y") on the ship, for stashing loot. */
+/** First BARREL tile key ("deck-x-y") on the ship, for stashing loot. While docked,
+ * harbor barrels share deck 1 — those must never be used (undocking deletes them,
+ * destroying anything stashed inside). */
 export function findFirstBarrelKey(world: World): string | null {
   for (let d = 0; d < world.decks.length; d++) {
     const deck = world.decks[d];
     for (let y = 0; y < deck.height; y++) {
       for (let x = 0; x < deck.width; x++) {
-        if (deck.tiles[y][x] === TileType.BARREL) return `${d}-${x}-${y}`;
+        if (deck.tiles[y][x] !== TileType.BARREL) continue;
+        if (!isShipBarrelKey(`${d}-${x}-${y}`)) continue;
+        return `${d}-${x}-${y}`;
       }
     }
   }
   return null;
 }
 
-/** Consume one Cannonball from any barrel, if present. Returns true if one was spent. */
+/** True if any ship barrel holds a Cannonball (for gating volleys/orders). */
+export function hasCannonballs(world: World): boolean {
+  for (const [key, items] of world.barrelInventory) {
+    if (!isShipBarrelKey(key)) continue;
+    if (items.some(i => i.name === 'Cannonball')) return true;
+  }
+  return false;
+}
+
+/** Consume one Cannonball from any ship barrel, if present. Returns true if one was spent. */
 function consumeCannonball(world: World): boolean {
   for (const [key, items] of world.barrelInventory) {
+    if (!isShipBarrelKey(key)) continue;
     const idx = items.findIndex(i => i.name === 'Cannonball');
     if (idx === -1) continue;
     const ball = items[idx];
@@ -228,13 +244,17 @@ function consumeCannonball(world: World): boolean {
 
 /**
  * A friendly cannon volley (auto-fire from manned cannons OR a manual FireCannon order).
- * Damages the enemy, consumes a Cannonball if one is available. Logs + plays SFX.
+ * Damages the enemy, consumes a Cannonball. No ball, no volley — an empty magazine
+ * just logs the problem so the player knows to buy/loot ammunition.
  */
 export function fireFriendlyVolley(world: World, audio: AudioManager | undefined, gunners: Actor[]): void {
   const enemy = world.enemyShip;
   if (!enemy) return;
   if (enemy.hp <= 0) return; // already a wreck — don't waste shots/ammo or re-log its death
-  consumeCannonball(world);
+  if (!consumeCannonball(world)) {
+    world.activityLog.push({ text: 'The magazine is empty — not a cannonball left to fire!', time: world.time });
+    return;
+  }
   let dmg = 0;
   for (const g of gunners) dmg += 6 + (g.skills.gunnery ?? 0) / 20 + Math.random() * 6;
   if (gunners.length === 0) dmg = 4 + Math.random() * 6; // a lone manual shot

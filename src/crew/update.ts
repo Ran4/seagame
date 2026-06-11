@@ -563,10 +563,13 @@ function updateBreeding(member: Actor, crew: Actor[], decks: Deck[], gameTime: n
 
       const [lo, hi] = LITTER_SIZE[pregnant.animalType] ?? [1, 1];
       const litter = lo + Math.floor(Math.random() * (hi - lo + 1));
+      // Allocate from the world's monotonic counter — a max(id)+1 scan reuses the
+      // ids of actors stranded ashore. The scan remains only as a world-less fallback.
       let maxId = 0;
       for (const a of crew) { if (a.id > maxId) maxId = a.id; }
       for (let i = 0; i < litter; i++) {
-        const baby = createBabyAnimal(maxId + 1 + i, pregnant.animalType, member, pregnant.fatherId, spawnTile, gameTime, crew);
+        const babyId = world ? world.nextActorId++ : maxId + 1 + i;
+        const baby = createBabyAnimal(babyId, pregnant.animalType, member, pregnant.fatherId, spawnTile, gameTime, crew);
         crew.push(baby);
         if (world && world.actors !== crew) world.actors.push(baby);
       }
@@ -604,9 +607,10 @@ function pickStealIndex(items: Item[]): number {
 function takeOneUnit(items: Item[], idx: number): Item {
   const src = items[idx];
   if (src.stackable && src.quantity > 1) {
+    const unitWeight = Math.round(src.weight / src.quantity);
     src.quantity -= 1;
-    src.weight = Math.max(0, src.weight - Math.round(src.weight / (src.quantity + 1)));
-    return { ...src, quantity: 1 };
+    src.weight = Math.max(0, src.weight - unitWeight);
+    return { ...src, quantity: 1, weight: unitWeight };
   }
   return items.splice(idx, 1)[0];
 }
@@ -1024,14 +1028,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         break;
       case CrewState.LOOKOUT:
         member.stateTimer -= dt;
-        // Tick speech bubble (updateTalking only runs for TALKING state)
-        if (member.speechBubbleTimer > 0) {
-          member.speechBubbleTimer -= dt;
-          if (member.speechBubbleTimer <= 0) {
-            member.speechBubbleText = null;
-            member.speechBubbleTimer = 0;
-          }
-        }
+        // Speech bubble ticks via the generic non-TALKING decrement above.
         if (worldMap && spottedIslands) {
           checkForIslandSpotting(member, crew, worldMap, spottedIslands, activityLog, gameTime);
         }
@@ -1068,6 +1065,13 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         if (member.copulationTarget?.type === 'crew') {
           const target = member.copulationTarget;
           const partner = crew.find(c => c.id === target.actorId);
+          // A tentacle seized the partner mid-kiss — break it off, don't pull them back in.
+          if (partner?.statuses.has('grabbed')) {
+            member.copulationTarget = null;
+            member.state = CrewState.IDLE;
+            member.idleTimer = 1 + Math.random() * 2;
+            break;
+          }
           if (partner && partner.state !== CrewState.KISSING) {
             partner.state = CrewState.KISSING;
             partner.stateTimer = member.stateTimer;
@@ -1138,6 +1142,13 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         if (member.copulationTarget?.type === 'crew') {
           const target = member.copulationTarget;
           const partner = crew.find(c => c.id === target.actorId);
+          // A tentacle seized the partner — break it off, don't pull them back in.
+          if (partner?.statuses.has('grabbed')) {
+            member.copulationTarget = null;
+            member.state = CrewState.IDLE;
+            member.idleTimer = 1 + Math.random() * 2;
+            break;
+          }
           if (partner && partner.state !== CrewState.COPULATING) {
             partner.state = CrewState.COPULATING;
             partner.stateTimer = member.stateTimer;
@@ -1508,12 +1519,9 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
         }
         break;
       case CrewState.PRAYING:
-        // Cower and pray through the storm. Tick the prayer bubble + occasional plea.
+        // Cower and pray through the storm. The prayer bubble ticks via the
+        // generic non-TALKING decrement above.
         member.stateTimer -= dt;
-        if (member.speechBubbleTimer > 0) {
-          member.speechBubbleTimer -= dt;
-          if (member.speechBubbleTimer <= 0) { member.speechBubbleText = null; member.speechBubbleTimer = 0; }
-        }
         if (member.stateTimer <= 0) {
           member.state = CrewState.IDLE;
           member.idleTimer = 1 + Math.random() * 2;
@@ -1707,11 +1715,18 @@ function updateIdleHuman(member: Actor, decks: Deck[], dt: number, crew: Actor[]
     const breach = findNearestBreach(member, decks);
     if (breach) {
       // Don't crowd a breach another repairer is already heading to.
-      const taken = crew.some(c => c.id !== member.id &&
-        ((c.state === CrewState.REPAIRING) ||
-         (c.state === CrewState.WALKING && c.targetState === CrewState.REPAIRING && c.path.length > 0 &&
-          c.path[c.path.length - 1].deck === breach.deck)) &&
-        Math.abs(Math.floor(c.pixelX / TILE_SIZE) - breach.x) + Math.abs(Math.floor(c.pixelY / TILE_SIZE) - breach.y) <= 1 && c.deck === breach.deck);
+      const taken = crew.some(c => {
+        if (c.id === member.id) return false;
+        if (c.state === CrewState.REPAIRING) {
+          return c.deck === breach.deck &&
+            Math.abs(Math.floor(c.pixelX / TILE_SIZE) - breach.x) + Math.abs(Math.floor(c.pixelY / TILE_SIZE) - breach.y) <= 1;
+        }
+        if (c.state === CrewState.WALKING && c.targetState === CrewState.REPAIRING && c.path.length > 0) {
+          const dest = c.path[c.path.length - 1];
+          return dest.deck === breach.deck && Math.abs(dest.x - breach.x) + Math.abs(dest.y - breach.y) <= 1;
+        }
+        return false;
+      });
       if (!taken) {
         if (orderCrewBesideTile(member, breach, decks, CrewState.REPAIRING, world.gangplanks)) return;
       }
@@ -2048,7 +2063,8 @@ function updateIdleAnimal(member: Actor, decks: Deck[], dt: number, allActors: A
     const stoves = findTilesOfType(decks, TileType.STOVE);
     const target = pickRandom(stoves);
     if (target) {
-      const path = findPath(decks, from, target);
+      const pathFn = member.conditions.has('flyer') ? findPathFlying : findPath;
+      const path = pathFn(decks, from, target);
       if (path) {
         member.path = path;
         member.state = CrewState.WALKING;

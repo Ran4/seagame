@@ -38,6 +38,9 @@ export function generateContractOffers(world: World): void {
   const harbors = otherHarborIslands(world);
   // Names already targeted by an active hunt so we don't double up.
   const activeHuntNames = new Set(world.contracts.filter(c => c.kind === 'hunt' && c.status === 'active').map(c => c.targetShipName));
+  // Islands already targeted by an active delivery — stacking them would pay out
+  // multiple rewards on a single arrival (checkDeliverContracts completes all matches).
+  const activeDeliverIslands = new Set(world.contracts.filter(c => c.kind === 'deliver' && c.status === 'active').map(c => c.targetIslandId));
 
   for (let n = 0; n < count; n++) {
     const wantHunt = Math.random() < 0.45 || harbors.length === 0;
@@ -55,8 +58,8 @@ export function generateContractOffers(world: World): void {
         status: 'active',
       });
     } else {
-      // Avoid duplicate delivery targets within this batch.
-      const candidates = harbors.filter(h => !offers.some(o => o.targetIslandId === h.id));
+      // Avoid duplicate delivery targets within this batch and against active contracts.
+      const candidates = harbors.filter(h => !activeDeliverIslands.has(h.id) && !offers.some(o => o.targetIslandId === h.id));
       if (candidates.length === 0) continue;
       const dest = candidates[Math.floor(Math.random() * candidates.length)];
       const reward = 60 + Math.floor(Math.random() * 15) * 10; // 60..200

@@ -11,7 +11,9 @@ interface Node {
 }
 
 function heuristic(a: DeckPoint, b: DeckPoint): number {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + (a.deck !== b.deck ? 2 : 0);
+  // Deck term must not exceed the real transition cost (1, stairs share x/y) —
+  // overestimating makes the heuristic inadmissible and yields suboptimal paths.
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + (a.deck !== b.deck ? 1 : 0);
 }
 
 function key(x: number, y: number, deck: number): string {

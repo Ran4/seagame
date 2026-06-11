@@ -157,14 +157,17 @@ export function updateWalking(member: Actor, dt: number, crew: Actor[], brightne
         const next = member.path[0];
         const ndx = next.x - target.x;
         const ndy = next.y - target.y;
-        // Perpendicular offset: swap dx/dy and randomly negate
-        const sign = Math.random() < 0.5 ? -1 : 1;
-        const wobbleX = target.x + (-ndy * sign || sign);
-        const wobbleY = target.y + (ndx * sign || 0);
-        // Only wobble if the tile is walkable and on the same deck
-        const deck = decks?.[target.deck];
-        if (deck && wobbleY >= 0 && wobbleY < deck.height && wobbleX >= 0 && wobbleX < deck.width && WALKABLE.has(deck.tiles[wobbleY][wobbleX])) {
-          member.path.unshift({ x: wobbleX, y: wobbleY, deck: target.deck });
+        // Perpendicular offset: swap dx/dy and randomly negate.
+        // Skip the degenerate case (deck transition at same x,y) — no leg direction, no perpendicular.
+        if (ndx !== 0 || ndy !== 0) {
+          const sign = Math.random() < 0.5 ? -1 : 1;
+          const wobbleX = target.x + -ndy * sign;
+          const wobbleY = target.y + ndx * sign;
+          // Only wobble if the tile is walkable and on the same deck
+          const deck = decks?.[target.deck];
+          if (deck && wobbleY >= 0 && wobbleY < deck.height && wobbleX >= 0 && wobbleX < deck.width && WALKABLE.has(deck.tiles[wobbleY][wobbleX])) {
+            member.path.unshift({ x: wobbleX, y: wobbleY, deck: target.deck });
+          }
         }
       }
     }

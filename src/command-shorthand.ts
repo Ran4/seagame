@@ -82,6 +82,23 @@ function readStringToken(input: string, pos: number): [string, number] {
   return readWord(input, pos);
 }
 
+/** Count consecutive integer tokens starting at pos. */
+function countNumbersAhead(input: string, pos: number): number {
+  let count = 0;
+  pos = skipWhitespace(input, pos);
+  while (pos < input.length && isDigitOrMinus(input[pos])) {
+    const [word, next] = readWord(input, pos);
+    if (isNaN(parseInt(word, 10))) break;
+    count++;
+    pos = skipWhitespace(input, next);
+  }
+  return count;
+}
+
+function isRequiredInt(argSpec: string): boolean {
+  return !argSpec.endsWith('?') && !argSpec.endsWith('$') && !argSpec.endsWith('...') && !argSpec.endsWith('()');
+}
+
 /** Read rest of line, but stop before an unmatched ')' */
 function readRest(input: string, pos: number): [string, number] {
   pos = skipWhitespace(input, pos);
@@ -114,7 +131,8 @@ function parseCommandAt(input: string, pos: number): [Command, number] {
   const cmd: any = { name: canonical };
   pos = afterName;
 
-  for (const argSpec of spec) {
+  for (let i = 0; i < spec.length; i++) {
+    const argSpec = spec[i];
     if (argSpec.endsWith('()')) {
       // Recursive command in parens
       const fieldName = argSpec.slice(0, -2);
@@ -144,9 +162,11 @@ function parseCommandAt(input: string, pos: number): [Command, number] {
       pos = afterToken;
       cmd[fieldName] = token;
     } else if (argSpec.endsWith('?')) {
-      // Optional int
+      // Optional int — only consume it when enough numbers remain for the
+      // required ints later in the spec (e.g. `GoTo 5 7` must not lose x to deck?)
       const fieldName = argSpec.slice(0, -1);
-      if (peekIsNumber(input, pos)) {
+      const requiredIntsAfter = spec.slice(i + 1).filter(isRequiredInt).length;
+      if (peekIsNumber(input, pos) && countNumbersAhead(input, pos) > requiredIntsAfter) {
         const [n, afterN] = readInt(input, pos);
         pos = afterN;
         cmd[fieldName] = n;

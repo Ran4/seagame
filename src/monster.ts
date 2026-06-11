@@ -22,6 +22,7 @@ import { World, CrewState, TileType, TILE_SIZE, Tentacle, Actor } from './types'
 import { damageObject } from './combat';
 import { isInDeepWater } from './worldmap';
 import { killActor } from './crew/death';
+import { stopConversation } from './conversation';
 import { createKrakenInk, createKrakenTooth, createTentacleMeat } from './items';
 import { CONFIG } from './config';
 import type { AudioManager } from './audio';
@@ -161,6 +162,8 @@ export function hitTentacle(world: World, tentacle: Tentacle, attacker: Actor, a
   if (attacker.profile.inventory.some(i => i.name === 'Kraken tooth')) dmg *= 1.5;
   dmg = Math.round(dmg);
   tentacle.hp = Math.max(0, tentacle.hp - dmg);
+  // Record participation — the Kraken Slayer honour goes only to crew who fought.
+  attacker.statuses.set('fought_kraken', null);
   if (audio) audio.play('fist_fight', attacker.deck);
 
   if (tentacle.hp <= 0) {
@@ -195,6 +198,21 @@ function severTentacle(world: World, tentacle: Tentacle): void {
 /** Mark a crew member as grabbed by a tentacle (stuck until freed). */
 function grabCrew(world: World, tentacle: Tentacle, victim: Actor): void {
   // Drop whatever the victim was doing — they're hauled off their feet.
+  // Free any interaction partner first (mirrors killActor): a Kiss/Copulate/Pet/Converse
+  // partner is frozen with idleTimer 999 waiting on the victim and would otherwise
+  // stand in place until they starve.
+  if (victim.state === CrewState.TALKING || victim.conversationPartnerId !== null) {
+    stopConversation(victim, world.actors);
+  }
+  if (victim.copulationTarget?.type === 'crew') {
+    const partnerId = victim.copulationTarget.actorId;
+    const partner = world.actors.find(a => a.id === partnerId);
+    if (partner && partner.copulationTarget?.type === 'crew' && partner.copulationTarget.actorId === victim.id) {
+      partner.copulationTarget = null;
+      partner.state = CrewState.IDLE;
+      partner.idleTimer = 1 + Math.random() * 2;
+    }
+  }
   victim.path = [];
   victim.copulationTarget = null;
   victim.commandQueue.length = 0;
@@ -292,9 +310,11 @@ function beginRetreat(world: World, killed: boolean): void {
 
   if (killed) {
     world.activityLog.push({ text: 'The kraken recoils, beaten, and sinks back into the abyss!', time: world.time });
-    // Every able human aboard who took part earns the Kraken Slayer honour (permanent).
+    // Every able human aboard who took part (landed a hit — see hitTentacle)
+    // earns the Kraken Slayer honour (permanent).
     for (const a of world.actors) {
       if (a.actorType !== 'human' || a.statuses.has('npc')) continue;
+      if (!a.statuses.has('fought_kraken')) continue;
       if (!a.statuses.has('kraken_slayer')) {
         a.statuses.set('kraken_slayer', { since: world.time });
         a.profile.morale = Math.min(255, a.profile.morale + 40);
@@ -302,6 +322,9 @@ function beginRetreat(world: World, killed: boolean): void {
     }
     dropLoot(world);
   }
+
+  // Reset participation markers for the next encounter.
+  for (const a of world.actors) a.statuses.delete('fought_kraken');
 }
 
 /**

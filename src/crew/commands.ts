@@ -2,7 +2,7 @@ import { Actor, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Comma
 import { stopConversation } from '../conversation';
 import { orderCrewTo, orderCrewToAdjacentTile, orderCrewBesideTile } from './movement';
 import { AudioManager } from '../audio';
-import { fireFriendlyVolley, resolveBoarding, BOARD_RANGE, CANNON_RANGE } from '../combat';
+import { fireFriendlyVolley, resolveBoarding, hasCannonballs, BOARD_RANGE, CANNON_RANGE } from '../combat';
 import { refusesOrderInStorm } from '../weather';
 import { tentacleAt } from '../monster';
 import { useMap, startExpedition } from '../treasure';
@@ -48,7 +48,9 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
 
   // Seized by a kraken tentacle — can't obey anything but Stop until cut free.
   if (member.conditions.has('grabbed') && cmd.name !== 'Stop') {
-    // Occasional feedback only — this is re-checked every idle tick, so don't spam the log.
+    // Re-arm the idle timer so this re-check (and the feedback roll) runs ~once a
+    // second, not every frame — otherwise the 8% roll spams the log frame-rate-fast.
+    member.idleTimer = 1 + Math.random();
     if (Math.random() < 0.08) {
       activityLog.push({ text: `${name} can't — held fast by a tentacle!`, time: gameTime });
     }
@@ -86,6 +88,11 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
   const setupActorTarget = (actorId: number, targetState: CrewState, beside: boolean): boolean => {
     const target = crew.find(c => c.id === actorId);
     if (!target) { fail(`actor ${actorId} not found`); return true; }
+    // If the target is mid-conversation, end it cleanly (releases their partner and
+    // clears conversationPartnerId — a stale id would block them as a future partner).
+    if (target.state === CrewState.TALKING || target.conversationPartnerId !== null) {
+      stopConversation(target, crew);
+    }
     member.copulationTarget = { type: 'crew', actorId: target.id };
     target.copulationTarget = { type: 'crew', actorId: member.id };
     target.state = CrewState.IDLE;
@@ -181,6 +188,7 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
       if (!world?.enemyShip) { fail('no enemy to fire on'); return true; }
       if (world.enemyShip.hp <= 0) { fail('the enemy is already a wreck'); return true; }
       if (world.enemyShip.distance > CANNON_RANGE) { fail('enemy out of range'); return true; }
+      if (!hasCannonballs(world)) { fail('no cannonballs left'); return true; }
       // Manual volley: gunners currently manning cannons add to the shot.
       const gunners = crew.filter(c => c.state === CrewState.MANNING_CANNON && c.actorType === 'human');
       fireFriendlyVolley(world, audio, gunners);

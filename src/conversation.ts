@@ -156,16 +156,9 @@ function pickConversationScript(speaker: Actor, partner: Actor, brightness: numb
   const npcRole = speakerNPC?.role ?? partnerNPC?.role;
   if (npcRole && NPC_SCRIPTS[npcRole]) {
     const scripts = NPC_SCRIPTS[npcRole];
+    // Scripts are written NPC-first; beginConversation gives the NPC the first
+    // turn when a crew member initiates, so the script is used as-is.
     const script = scripts[Math.floor(Math.random() * scripts.length)];
-    // If the NPC is the partner, reverse the script so NPC speaks first
-    if (partnerNPC && !speakerNPC) {
-      const reversed = [...script];
-      // Swap odd/even lines
-      for (let i = 0; i < reversed.length - 1; i += 2) {
-        [reversed[i], reversed[i + 1]] = [reversed[i + 1], reversed[i]];
-      }
-      return { script: reversed, mood: 'friendly' };
-    }
     return { script, mood: 'friendly' };
   }
 
@@ -217,12 +210,16 @@ export function beginConversation(member: Actor, partner: Actor, brightness: num
   const { script, mood } = pickConversationScript(member, partner, brightness);
   const isUnfriendly = mood === 'unfriendly';
 
+  // NPC scripts are written NPC-first — when a crew member walks up to an NPC,
+  // the NPC gets the first turn so the question comes before the answer.
+  const npcSpeaksFirst = partner.statuses.has('npc') && !member.statuses.has('npc');
+
   member.state = CrewState.TALKING;
   member.conversationPartnerId = partner.id;
   member.conversationExchangesLeft = script.length;
   member.conversationPositive = !isUnfriendly;
   member.conversationScript = script;
-  member.conversationMyTurn = true;
+  member.conversationMyTurn = !npcSpeaksFirst;
   member.speechBubbleText = null;
   member.speechBubbleTimer = 0;
   member.path = [];
@@ -232,7 +229,7 @@ export function beginConversation(member: Actor, partner: Actor, brightness: num
   partner.conversationExchangesLeft = script.length;
   partner.conversationPositive = !isUnfriendly;
   partner.conversationScript = script;
-  partner.conversationMyTurn = false;
+  partner.conversationMyTurn = npcSpeaksFirst;
   partner.speechBubbleText = null;
   partner.speechBubbleTimer = 0;
   partner.path = [];
@@ -329,6 +326,10 @@ export function updateTalking(member: Actor, crew: Actor[], dt: number, brightne
       const memberNPC = member.statuses.get('npc') as { role: string } | null;
       const npcRole = partnerNPC?.role ?? memberNPC?.role;
       const crewMember = partnerNPC ? member : memberNPC ? partner : null;
+      endConversation(partner);
+      endConversation(member);
+      // Set the gossip bubble after endConversation — it clears speech bubbles
+      // unconditionally and would wipe the line before it ever rendered.
       if (npcRole && crewMember && !crewMember.statuses.has('npc')) {
         // Small morale boost from socializing
         crewMember.profile.morale = Math.min(255, crewMember.profile.morale + 3);
@@ -346,8 +347,6 @@ export function updateTalking(member: Actor, crew: Actor[], dt: number, brightne
           crewMember.speechBubbleTimer = 4;
         }
       }
-      endConversation(partner);
-      endConversation(member);
       return;
     }
 

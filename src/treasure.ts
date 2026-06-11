@@ -15,6 +15,7 @@ import {
   createGem, createArtifact, createCursedItem, createTreasureMap,
 } from './items';
 import { findFirstBarrelKey } from './combat';
+import { pickUniqueName } from './crew/factory';
 import { DECK_X_SHIFT, DECK_Y_SHIFT } from './harbor';
 import type { AudioManager } from './audio';
 
@@ -234,18 +235,13 @@ function awardItem(world: World, item: Item, party: Actor[]): void {
   }
 }
 
-let castawayIdCounter = 0;
-
 /** Spawn a rescued castaway near the gangplank (self-contained recruit, like recruitSailor). */
 function spawnCastaway(world: World): void {
-  let maxId = 0;
-  for (const a of world.actors) { if (a.id > maxId) maxId = a.id; }
-  const id = maxId + 1;
+  const id = world.nextActorId++;
   const sex: Sex = Math.random() < 0.5 ? 'M' : 'F';
   const namePool = sex === 'M' ? CASTAWAY_NAMES_M : CASTAWAY_NAMES_F;
   const used = new Set(world.actors.map(a => a.profile.name));
-  let name = namePool[castawayIdCounter++ % namePool.length];
-  for (const n of namePool) { if (!used.has(n)) { name = n; break; } }
+  const name = pickUniqueName(namePool, used);
   const colors = ['#c0a060', '#7fa0c0', '#b07050', '#609080', '#a070a0'];
   const color = colors[id % colors.length];
 
