@@ -281,15 +281,26 @@ function drawFishingRig(rc: RenderContext, member: Actor, sx: number, sy: number
 
   if (phase === 'casting') {
     const prog = member.fishingLineProgress ?? 0;
-    const len = FISH_MAX_LINE_LEN * prog;
-    const endX = rodTipX + dir.x * len;
-    const endY = rodTipY + dir.y * len;
+    // Landing point = where the bobber will rest during 'waiting' (smooth hand-off).
+    const landX = rodTipX + dir.x * FISH_MAX_LINE_LEN;
+    const landY = rodTipY + dir.y * FISH_MAX_LINE_LEN;
+    // The lure is THROWN: it travels linearly toward the landing point but is lifted by
+    // a parabola that peaks mid-flight (zero at both ends), so it arcs up and drops in.
+    const arcLift = FISH_MAX_LINE_LEN * 0.6;
+    const parabola = 4 * prog * (1 - prog); // 0 → 1 → 0 over prog 0..1
+    const lureX = rodTipX + (landX - rodTipX) * prog;
+    const lureY = rodTipY + (landY - rodTipY) * prog - arcLift * parabola;
+    // Line bows up toward the lure (control point above the chord), flattening on landing.
+    const cpX = (rodTipX + lureX) / 2;
+    const cpY = (rodTipY + lureY) / 2 - arcLift * 0.5 * parabola;
     ctx.strokeStyle = '#e8e8d0';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(rodTipX, rodTipY);
-    ctx.lineTo(endX, endY);
+    ctx.quadraticCurveTo(cpX, cpY, lureX, lureY);
     ctx.stroke();
+    // The lure/bobber rides the arc as it flies out.
+    drawBobber(ctx, lureX, lureY);
     return;
   }
 
