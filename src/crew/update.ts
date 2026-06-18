@@ -1,4 +1,4 @@
-import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY, Corpse } from '../types';
+import { Actor, ActorType, CrewState, DeckPoint, Deck, TileType, WALKABLE, TILE_SIZE, Item, ActivityLogEntry, NIGHT_FEAR_MORALE_THRESHOLD, LANTERN_SAFE_RADIUS, WorldMap, World, SKILL_MASTERY, Corpse, CAST_DURATION, CAUGHT_DISPLAY_DURATION } from '../types';
 import { findPath, findPathFlying } from '../pathfinding';
 import { createSemen, createFish, FishKind } from '../items';
 import { repairObject, getObjectHp, getObjectMaxHp } from '../combat';
@@ -83,6 +83,12 @@ const SICK_VOMIT_INTERVAL = 90;      // average seconds between vomit speech bub
 // Ship food supply: idle crew fish autonomously when edible items in barrels run low.
 const LOW_FOOD_THRESHOLD = 3;        // fewer than this many edible units → consider fishing
 const AUTO_FISH_CHANCE = 0.02;       // per idle decision, when food is low
+// Fishing animation phases (visual overhaul): cast line → wait for bite → fight the fish.
+// CAST_DURATION and CAUGHT_DISPLAY_DURATION are shared with the renderer (defined in types.ts).
+const BITE_MIN = 10;                 // seconds — minimum wait for a bite
+const BITE_VAR = 30;                 // seconds — random extra wait (10-40s total)
+const FIGHT_MIN = 3;                 // seconds — minimum struggle with the fish
+const FIGHT_VAR = 4;                 // seconds — random extra struggle (3-7s total)
 
 // Repair (hull/object damage — SHARED SYSTEM A)
 const REPAIR_AMOUNT = 35;            // HP restored per completed repair tick (one Wood consumed)
@@ -392,6 +398,37 @@ function pickFishKind(worldMap?: WorldMap): FishKind {
   // Pufferfish lurk in shallows near land
   if (distToIsland <= WARM_ISLAND_DISTANCE && roll < 0.40) return 'pufferfish';
   return 'common';
+}
+
+/**
+ * Which way is open water from the member's current tile? Used to aim the cast line.
+ * Scans outward along each of the 4 directions and returns the one that reaches
+ * out-of-bounds OR water in the fewest tiles — so the line aims seaward even when the
+ * angler ends up standing one tile inboard of the railing. Falls back to current facing.
+ */
+function waterDirectionFrom(member: Actor, decks: Deck[]): 'north' | 'south' | 'east' | 'west' {
+  const deck = decks[member.deck];
+  if (!deck) return member.facing;
+  const x = Math.floor(member.pixelX / TILE_SIZE);
+  const y = Math.floor(member.pixelY / TILE_SIZE);
+  const DIRS: [number, number, 'north' | 'south' | 'east' | 'west'][] = [
+    [-1, 0, 'west'], [1, 0, 'east'], [0, -1, 'north'], [0, 1, 'south'],
+  ];
+  const MAX_SCAN = 4; // railing sits on the hull edge; water is 1-2 tiles outboard
+  let best: 'north' | 'south' | 'east' | 'west' | null = null;
+  let bestDist = Infinity;
+  for (const [dx, dy, dir] of DIRS) {
+    for (let step = 1; step <= MAX_SCAN; step++) {
+      const nx = x + dx * step;
+      const ny = y + dy * step;
+      const oob = nx < 0 || ny < 0 || nx >= deck.width || ny >= deck.height;
+      if (oob || deck.tiles[ny][nx] === TileType.WATER) {
+        if (step < bestDist) { bestDist = step; best = dir; }
+        break; // found sea in this direction; stop scanning it
+      }
+    }
+  }
+  return best ?? member.facing;
 }
 
 // ---------------------------------------------------------------------------
@@ -942,6 +979,12 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
       }
     }
 
+    // Tick down the caught-fish window (keeps showing after the angler walks away).
+    if (member.caughtFishDisplay) {
+      member.caughtFishDisplay.timer -= dt;
+      if (member.caughtFishDisplay.timer <= 0) member.caughtFishDisplay = null;
+    }
+
     // Tick down non-conversation speech bubbles (NPC ambient lines, starvation complaints)
     if (member.speechBubbleText && member.state !== CrewState.TALKING) {
       member.speechBubbleTimer -= dt;
@@ -964,6 +1007,7 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           (member.state === CrewState.WALKING && SICK_BLOCKED_STATES.has(member.targetState))) {
         member.path = [];
         member.copulationTarget = null;
+        member.fishingPhase = null; // drop any in-progress cast/fight
         member.commandQueue.length = 0; // drop the order — too sick to carry it out
         member.state = CrewState.IDLE;
         member.idleTimer = 1 + Math.random() * 2;
@@ -1416,28 +1460,57 @@ export function updateActors(crew: Actor[], decks: Deck[], dt: number, barrelInv
           member.idleTimer = 1 + Math.random() * 2;
         }
         break;
-      case CrewState.FISHING:
+      case CrewState.FISHING: {
+        // Sub-phase machine: cast the line out → wait for a bite → fight the fish in.
+        if (!member.fishingPhase) {
+          member.fishingCastDir = waterDirectionFrom(member, decks);
+          member.facing = member.fishingCastDir;
+          member.fishingPhase = 'casting';
+          member.fishingLineProgress = 0;
+          member.stateTimer = CAST_DURATION;
+        }
         member.stateTimer -= dt;
-        if (member.stateTimer <= 0) {
-          const kind = pickFishKind(worldMap);
-          const fish = createFish(kind, gameTime);
-          // Deposit into the nearest barrel; fall back to the angler's own inventory.
-          const barrel = findNearestBarrel(member, decks);
-          if (barrel) {
-            const key = `${barrel.deck}-${barrel.x}-${barrel.y}`;
-            const items = barrelInventory.get(key) || [];
-            items.push(fish);
-            barrelInventory.set(key, items);
-          } else {
-            member.profile.inventory.push(fish);
+        if (member.fishingPhase === 'casting') {
+          // Line flies out — extend the rendered line from 0 to 1 over CAST_DURATION.
+          member.fishingLineProgress = Math.max(0, Math.min(1, 1 - member.stateTimer / CAST_DURATION));
+          if (member.stateTimer <= 0) {
+            member.fishingPhase = 'waiting';
+            member.fishingLineProgress = 1;
+            member.stateTimer = BITE_MIN + Math.random() * BITE_VAR;
           }
-          activityLog.push({ text: `${member.profile.name} caught a ${fish.name.toLowerCase()}!`, time: gameTime });
-          member.thoughtBubble = 'heart';
-          member.thoughtBubbleTimer = 3;
-          member.state = CrewState.IDLE;
-          member.idleTimer = 1 + Math.random() * 2;
+        } else if (member.fishingPhase === 'waiting') {
+          // Line is out — wait for a bite, then start fighting the fish.
+          if (member.stateTimer <= 0) {
+            member.fishingPhase = 'fighting';
+            member.stateTimer = FIGHT_MIN + Math.random() * FIGHT_VAR;
+            member.speechBubbleText = 'Fish on!';
+            member.speechBubbleTimer = 1.5;
+          }
+        } else if (member.fishingPhase === 'fighting') {
+          // Struggle, then land the catch.
+          if (member.stateTimer <= 0) {
+            const kind = pickFishKind(worldMap);
+            const fish = createFish(kind, gameTime);
+            // Deposit into the nearest barrel; fall back to the angler's own inventory.
+            const barrel = findNearestBarrel(member, decks);
+            if (barrel) {
+              const key = `${barrel.deck}-${barrel.x}-${barrel.y}`;
+              const items = barrelInventory.get(key) || [];
+              items.push(fish);
+              barrelInventory.set(key, items);
+            } else {
+              member.profile.inventory.push(fish);
+            }
+            activityLog.push({ text: `${member.profile.name} caught a ${fish.name.toLowerCase()}!`, time: gameTime });
+            // Show the catch in a little window above the head (replaces the heart bubble).
+            member.caughtFishDisplay = { name: fish.name, kind, timer: CAUGHT_DISPLAY_DURATION };
+            member.fishingPhase = null;
+            member.state = CrewState.IDLE;
+            member.idleTimer = 1 + Math.random() * 2;
+          }
         }
         break;
+      }
       case CrewState.REPAIRING:
         if (member.actorType === 'human') member.skills.repair = Math.min(255, (member.skills.repair ?? 0) + 0.1 * dt);
         member.stateTimer -= dt;

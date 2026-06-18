@@ -460,6 +460,7 @@ export function tryExecuteCommand(member: Actor, decks: Deck[], crew: Actor[], a
         }
         member.carryingCorpseId = null;
       }
+      member.fishingPhase = null; // drop any in-progress cast/fight
       member.state = CrewState.IDLE;
       member.path = [];
       member.idleTimer = 1 + Math.random() * 2;

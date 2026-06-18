@@ -12,4 +12,5 @@ export interface RenderContext {
   hoveredItem: { item: Item; x: number; y: number } | null;
   hoveredBarTooltip: string[] | null;
   weather: WeatherState;            // FEATURE 5 — storm darkening / rain / flash + HUD
+  time: number;                     // animation clock (seconds, continuously increasing)
 }

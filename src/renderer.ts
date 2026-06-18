@@ -103,6 +103,7 @@ export class Renderer {
       hoveredItem: null,
       hoveredBarTooltip: null,
       weather: world.weather,
+      time,
     };
 
     ctx.fillStyle = WATER_COLOR_1;

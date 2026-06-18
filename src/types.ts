@@ -32,6 +32,10 @@ export const LANTERN_BURNOUT_RATE = 0.4;
 export const LIGHT_LANTERN_DURATION = 3;
 export const EXTINGUISH_LANTERN_DURATION = 0.5;
 
+// Fishing constants shared between logic (crew/update.ts) and rendering (render/actors.ts)
+export const CAST_DURATION = 1.2;            // line flying out over the water
+export const CAUGHT_DISPLAY_DURATION = 3.5;  // caught-fish window lifetime above the angler
+
 export enum TileType {
   WATER,
   HULL,
@@ -287,6 +291,11 @@ export interface Actor {
   relations: ActorRelation[];
   thoughtBubble: ThoughtBubble | null;
   thoughtBubbleTimer: number;
+  // Fishing sub-phase state (optional — only set while CrewState.FISHING). See crew/update.ts.
+  fishingPhase?: FishingPhase | null;          // sub-phase while FISHING; null/undefined = needs init
+  fishingCastDir?: 'north' | 'south' | 'east' | 'west';  // direction the line points (toward water)
+  fishingLineProgress?: number;                // 0..1, how far the line has extended during casting
+  caughtFishDisplay?: { name: string; kind: string; timer: number } | null; // little window above head
   conversationPartnerId: number | null;
   conversationExchangesLeft: number;
   conversationPositive: boolean;
@@ -409,6 +418,9 @@ export interface GameSettings {
 }
 
 export type ThoughtBubble = 'heart' | 'broken_heart' | 'music_note' | 'mischief' | 'prayer';
+
+// Fishing sub-phase machine (while CrewState.FISHING). See crew/update.ts.
+export type FishingPhase = 'casting' | 'waiting' | 'fighting';
 
 // --- FEATURE 5: Storms & Weather ---
 // Weather lives on the World and is ticked in the sailing block of update().
