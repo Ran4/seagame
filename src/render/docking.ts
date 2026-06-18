@@ -9,15 +9,15 @@ export function drawDockButton(
 ): void {
   const barY = CANVAS_HEIGHT - 60;
 
-  // Background bar
+  // Background bar — only 12 tiles wide, centered, so it doesn't cover the
+  // bottom-left GUI buttons.
+  const barW = TILE_SIZE * 12;
+  const barX = (CANVAS_WIDTH - barW) / 2;
   ctx.fillStyle = 'rgba(10, 30, 60, 0.88)';
-  ctx.fillRect(0, barY, CANVAS_WIDTH, 60);
+  ctx.fillRect(barX, barY, barW, 60);
   ctx.strokeStyle = '#5577aa';
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, barY);
-  ctx.lineTo(CANVAS_WIDTH, barY);
-  ctx.stroke();
+  ctx.strokeRect(barX, barY, barW, 60);
 
   // Island name
   ctx.fillStyle = '#aaccee';
@@ -45,7 +45,7 @@ export function drawDockButton(
     ctx.fillStyle = '#cc6666';
     ctx.font = '12px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('No one is at the helm!', CANVAS_WIDTH / 2, btnY + 17);
+    ctx.fillText('Assign a helmsman to dock', CANVAS_WIDTH / 2, btnY + 17);
   }
 }
 

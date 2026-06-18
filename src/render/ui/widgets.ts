@@ -232,7 +232,10 @@ export function drawDockingToast(rc: RenderContext, toast: { text: string; timer
   const ctx = rc.ctx;
   // Fade the completion toast out over its last second.
   const alpha = toast.timer === Infinity ? 1 : Math.max(0, Math.min(1, toast.timer));
-  const w = Math.max(180, ctx.measureText(toast.text).width + 48);
+  // Set the font *before* measuring — otherwise the box is sized against the
+  // previously-active font and ends up too narrow for the text.
+  ctx.font = 'bold 14px monospace';
+  const w = Math.max(180, ctx.measureText(toast.text).width + 64);
   const h = 30;
   const x = CANVAS_WIDTH / 2 - w / 2;
   const y = 46;
@@ -244,7 +247,6 @@ export function drawDockingToast(rc: RenderContext, toast: { text: string; timer
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.fillStyle = '#cce6ff';
-  ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(toast.text, CANVAS_WIDTH / 2, y + h / 2 + 1);
